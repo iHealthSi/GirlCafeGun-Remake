@@ -34,6 +34,17 @@ The controller layer (`release/client/gamepad_fight.lua`, `patch_gamepad.py` and
 adapted file names its source. The InputManager change of that commit is not
 part of this release; see [controller support](controller.md).
 
+The title-screen patch (`release/client/title_screens.lua`, `patch_title.py`
+and `test_title.py`) recreates and extends an edit of that repository's phone
+build. The edit, with two titles, exists there only inside a patched `lua.u`;
+its description is section 3.2 of
+`docs/05-PHONE-PORT-2026-11-11.md` at
+[c5b9ed9](https://github.com/BlackrUSter4/GirlCafeGun-Offline/commit/c5b9ed93e91028d7719e869da8e09ae07a34186c).
+The recipe and its test are new tooling, MIT, copyright 2026 GCG2-Offline
+contributors. The prefab with translated button labels that the section also
+describes is a game asset and is not part of this release; see
+[title screens](title-screens.md).
+
 The local extracted C# reference and upstream have identical normalized source
 for `RuneFeature.cs` (Git blob `aca74fc4cd2fc57bd9a6c6a788741d7c63f1a68d`) and
 `RuneTable.cs` (`ac703fd32ded6cff980bbd24a7f1282e220b6920`). We corrected several
