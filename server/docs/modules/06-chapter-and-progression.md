@@ -22,6 +22,25 @@
 - 结算去重以完整上报负载（含战斗统计）为键，缓存响应 120 秒：重发包原样
   重放响应，而重复刷同一关的战斗统计不同，会正常再次结算。
 
+## Natural vigour recovery
+
+- One point every six minutes, up to the cap of the commander level (the `Spirit`
+  column of `PlayerExp.txt`: 28 at level 1, 150 from level 90). The rate is the
+  one the client uses for its "full in N minutes" estimate.
+- The save keeps `vigourRecoveredAt` (Unix seconds). Recovery is paid out lazily:
+  at login and every `getOrCreate`, before each vigour spend (`settleLevel`,
+  `chargeLevelVigour`, `settleBounty`), before the stage-entry balance check, and
+  on keep-alive for a connected player (`MONEY_UPDATE_NTF` when a point is due;
+  the save is written at most once per six minutes for this).
+- At or above the cap nothing is added and the clock restarts, so an idle full bar
+  banks no time and vigour above the cap (level-up refill, rewards) is never
+  reduced. The unused part of a period carries over.
+- A save from before this feature has no clock; it starts counting at its next
+  load and gets no retroactive points.
+
+Adapted from `World.RecoverVigour` in the MIT-licensed SssjServer. That server
+recovers only at login; this one also recovers during a session.
+
 ## 协议
 
 支持直接 `ChapterMsg` 和 `LuaCall sCmd=252` 包装形式，`nState=0` 进入、
@@ -36,6 +55,10 @@
 - `test/chapter-session.test.ts` 覆盖无进入直接结算、结算扣电力、电力不足
   回滚和失败结算扣电力；
 - `test/player-level-data.test.ts` 覆盖经验、跨级和 300 级上限；
+- `test/vigour-recovery-data.test.ts` checks the cap against the shipped table and
+  the recovery arithmetic; `test/vigour-recovery-persistence.test.ts` covers the
+  clock, recovery before a spend, the cap and old saves;
+  `test/vigour-recovery-gateway.test.ts` covers the keep-alive notification;
 - `test/persistence.test.ts` 覆盖关卡落盘和奖励；
 - 尚无完整网关出击集成测试。
 
@@ -46,6 +69,7 @@
   完全不同负载重复结算理论可重复领奖（原游戏重复通关本就发奖，影响可控）；
 - 结算去重缓存只保存在当前 TCP 连接，重连后的相同负载重发会再次发奖；
 - `CardExp` 只回给客户端，没有分配给出战角色卡；
-- 没有章节星箱、关卡首通活动奖励、电力自然恢复和扫荡；
+- 没有章节星箱、关卡首通活动奖励和扫荡；
+- Vigour cannot be bought yet (`ExChangeMoney` is not handled);
 - 客户端退出不发送专用协议；服务端只能通过连接内关卡坐标拦截错关陈旧结算；
 - 指引任务“第二章满星奖励”尚无对应领域事件。
