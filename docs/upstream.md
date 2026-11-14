@@ -56,13 +56,6 @@ GUIDs. The client already supports active type-2 and pending type-6 skill entrie
 Pull request #1 was later merged upstream at
 `bf9f9220cb7021bcf203c4bbe6cdbb79ca5ace95`. Notes that follow from that work:
 
-
-`bf9f9220cb7021bcf203c4bbe6cdbb79ca5ace95`. Contributions that follow that work:
-
-- Natural vigour recovery is adapted from `World.RecoverVigour` and
-  `PlayerExpTable` of the C# server (MIT, copyright 2025 luoxiadesu; notice in
-  `server/LICENSES/SssjServer-MIT.txt`). The C# server recovers at login only;
-  this server also recovers during a session.
 - The daily save backup follows the upstream phone launcher work, which copies
   the save before the embedded server starts. No code was copied; the store
   implementation here is new.
@@ -72,10 +65,6 @@ Pull request #1 was later merged upstream at
   one `JsonStore.update` transaction. The arithmetic guards of 88c397d and
   5a66d20 are not needed: quantities are JavaScript numbers, `buyNum` is
   limited to 99, and varints are encoded through `BigInt`.
-
-  skips empty stacks. Its arithmetic guards are not needed either: quantities
-  are JavaScript numbers, `buyNum` is limited to 99, and varints are encoded
-  through `BigInt`.
 
 Welcome rewards use their own persistent campaign marker, independent of other
 mail and surviving message deletion. The fixed local account starts a fresh

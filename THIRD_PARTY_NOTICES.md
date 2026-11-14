@@ -3,8 +3,8 @@
 - **Yricky/new-cafe**: the TypeScript server is distributed under CC0-1.0;
   the complete notice is `server/LICENSE`.
 - **SssjServer**, copyright 2025 luoxiadesu: MIT. Adapted café/MOD protocol
-  behavior and natural vigour recovery retain
-  `server/LICENSES/SssjServer-MIT.txt`, including in the Android server payload. See `docs/upstream.md` for reviewed versions and corrections.
+  behavior retains `server/LICENSES/SssjServer-MIT.txt`, including in the Android
+  server payload. See `docs/upstream.md` for reviewed versions and corrections.
 - **Zod**: MIT; its dependency license is retained when packaging the server.
 - **AOSP JSON** used by host-side tests: Apache-2.0; test source notices and license
   are retained beside those sources.

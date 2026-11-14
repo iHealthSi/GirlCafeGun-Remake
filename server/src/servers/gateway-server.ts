@@ -84,7 +84,6 @@ import { getPhoneLetterDefinition } from "../game-data/phone-message-data.js";
 import { PvpSessionManager, type PvpSession } from "../game-data/pvp-session.js";
 import { buildPvpEquipSolution } from "../game-data/pvp-solution.js";
 import { cafeRoomGirls } from "../game-data/cafe-runtime.js";
-import { recoverVigour } from "../game-data/vigour-recovery-data.js";
 import {
   parseHouseInfoRequest,
   parseUpdateHouseRequest,
@@ -194,8 +193,6 @@ interface GatewayServerOptions {
   logger: Logger;
   players: PlayerRepository;
   pvpSessions?: PvpSessionManager;
-  /** Clock for natural vigour recovery; tests replace it. */
-  now?: () => number;
 }
 
 const SETTLEMENT_CACHE_TTL_MS = 120_000;
@@ -745,7 +742,6 @@ export function createGatewayServer({
   logger,
   players,
   pvpSessions: sharedPvpSessions,
-  now: clock = Date.now,
 }: GatewayServerOptions): Server {
   const chapterCatalog = ChapterCatalog.loadDefault();
   const gachaCatalog = GachaCatalog.loadDefault();
@@ -861,28 +857,6 @@ export function createGatewayServer({
         }
       }
       mailDate = date;
-    }
-
-    /**
-     * Natural vigour recovery for a connected player. The cached player is
-     * checked first, so the save is written only when a point is due (at most
-     * once per six minutes).
-     */
-    async function refreshVigourRecovery(now = clock()): Promise<void> {
-      const cached = context.player;
-      if (!loggedIn || !cached) return;
-      const due = recoverVigour(
-        cached.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0,
-        cached.level,
-        cached.vigourRecoveredAt,
-        Math.floor(now / 1000),
-      );
-      if (due.gained === 0) return;
-      const result = await players.recoverVigour(context.account, now);
-      context.player = result.player;
-      if (result.vigour && !socket.destroyed) {
-        send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(result.vigour));
-      }
     }
 
     function scheduleDailyMailRefresh(now = Date.now()): void {
@@ -1168,7 +1142,6 @@ export function createGatewayServer({
       if (packet.command === COMMAND.KEEP_ALIVE_REQ) {
         send(COMMAND.KEEP_ALIVE_RSP, packet.serial);
         await refreshDailyMail();
-        await refreshVigourRecovery();
         return;
       }
 
@@ -3866,10 +3839,8 @@ export function createGatewayServer({
             const cardGuids = promiseFightRoster(player, formationId);
             context.activeChapter = null;
             const energyCost = effectiveEnergyCost(level, player.level);
-            await refreshVigourRecovery();
             const availableVigour =
-              (context.player ?? player).money.find(({ id }) => id === MONEY_VIGOUR)
-                ?.count ?? 0;
+              player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
             if (availableVigour < energyCost) {
               logger.info("chapter.enter.insufficient_vigour", {
                 account: context.account,

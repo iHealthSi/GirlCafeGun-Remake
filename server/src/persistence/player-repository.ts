@@ -215,7 +215,6 @@ import {
   MAX_CONCURRENT_GIRL_TRAINING,
 } from "../game-data/girl-training-data.js";
 import { addPlayerExperience } from "../game-data/player-level-data.js";
-import { recoverVigour } from "../game-data/vigour-recovery-data.js";
 import {
   RUNE_GENRE,
   RUNE_SLOT_COUNT,
@@ -464,8 +463,6 @@ export interface Player {
   dailyMissions?: DailyMissionState;
   dailySignUp: DailySignUpState;
   eightDaySignUp: EightDaySignUpState;
-  /** Unix seconds up to which natural vigour recovery has been paid out. */
-  vigourRecoveredAt?: number;
   bounty?: BountyState;
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
@@ -1365,28 +1362,6 @@ function reconcileGirlAppearanceState(
   }
 
   return { updatedGirlIds, tasksChanged };
-}
-
-/**
- * Pays out natural vigour recovery up to `now`. Every vigour spend calls this
- * first, so the recovery clock always starts at the spend that left the cap.
- */
-function reconcileVigourRecovery(player: Player, now: number): boolean {
-  let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
-  const result = recoverVigour(
-    vigour?.count ?? 0,
-    player.level,
-    player.vigourRecoveredAt,
-    Math.floor(now / 1000),
-  );
-  player.vigourRecoveredAt = result.recoveredAt;
-  if (result.gained === 0) return false;
-  if (!vigour) {
-    vigour = { id: MONEY_VIGOUR, count: 0 };
-    player.money.push(vigour);
-  }
-  vigour.count = result.count;
-  return true;
 }
 
 function applyPlayerExperience(
@@ -3385,7 +3360,6 @@ export class PlayerRepository {
           reconcileWelcomeMail((player.mail ??= makeMailbox()), now);
         reconcileCustomGirlOutfits(player);
         reconcileHeadpatCharges(player.taskValues, now);
-        reconcileVigourRecovery(player, now);
         reconcileInventoryLockState(player);
         reconcileRuneState(player);
         reconcileRuneSkills(player);
@@ -6133,42 +6107,7 @@ export class PlayerRepository {
     };
   }
 
-  /**
-   * Applies natural vigour recovery outside a spend, for the gateway's
-   * keep-alive and stage-entry checks. `vigour` is set only when it changed.
-   */
-  async recoverVigour(
-    account: string,
-    now = Date.now(),
-  ): Promise<{ player: Player; vigour: MoneyState | null }> {
-    let player: Player | undefined;
-    let changed = false;
-    await this.#store.update((state) => {
-      player = state.players[account];
-      if (!player) throw new Error(`Unknown player account: ${account}`);
-      changed = reconcileVigourRecovery(player, now);
-    });
-    if (!player) throw new Error(`Failed to recover vigour: ${account}`);
-    const snapshot = structuredClone(player);
-    if (changed) {
-      this.#logger.info("player.vigour.recovered", {
-        account,
-        vigour: snapshot.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0,
-      });
-    }
-    return {
-      player: snapshot,
-      vigour: changed
-        ? (snapshot.money.find(({ id }) => id === MONEY_VIGOUR) ?? null)
-        : null,
-    };
-  }
-
-  async chargeLevelVigour(
-    account: string,
-    energyCost: number,
-    now = Date.now(),
-  ): Promise<Player> {
+  async chargeLevelVigour(account: string, energyCost: number): Promise<Player> {
     if (!Number.isSafeInteger(energyCost) || energyCost < 0) {
       throw new Error(`Invalid level energy cost: ${energyCost}`);
     }
@@ -6177,7 +6116,6 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
-      reconcileVigourRecovery(player, now);
       const vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
       const available = vigour?.count ?? 0;
       if (available < energyCost) {
@@ -6202,7 +6140,6 @@ export class PlayerRepository {
     dailyBonusApplied: boolean,
     keyItem: BaseAward | null,
     promiseFight?: PromiseFightEvent,
-    now = Date.now(),
   ): Promise<BountySettlement> {
     let player: Player | undefined;
     let experienceUpdate: PlayerExperienceUpdate | undefined;
@@ -6216,7 +6153,6 @@ export class PlayerRepository {
       reconcileBounty(player);
 
       energyCost = effectiveBountyEnergyCost(level, player.level);
-      reconcileVigourRecovery(player, now);
       let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
       const available = vigour?.count ?? 0;
       if (available < energyCost) {
@@ -6326,7 +6262,6 @@ export class PlayerRepository {
     awards: readonly Award[],
     masterExp: number,
     promiseFight?: PromiseFightEvent,
-    now = Date.now(),
   ): Promise<ChapterSettlement> {
     if (
       ![chapter, index, difficulty].every(
@@ -6350,7 +6285,6 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
 
-      reconcileVigourRecovery(player, now);
       let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
       const available = vigour?.count ?? 0;
       if (available < energyCost) {
