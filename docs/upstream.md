@@ -37,3 +37,8 @@ GUIDs. The client already supports active type-2 and pending type-6 skill entrie
 Welcome rewards use their own persistent campaign marker, independent of other
 mail and surviving message deletion. The fixed local account starts a fresh
 tutorial save; development profiles and trial-state copying are not shipped.
+
+The save tool in `tools/save-tool/` (back up, push and wipe the save of a playtest build through
+`adb shell run-as`, and a helper that makes a debuggable playtest copy of an APK) was written for
+GirlCafeGun-Offline and is contributed here under this repository's MIT license. It holds code only and
+changes no game or server file; see `tools/save-tool/README.md`.
