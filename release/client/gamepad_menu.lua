@@ -802,6 +802,8 @@ end
 -- ---------- overlay: focus frame and cursor ----------
 local function makeImage(parent, name, color)
 	local go = U3D.GameObject(name)
+	-- hidden until placed: a new Image is a 100 x 100 white square at the bottom-left anchor
+	go:SetActive(false)
 	go.transform:SetParent(parent, false)
 	local img = go:AddComponent(typeof(UGUI.Image))
 	img.raycastTarget = false

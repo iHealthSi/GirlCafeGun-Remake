@@ -351,6 +351,9 @@ def scenario(chunk, report):
     assert not ev('frameShown()')
     check(lua, 'press(0)', '', 'first press shows focus', report)
     assert ev('frameShown()') and ev('focusName()') == 'Cell2', ev('focusName()')   # nearest the centre
+    # the cursor images exist now but were never placed: they must not show as squares in the corner
+    assert not ev('GamepadMenu.overlay.cursor[1].go.active or GamepadMenu.overlay.cursor[2].go.active'
+                  ' or GamepadMenu.overlay.cursor[3].go.active')
 
     # spatial moves, edges, and the beam rule
     check(lua, 'stick(1, 0)', '', 'right', report); assert ev('focusName()') == 'Cell3'
