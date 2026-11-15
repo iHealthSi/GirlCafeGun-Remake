@@ -86,3 +86,8 @@ The story editor in `tools/story-editor/` (a local viewer and translation editor
 written for GirlCafeGun-Offline and is contributed here under this repository's MIT license. It contains code
 only and reads the game data that the user supplies. Characters need the Live2D Cubism Core, which is not
 included; see `tools/story-editor/README.md`.
+
+The save tool in `tools/save-tool/` (back up, push and wipe the save of a playtest build through
+`adb shell run-as`, and a helper that makes a debuggable playtest copy of an APK) was written for
+GirlCafeGun-Offline and is contributed here under this repository's MIT license. It holds code only and
+changes no game or server file; see `tools/save-tool/README.md`.
