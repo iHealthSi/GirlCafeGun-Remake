@@ -46,9 +46,15 @@ it:
   released, through `Game.Utils.ExecutePointerDownEvents`, `...UpEvents` and
   `ExecuteClickEvents` (the calls of the client's own UI test runner). Hold A on
   a hold-to-repeat button and it repeats, as under a finger.
+- **Main action**: a full-screen target is left out of focus moves (it is a
+  backdrop), unless it is a whole window or is named start, tap, continue, next,
+  click or touch. Then it is the screen's main action, such as the title's "Tap
+  Screen to Start" (the `UI_Login` window itself is the button): the frame runs
+  along the screen edges and the d-pad reaches it through a box at its centre.
 - **First focus** of a new page or popup: the tutorial's target when a tutorial
-  step is open, else the control last used in that window, else a confirm/OK
-  button, else the control nearest the screen centre. The resource bar
+  step is open, else the control last used in that window, else the window's
+  main action, else a confirm/OK button, else the control nearest the screen
+  centre. The resource bar
   (`UI_Player`) sorts above every page, so it gets the first focus only when it
   is alone.
 - The stock EventSystem sends Submit (joystick button 0) to its selected object.

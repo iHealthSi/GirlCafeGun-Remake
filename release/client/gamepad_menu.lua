@@ -158,10 +158,12 @@ end
 function G.best(src, list, d, skip)
 	local best
 	for _, c in ipairs(list) do
-		if c ~= skip and G.inDir(src, c.r, d) then
+		local r = c.nr or c.r
+		if c ~= skip and G.inDir(src, r, d) then
+			local br = best and (best.nr or best.r)
 			if not best then best = c
-			elseif beamBeats(src, c.r, best.r, d) then best = c
-			elseif not beamBeats(src, best.r, c.r, d) and score(src, c.r, d) < score(src, best.r, d) then best = c end
+			elseif beamBeats(src, r, br, d) then best = c
+			elseif not beamBeats(src, br, r, d) and score(src, r, d) < score(src, br, d) then best = c end
 		end
 	end
 	return best
@@ -175,6 +177,22 @@ function G.backRank(name)
 	if n:find('back', 1, true) or n:find('return', 1, true) or n:find('fanhui', 1, true) then return 2 end
 	if n:find('cancel', 1, true) or n == 'btnno' or n == 'no' or n:find('btn_no', 1, true) then return 3 end
 	return nil
+end
+
+-- a full-screen target whose tap is the screen's main action ("Tap Screen to Start", "tap to continue")
+function G.isMainAction(name)
+	local n = string.lower(name or '')
+	for _, w in ipairs({ 'start', 'tap', 'continue', 'next', 'click', 'touch' }) do
+		if n:find(w, 1, true) then return true end
+	end
+	return false
+end
+
+-- the box that stands for a main action in focus moves: a third of it, at its centre
+function G.mainBox(r)
+	local w, h = (r.x1 - r.x0) / 6, (r.y1 - r.y0) / 6
+	local cx, cy = G.center(r)
+	return { x0 = cx - w, y0 = cy - h, x1 = cx + w, y1 = cy + h }
 end
 
 -- a full-screen target that closes a popup when tapped outside it
@@ -439,7 +457,15 @@ local function collect()
 		end
 	end
 	local nav = {}
-	for _, c in ipairs(result) do if not c.big then nav[#nav + 1] = c end end
+	for _, c in ipairs(result) do
+		-- a full-screen target that is a whole window (the title's tap area) or says so by name is that
+		-- screen's main action: it stays in the focus moves, through a box at its centre
+		if c.big and not G.isBackdrop(c.go.name) and (c.go.name == c.win or G.isMainAction(c.go.name)) then
+			c.main = true
+			c.nr = G.mainBox(c.r)
+		end
+		if not c.big or c.main then nav[#nav + 1] = c end
+	end
 	if #nav == 0 then for _, c in ipairs(result) do nav[#nav + 1] = c end end
 	local reach = {}
 	for _, c in ipairs(result) do reach[c.id] = c end
@@ -554,6 +580,9 @@ local function pickInitial(anyway)
 		if m and m == c.go then return c end
 	end
 	for _, c in ipairs(inTop) do
+		if c.main then return c end
+	end
+	for _, c in ipairs(inTop) do
 		if G.isConfirm(c.go.name) then return c end
 	end
 	local sw, sh = U3D.Screen.width * 0.5, U3D.Screen.height * 0.5
@@ -656,7 +685,7 @@ local function move(d)
 		s.value = s.value + (d == 'right' and step or -step)
 		return
 	end
-	local b = G.best(f.r, st.nav, d, f)
+	local b = G.best(f.nr or f.r, st.nav, d, f)
 	if b then setFocus(b); return end
 	if nudge(f, d) then st.pending = { d = d, at = now() + 0.08, tries = 2 } end
 end
@@ -809,6 +838,10 @@ local function showFrame(r)
 	local pulse = 0.65 + 0.35 * math.abs(math.sin(now() * 3.2))
 	local g = 3   -- gap between the control and the frame
 	local x0, y0, x1, y1 = r.x0 - g - t, r.y0 - g - t, r.x1 + g, r.y1 + g
+	-- a full-screen target (the title's tap area) gets its frame on the screen edges
+	local sw, sh = U3D.Screen.width, U3D.Screen.height
+	x0, y0 = math.max(0, x0), math.max(0, y0)
+	x1, y1 = math.min(sw - t, x1), math.min(sh - t, y1)
 	local w, h = x1 - x0 + t, y1 - y0 + t
 	place(o.bars[1], x0, y0, w, t)          -- bottom
 	place(o.bars[2], x0, y1, w, t)          -- top
@@ -1007,7 +1040,7 @@ function M.Tick()
 			local f = st.focus and st.byId[st.focus.id]
 			if f then
 				st.focus = f
-				local b = G.best(f.r, st.nav, pd.d, f)
+				local b = G.best(f.nr or f.r, st.nav, pd.d, f)
 				if b then setFocus(b)
 				elseif pd.tries > 1 then st.pending = { d = pd.d, at = t + 0.08, tries = pd.tries - 1 } end
 			end

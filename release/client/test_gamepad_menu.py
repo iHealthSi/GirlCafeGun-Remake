@@ -328,6 +328,23 @@ def scenario(chunk, report):
     assert tuple(ev('timerArgs').values()) == (True, True)   # real time, kept over scene loads
     lua.execute('UI.Open("UI_Player")')
     assert ev('#timers') == 1                                # Ensure does not start a second timer
+
+    # title screen: the whole window is the "tap to start" button, with a small Update button on top
+    lua.execute('''
+      login = window('UI_Login', 5)
+      el(login, 'Art', 0, 0, 1920, 1080, 'image')
+      login.raycast = true; login.sel = nil
+      local c = { gameObject = login, transform = login.transform, interactable = true, types = { [T.Selectable] = true } }
+      function c.IsInteractable() return true end
+      login.comps[T.Selectable] = c; login.sel = c
+      update = el(login, 'BtnUpdate', 1650, 60, 1880, 160)
+      UI.Open('UI_Login')
+      press(0); frame(0.3)''')
+    assert ev('focusName()') == 'UI_Login', ev('focusName()')            # the main action takes the focus
+    check(lua, 'stick(1, 0)', '', 'title: right to Update', report); assert ev('focusName()') == 'BtnUpdate'
+    check(lua, 'stick(-1, 0)', '', 'title: back to start', report); assert ev('focusName()') == 'UI_Login'
+    check(lua, 'press(0)', 'down UI_Login|up UI_Login|click UI_Login', 'title: A starts', report)
+    lua.execute('login.active = false; frame(0.3); touches = 1; frame(); touches = 0; frame()')
     lua.execute(SCENE)
 
     # nothing happens before the pad is used; the first input shows the frame and is swallowed
