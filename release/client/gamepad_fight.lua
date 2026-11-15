@@ -156,6 +156,8 @@ function P.Tick()
 	-- pause works even while the fight HUD is hidden
 	if pressed("pause", cfg.pause) then try("pause", pause) end
 	if UI.IsOpen("UI_MissionPause") then P.Reset(); return end
+	-- a window covers the HUD (story, results, rewards): the menu layer (gamepad_menu.lua) has the pad
+	if GamepadMenu and GamepadMenu.owner == 'menu' then P.Reset(); return end
 
 	-- move: stock Horizontal/Vertical (left stick = joystick axes 1/2, and the arrow keys), else the hat
 	local x, y = U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
@@ -199,7 +201,8 @@ function P.Start()
 	if P.timer then return end
 	P.Reset()
 	-- never break the fight HUD: a failure here only turns the controller off
-	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, function() try("tick", P.Tick) end)
+	-- real time: the pause menu sets the game's timer scale to 0, and Start must still close it
+	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, function() try("tick", P.Tick) end, true, false)
 	if ok then P.timer = t; print("[pad] started") else print("[pad] start failed: " .. tostring(t)) end
 end
 
