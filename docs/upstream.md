@@ -58,3 +58,8 @@ Pull request #1 was later merged upstream at
 Welcome rewards use their own persistent campaign marker, independent of other
 mail and surviving message deletion. The fixed local account starts a fresh
 tutorial save; development profiles and trial-state copying are not shipped.
+
+The story editor in `tools/story-editor/` (a local viewer and translation editor for story cutscenes) was
+written for GirlCafeGun-Offline and is contributed here under this repository's MIT license. It contains code
+only and reads the game data that the user supplies. Characters need the Live2D Cubism Core, which is not
+included; see `tools/story-editor/README.md`.
