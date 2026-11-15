@@ -1,0 +1,588 @@
+"""Run the menu controller layer, as patched into UI.lua, in a mocked UI runtime.
+
+The mock holds a small scene graph: windows under the canvas root, rect transforms in screen pixels,
+a raycaster that returns the top target under a point (masks clip, later siblings draw on top), the
+Selectable registry, toggle groups, a scroll list and the client's click helpers. It checks what the
+player would see: where the focus goes, what A, B, LB/RB, Start, the right stick and the cursor press.
+run() patches a synthetic UI.lua that carries the anchor line; run_bundle() uses the module of a lua.u.
+"""
+from pathlib import Path
+import sys
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path[:0] = [str(Path(__file__).resolve().parent), str(ROOT / 'translation/tools/.deps')]
+from lupa.lua53 import LuaRuntime
+import patch_gamepad as g
+
+NAME = 'UI.lua'
+SYNTHETIC = '''-- Synthetic stand-in for the UI manager.
+UI = UI or {}
+function UI.Open(sClass, ...)
+\topened[#opened + 1] = sClass
+end
+-- Names that the module uses as locals must still resolve to globals here.
+function UI.Globals() return M, G, st, key, move, back, tab end
+'''.replace('\n', '\r\n').encode('utf8')
+
+MOCK = r'''
+M, G, st, key, move, back, tab = 1, 2, 3, 4, 5, 6, 7
+opened, calls = {}, {}
+local function log(s) calls[#calls + 1] = s end
+function take() local c = calls; calls = {}; return table.concat(c, "|") end
+clock = 100
+pad = { buttons = {}, axes = {}, h = 0, v = 0 }
+touches = 0
+
+-- ---------- types ----------
+local function Type(name)
+  return { name = name, IsInstanceOfType = function(self, o) return o and o.types and o.types[self] or false end }
+end
+T = { Selectable = Type('Selectable'), Button = Type('Button'), Toggle = Type('Toggle'), Slider = Type('Slider'),
+      Scrollbar = Type('Scrollbar'), InputField = Type('InputField'), ScrollRect = Type('ScrollRect'),
+      Canvas = Type('Canvas'), RectTransform = Type('RectTransform'), Image = Type('Image'),
+      ETL = Type('EventTriggerListener') }
+function typeof(t) return t end
+
+-- ---------- scene ----------
+local nextId, order = 0, 0
+local allObjects = {}
+local Tr = {}
+Tr.__index = function(t, k)
+  if k == 'anchoredPosition' then return { x = t.ax, y = t.ay } end
+  if k == 'rect' then local r = t.r; return { xMin = r[1], yMin = r[2], xMax = r[3], yMax = r[4], width = r[3] - r[1], height = r[4] - r[2] } end
+  if k == 'name' then return t.gameObject.name end
+  return Tr[k]
+end
+Tr.__newindex = function(t, k, v)
+  if k == 'anchoredPosition' then rawset(t, 'ax', v.x); rawset(t, 'ay', v.y)
+  elseif k == 'anchorMin' or k == 'anchorMax' or k == 'pivot' or k == 'sizeDelta' then rawset(t, '_' .. k, v)
+  else rawset(t, k, v) end
+end
+function Tr.world(t)
+  local x, y = t.ax, t.ay
+  local p = t.parent
+  while p do x, y = x + p.ax, y + p.ay; p = p.parent end
+  return x, y
+end
+function Tr.GetInstanceID(t) return t.id end
+function Tr.TransformPoint(t, v) local x, y = t:world(); return { x = x + v.x, y = y + v.y, z = 0 } end
+function Tr.InverseTransformPoint(t, v) local x, y = t:world(); return { x = v.x - x, y = v.y - y, z = 0 } end
+function Tr.TransformVector(t, v) return v end
+function Tr.InverseTransformVector(t, v) return v end
+function Tr.IsChildOf(t, o) local p = t; while p do if p == o then return true end; p = p.parent end; return false end
+function Tr.GetComponent(t, ty) return t.gameObject.comps[ty] end
+function Tr.GetComponentInParent(t, ty) local p = t; while p do local c = p.gameObject.comps[ty]; if c then return c end; p = p.parent end end
+function Tr.SetParent(t, p) rawset(t, 'parent', p) end
+
+local Go = {}
+Go.__index = function(o, k)
+  if k == 'activeInHierarchy' then
+    local p = o.transform
+    while p do if not p.gameObject.active then return false end; p = p.parent end
+    return true
+  end
+  return Go[k]
+end
+function Go.GetInstanceID(o) return o.id end
+function Go.GetComponent(o, ty) return o.comps[ty] end
+function Go.SetActive(o, v) o.active = v end
+function Go.AddComponent(o, ty)
+  local c = { gameObject = o, transform = o.transform, types = { [ty] = true } }
+  o.comps[ty] = c
+  if ty == T.Image then o.comps[T.RectTransform] = o.transform end
+  return c
+end
+function Go.GetComponentsInChildren(o, ty)
+  local out = { Length = 0 }
+  for _, x in ipairs(allObjects) do
+    local c = x.comps[ty]
+    if c and x.activeInHierarchy and x.transform:IsChildOf(o.transform) then out[out.Length] = c; out.Length = out.Length + 1 end
+  end
+  return out
+end
+
+function newObject(name, parent, x0, y0, x1, y1)
+  nextId = nextId + 1; order = order + 1
+  local o = setmetatable({ name = name, id = nextId, active = true, comps = {}, order = order }, Go)
+  local t = setmetatable({ id = -nextId, ax = 0, ay = 0, r = { x0 or 0, y0 or 0, x1 or 0, y1 or 0 } }, Tr)
+  rawset(t, 'gameObject', o); rawset(t, 'parent', parent)
+  o.transform = t
+  allObjects[#allObjects + 1] = o
+  return o
+end
+
+ROOT = newObject('CanvasRoot').transform
+function window(name, ord)
+  local w = newObject(name, ROOT, 0, 0, 1920, 1080)
+  w.comps[T.Canvas] = { sortingOrder = ord, renderMode = 'camera', worldCamera = 'cam' }
+  w.comps[T.Canvas].rootCanvas = w.comps[T.Canvas]
+  return w
+end
+-- an element: raycast target; kind 'button' | 'toggle' | 'slider' | 'trigger' | 'image'
+function el(parent, name, x0, y0, x1, y1, kind)
+  local o = newObject(name, parent.transform or parent, x0, y0, x1, y1)
+  o.raycast = true
+  kind = kind or 'button'
+  if kind ~= 'image' then
+    local c = { gameObject = o, transform = o.transform, interactable = true, isActiveAndEnabled = true, types = {} }
+    function c.IsInteractable(self) return self.interactable end
+    if kind == 'trigger' then c.types[T.ETL] = true; o.comps[T.ETL] = c
+    else
+      c.types[T.Selectable] = true
+      if kind == 'toggle' then c.types[T.Toggle] = true; c.isOn = false end
+      if kind == 'slider' then c.types[T.Slider] = true; c.minValue, c.maxValue, c.value, c.wholeNumbers = 0, 1, 0.5, false end
+      o.comps[T.Selectable] = c
+    end
+    o.sel = c
+  end
+  return o
+end
+function group(...)
+  nextId = nextId + 1
+  local gr = { id = nextId, GetInstanceID = function(self) return self.id end }
+  for _, o in ipairs({ ... }) do o.sel.group = gr end
+  return gr
+end
+function scrollList(parent, name, x0, y0, x1, y1)
+  local view = newObject(name, parent.transform, x0, y0, x1, y1)
+  view.mask = true; view.raycast = true
+  local content = newObject('Content', view.transform, 0, 0, 0, 0)
+  local sr = { gameObject = view, transform = view.transform, viewport = view.transform, content = content.transform,
+               vertical = true, horizontal = false, isActiveAndEnabled = true, types = { [T.ScrollRect] = true } }
+  function sr.GetInstanceID() return view.id end
+  function sr.StopMovement() end
+  view.comps[T.ScrollRect] = sr
+  return view, content, sr
+end
+
+local function inside(o, x, y)
+  local t = o.transform
+  local wx, wy = t:world()
+  local r = t.r
+  return x >= wx + r[1] and x <= wx + r[3] and y >= wy + r[2] and y <= wy + r[4]
+end
+local function canvasOf(o) local c = o.transform:GetComponentInParent(T.Canvas); return c and c.sortingOrder or -1 end
+function raycast(x, y)
+  local best, bk
+  for _, o in ipairs(allObjects) do
+    if o.raycast and not o.destroyed and o.activeInHierarchy and inside(o, x, y) then
+      local clipped = false
+      local p = o.transform.parent
+      while p do if p.gameObject.mask and not inside(p.gameObject, x, y) then clipped = true end; p = p.parent end
+      if not clipped then
+        local k = canvasOf(o) * 100000 + o.order
+        if not bk or k > bk then best, bk = o, k end
+      end
+    end
+  end
+  return best
+end
+
+local function newList()
+  local l = { Count = 0 }
+  function l.Clear(self) for i = 0, self.Count - 1 do self[i] = nil end; self.Count = 0 end
+  return l
+end
+selected = nil
+local es = {
+  RaycastAll = function(self, ped, list)
+    local o = raycast(ped.position.x, ped.position.y)
+    if o then list[0] = { gameObject = o }; list.Count = 1 end
+  end,
+  SetSelectedGameObject = function(self, o) selected = o end,
+}
+setmetatable(es, { __index = function(t, k) if k == 'currentSelectedGameObject' then return selected end end })
+
+local function allSelectables()
+  local l = { Count = 0 }
+  for _, o in ipairs(allObjects) do
+    local s = o.comps[T.Selectable]
+    if s and o.activeInHierarchy and not o.destroyed then l[l.Count] = s; l.Count = l.Count + 1 end
+  end
+  return l
+end
+
+U3D = {
+  KeyCode = { __CastFrom = function(n) return n end },
+  Vector2 = function(x, y) return { x = x, y = y } end,
+  Vector3 = function(x, y, z) return { x = x, y = y, z = z or 0 } end,
+  Color = function(r, g, b, a) return { r, g, b, a } end,
+  RenderMode = { ScreenSpaceOverlay = 'overlay' },
+  Screen = { width = 1920, height = 1080 },
+  Time = {},
+  Canvas = T.Canvas, RectTransform = T.RectTransform,
+  RectTransformUtility = { WorldToScreenPoint = function(cam, p) return { x = p.x, y = p.y } end },
+  Input = {
+    GetKey = function(k) return pad.buttons[k - 330] == true end,
+    GetAxisRaw = function(name)
+      if name == "Horizontal" then return pad.h end
+      if name == "Vertical" then return pad.v end
+      local n = tonumber(name:match("^gcgpad_a(%d+)$"))
+      if n then return pad.axes[n] or 0 end
+      error("Input Axis " .. name .. " is not setup.")
+    end,
+    GetMouseButton = function() return touches > 0 end,
+  },
+  Object = {
+    FindObjectsOfType = function(ty)
+      local out = { Length = 0 }
+      for _, o in ipairs(allObjects) do
+        local c = o.comps[ty]
+        if c and o.activeInHierarchy and not o.destroyed then out[out.Length] = c; out.Length = out.Length + 1 end
+      end
+      return out
+    end,
+    DontDestroyOnLoad = function() end,
+  },
+  GameObject = function(name) local o = newObject(name); o.overlay = true; return o end,
+  UI = { Selectable = setmetatable(T.Selectable, { __index = function(t, k) if k == 'allSelectables' then return allSelectables() end end }),
+         Button = T.Button, Toggle = T.Toggle, Slider = T.Slider, Scrollbar = T.Scrollbar, InputField = T.InputField,
+         ScrollRect = T.ScrollRect, Image = T.Image },
+  EventSystems = { EventSystem = { current = es }, RaycastResult = 'RaycastResult',
+                   PointerEventData = function() return {} end },
+}
+setmetatable(U3D.Input, { __index = function(t, k) if k == 'touchCount' then return touches end end })
+setmetatable(U3D.Time, { __index = function(t, k) if k == 'realtimeSinceStartup' then return clock end end })
+CS = { System = { Collections = { Generic = { List = function() return newList end } } },
+       Game = { EventTriggerListener = T.ETL }, UnityEngine = { EventSystems = {} } }
+
+timers = {}
+cartoon = { OnTouch = function() log('advance') end }
+storyPlaying = false
+Game = {
+  Utils = {
+    IsDestroyed = function(o) return o == nil or o.destroyed == true or (o.gameObject and o.gameObject.destroyed == true) end,
+    ExecutePointerDownEvents = function(o) log('down ' .. o.name) end,
+    ExecutePointerUpEvents = function(o) log('up ' .. o.name) end,
+    ExecuteClickEvents = function(o)
+      log('click ' .. o.name)
+      if o.sel and o.sel.types[T.Toggle] then
+        if o.sel.group then for _, x in ipairs(allObjects) do if x.sel and x.sel.group == o.sel.group then x.sel.isOn = false end end end
+        o.sel.isOn = true
+      end
+      if o.onClick then o.onClick() end
+    end,
+  },
+  Timer = { Add = function(d, i, fn, real, keep) timers[#timers + 1] = fn; timerArgs = { real, keep }; return #timers end,
+            Delete = function(id) timers[id] = nil end },
+  CanvasCamera = { Root = ROOT },
+  CartoonMgr = setmetatable({}, { __index = function(t, k)
+    if k == 'IsPlaying' then return storyPlaying end
+    if k == 'Ins' then return { GetCartoonNow = function() return cartoon end } end
+  end }),
+}
+openWindows = {}
+UI.IsOpen = function(n) return openWindows[n] == true end
+UI.GetClass = function(n) return nil end
+UI.GetWindowGameObject = function(n) return windowObjects and windowObjects[n] end
+
+function frame(dt) clock = clock + (dt or 0.05); for _, fn in pairs(timers) do fn() end end
+function press(n) pad.buttons[n] = true; frame(); pad.buttons[n] = false; frame() end
+function stick(x, y) pad.h, pad.v = x, y; frame(); pad.h, pad.v = 0, 0; frame() end
+function focusName() local f = GamepadMenu._state.focus; return f and f.go.name or 'none' end
+function frameShown()
+  local o = GamepadMenu.overlay
+  return o ~= nil and o.bars[1].go.active == true
+end
+'''
+
+SCENE = r'''
+-- main menu: a 3 x 2 grid, a top bar window above it with Back, and a tab bar (toggle group)
+main = window('UI_Main', 10)
+cells = {}
+for row = 0, 1 do for col = 0, 2 do
+  local x, y = 560 + col * 300, 520 - row * 220
+  cells[#cells + 1] = el(main, 'Cell' .. (row * 3 + col + 1), x, y, x + 240, y + 160)
+end end
+tabs = { el(main, 'TabA', 600, 900, 760, 960, 'toggle'), el(main, 'TabB', 800, 900, 960, 960, 'toggle'),
+         el(main, 'TabC', 1000, 900, 1160, 960, 'toggle') }
+group(tabs[1], tabs[2], tabs[3]); tabs[1].sel.isOn = true
+deco = el(main, 'Deco', 0, 0, 200, 200, 'image')
+player = window('UI_Player', 20)
+backBtn = el(player, 'BtnBack', 20, 980, 140, 1060)
+'''
+
+
+def lua_runtime(chunk):
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute('UI = {}')
+    lua.execute(MOCK)
+    printed = []
+    lua.globals().print = lambda *a: printed.append(' '.join(str(x) for x in a))
+    lua.execute(chunk)
+    return lua, printed
+
+
+def check(lua, code, want, label, report):
+    lua.execute(code)
+    got = lua.eval('take()')
+    assert got == want, (label, code, got, want)
+    if report: report('ok %-28s %-62s -> %s' % (label, code.strip().replace('\n', '; ')[:62], got))
+
+
+def scenario(chunk, report):
+    lua, printed = lua_runtime(chunk)
+    ev = lua.eval
+    lua.execute('UI.Open("UI_Main")')
+    assert ev('#timers') == 1 and '[pad] menu: started' in printed
+    assert tuple(ev('timerArgs').values()) == (True, True)   # real time, kept over scene loads
+    lua.execute('UI.Open("UI_Player")')
+    assert ev('#timers') == 1                                # Ensure does not start a second timer
+    lua.execute(SCENE)
+
+    # nothing happens before the pad is used; the first input shows the frame and is swallowed
+    check(lua, 'frame(); frame()', '', 'idle', report)
+    assert not ev('frameShown()')
+    check(lua, 'press(0)', '', 'first press shows focus', report)
+    assert ev('frameShown()') and ev('focusName()') == 'Cell2', ev('focusName()')   # nearest the centre
+
+    # spatial moves, edges, and the beam rule
+    check(lua, 'stick(1, 0)', '', 'right', report); assert ev('focusName()') == 'Cell3'
+    check(lua, 'stick(1, 0)', '', 'right at edge', report); assert ev('focusName()') == 'Cell3'
+    check(lua, 'stick(0, -1)', '', 'down', report); assert ev('focusName()') == 'Cell6'
+    check(lua, 'stick(-1, 0)', '', 'left', report); assert ev('focusName()') == 'Cell5'
+    check(lua, 'stick(0, 1); stick(0, 1)', '', 'up to the tab bar', report); assert ev('focusName()') == 'TabB'
+    check(lua, 'stick(-1, 0); stick(0, 1)', '', 'up to the top bar', report); assert ev('focusName()') == 'BtnBack'
+    check(lua, 'stick(0, -1)', '', 'back down', report); assert ev('focusName()') == 'TabA'
+
+    # A presses like a finger: down on press, up and click on release
+    lua.execute('stick(0, -1)')
+    assert ev('focusName()') == 'Cell1'
+    check(lua, 'pad.buttons[0] = true; frame()', 'down Cell1', 'A down', report)
+    check(lua, 'frame()', '', 'A held', report)
+    check(lua, 'pad.buttons[0] = false; frame()', 'up Cell1|click Cell1', 'A up', report)
+
+    # held direction repeats after the delay
+    lua.execute('stick(0, 1)')   # back to TabA
+    check(lua, 'pad.h = 1; frame(0.05); frame(0.2); frame(0.2); pad.h = 0; frame()', '', 'repeat', report)
+    assert ev('focusName()') == 'TabC', ev('focusName()')
+
+    # LB / RB: tabs of the toggle group
+    check(lua, 'press(5)', 'down TabB|up TabB|click TabB', 'RB next tab', report)
+    assert ev('tabs[2].sel.isOn') and not ev('tabs[1].sel.isOn')
+    check(lua, 'press(4)', 'down TabA|up TabA|click TabA', 'LB previous tab', report)
+    check(lua, 'press(4)', '', 'LB at first tab', report)
+
+    # B with no popup: the Back button of the top bar
+    check(lua, 'press(1)', 'down BtnBack|up BtnBack|click BtnBack', 'B back', report)
+
+    # a popup with a dark backdrop: the focus moves into it, the menu below is out of reach
+    lua.execute('''
+      pop = window('UI_Popup', 30)
+      mask = el(pop, 'Mask', 0, 0, 1920, 1080, 'trigger')
+      box = el(pop, 'Box', 660, 340, 1260, 740, 'image')
+      el(pop, 'BtnCancel', 700, 380, 900, 460); el(pop, 'BtnConfirm', 1020, 380, 1220, 460)
+      el(pop, 'BtnClose', 1180, 660, 1250, 730)
+      frame(0.3)''')
+    assert ev('focusName()') == 'BtnConfirm', ev('focusName()')
+    check(lua, 'stick(-1, 0)', '', 'left in popup', report); assert ev('focusName()') == 'BtnCancel'
+    check(lua, 'stick(0, -1)', '', 'down: nothing below', report); assert ev('focusName()') == 'BtnCancel'
+    check(lua, 'stick(0, 1)', '', 'up: close, not the menu', report); assert ev('focusName()') == 'BtnClose'
+    check(lua, 'press(1)', 'down BtnClose|up BtnClose|click BtnClose', 'B closes popup', report)
+    # the popup goes away: the focus returns to the control last used in the main window
+    lua.execute('pop.active = false; frame(0.3)')
+    assert ev('focusName()') == 'TabA', ev('focusName()')
+    # a popup with only a backdrop: B taps the backdrop
+    lua.execute('''
+      pop2 = window('UI_Reward', 40)
+      bg = el(pop2, 'BlackBg', 0, 0, 1920, 1080)
+      el(pop2, 'Icon', 900, 500, 1000, 600, 'image')
+      frame(0.3)''')
+    assert ev('focusName()') == 'BlackBg', ev('focusName()')   # only a backdrop to reach: it takes the focus
+    check(lua, 'press(1)', 'down BlackBg|up BlackBg|click BlackBg', 'B taps backdrop', report)
+    lua.execute('pop2.active = false; frame(0.3)')
+
+    # scroll list: items beyond the viewport are reached and scrolled into view
+    lua.execute('''
+      main.active = false; frame(0.3)
+      list = window('UI_List', 10)
+      view, content, sr = scrollList(list, 'View', 600, 200, 1300, 800)
+      items = {}
+      for i = 1, 8 do items[i] = el(content, 'Item' .. i, 600, 800 - i * 190, 1300, 800 - i * 190 + 170) end
+      UI.Open("UI_List"); frame(0.3)''')
+    assert ev('focusName()') in ('Item2', 'Item3'), ev('focusName()')
+    lua.execute('for i = 1, 6 do stick(0, -1) end')
+    assert ev('focusName()') == 'Item8', ev('focusName()')
+    assert ev('content.transform.ay') > 0                  # content moved up to show the last item
+    y0 = ev('select(2, items[8].transform:world()) + items[8].transform.r[2]')
+    assert y0 >= 200, y0                                   # last item inside the viewport
+    check(lua, 'press(0)', 'down Item8|up Item8|click Item8', 'A on scrolled item', report)
+    before = ev('content.transform.ay')
+    check(lua, 'pad.axes[5] = -1; frame(0.1); pad.axes[5] = 0; frame()', '', 'right stick scrolls up', report)
+    assert ev('content.transform.ay') < before
+
+    # slider: left / right change its value
+    lua.execute('''
+      list.active = false
+      opt = window('UI_Option', 10)
+      vol = el(opt, 'Volume', 700, 500, 1200, 560, 'slider')
+      UI.Open("UI_Option"); frame(0.3)''')
+    assert ev('focusName()') == 'Volume'
+    lua.execute('stick(1, 0)')
+    assert abs(ev('vol.sel.value') - 0.55) < 1e-6
+
+    # touch hides the frame; the next pad input shows it again and is swallowed
+    lua.execute('touches = 1; frame(); touches = 0; frame()')
+    assert not ev('frameShown()')
+    check(lua, 'press(0)', '', 'press after touch', report)
+    assert ev('frameShown()')
+
+    # the EventSystem's selection is cleared, so Submit cannot press a touched button again
+    lua.execute('selected = vol; frame()')
+    assert ev('selected') is None
+
+    # story scene: A advances, Start skips, choices take the focus, B gives A back to the dialogue
+    lua.execute('''
+      opt.active = false
+      story = window('UI_Cartoon', 50)
+      skip = el(story, 'BtnSkip', 1700, 980, 1880, 1060)
+      openWindows.UI_Cartoon = true; storyPlaying = true
+      frame(0.6)''')
+    assert ev('focusName()') == 'none'
+    check(lua, 'press(0)', 'advance', 'story A advances', report)
+    check(lua, 'press(10)', 'down BtnSkip|up BtnSkip|click BtnSkip', 'story Start skips', report)
+    check(lua, 'stick(0, 1)', '', 'story d-pad', report); assert ev('focusName()') == 'BtnSkip'
+    check(lua, 'press(1)', '', 'story B clears focus', report); assert ev('focusName()') == 'none'
+    check(lua, 'press(0)', 'advance', 'story A advances again', report)
+    lua.execute('''
+      c1 = el(story, 'BtnChoice1', 700, 500, 1200, 580); c2 = el(story, 'BtnChoice2', 700, 380, 1200, 460)
+      frame(0.6)''')
+    assert ev('focusName()') == 'BtnChoice1'
+    check(lua, 'stick(0, -1); press(0)', 'down BtnChoice2|up BtnChoice2|click BtnChoice2', 'story choice', report)
+    lua.execute('story.active = false; openWindows.UI_Cartoon = false; storyPlaying = false')
+
+    # optional cursor: Select on, stick moves it, A taps under it, Select off
+    lua.execute('''
+      cur = window('UI_Cursor', 10)
+      far = el(cur, 'Far', 1500, 100, 1700, 200)
+      near = el(cur, 'Near', 860, 490, 1060, 590)
+      UI.Open("UI_Cursor"); frame(0.3)''')
+    check(lua, 'press(11)', '', 'cursor on', report)
+    assert ev('GamepadMenu._state.cursorOn') and not ev('frameShown()')
+    lua.execute('pad.h, pad.v = 1, -1; for i = 1, 12 do frame(0.05) end; pad.h, pad.v = 0, 0; frame()')
+    cx, cy = ev('GamepadMenu._state.cx'), ev('GamepadMenu._state.cy')
+    assert cx > 1300 and cy < 300, (cx, cy)
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150')
+    check(lua, 'press(0)', 'down Far|up Far|click Far', 'cursor A taps', report)
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 300, 900')
+    check(lua, 'press(0)', '', 'cursor A on nothing', report)
+    check(lua, 'press(11)', '', 'cursor off', report)
+    assert not ev('GamepadMenu._state.cursorOn') and ev('frameShown()')
+
+    # fight: while a HUD button can be tapped, the menu layer stays idle and owns nothing
+    lua.execute('''
+      cur.active = false
+      hud = window('UI_Fight', 10)
+      pause = el(hud, 'BtnPause', 1800, 1000, 1900, 1070)
+      windowObjects = { UI_Fight = hud }
+      openWindows.UI_Fight = true; GamepadFight = { timer = 1 }
+      frame(0.3)''')
+    assert ev('GamepadMenu.owner') == 'fight' and not ev('frameShown()')
+    check(lua, 'press(0); press(1); stick(1, 0)', '', 'menu idle in fight', report)
+    # the pause menu opens over the HUD: the menu layer takes the pad
+    lua.execute('''
+      openWindows.UI_MissionPause = true
+      pw = window('UI_MissionPause', 30)
+      el(pw, 'PauseBg', 0, 0, 1920, 1080, 'image')
+      resume = el(pw, 'BtnContinue', 860, 500, 1060, 580)
+      frame(0.3)''')
+    assert ev('GamepadMenu.owner') == 'menu'
+    check(lua, 'press(0); press(0)', 'down BtnContinue|up BtnContinue|click BtnContinue', 'pause menu', report)
+
+    # a failing C# call is logged once and the layer keeps running
+    lua.execute('''
+      pw.active = false; openWindows.UI_MissionPause = false; hud.active = false; openWindows.UI_Fight = false
+      w = window('UI_Err', 10); b1 = el(w, 'B1', 700, 500, 900, 600); b2 = el(w, 'B2', 1000, 500, 1200, 600)
+      UI.Open("UI_Err"); frame(0.3)
+      local real = Game.Utils.ExecutePointerDownEvents
+      Game.Utils.ExecutePointerDownEvents = function() error('boom') end
+      press(0); press(0)
+      Game.Utils.ExecutePointerDownEvents = real''')
+    assert sum('boom' in p for p in printed) == 1, printed
+    check(lua, 'stick(1, 0); press(0)', 'down B2|up B2|click B2', 'after an error', report)
+    assert lua.eval('UI.Globals()') == (1, 2, 3, 4, 5, 6, 7)
+    return len([p for p in printed if p.startswith('[pad] menu: focus')])
+
+
+def check_geometry(report):
+    lua, _ = lua_runtime('')
+    lua.execute(module_only())
+    G = lua.eval('GamepadMenu._geo')
+    rank = G.backRank
+    assert [rank(n) for n in ('BtnClose', 'btnBack', 'Return', 'BtnCancel', 'Background', 'Feedback', 'BtnOK')] == \
+        [1, 2, 2, 3, None, None, None]
+    assert G.isConfirm('BtnConfirm') and G.isConfirm('BtnOk') and not G.isConfirm('Book')
+    assert G.arrowSide('BtnLeft') == -1 and G.arrowSide('BtnNext') == 1 and G.arrowSide('Center') is None
+    # the beam rule: a control straight ahead beats a closer one off the beam
+    lua.execute('''
+      src = { x0 = 0, y0 = 0, x1 = 100, y1 = 100 }
+      a = { r = { x0 = 400, y0 = 0, x1 = 500, y1 = 100 } }     -- straight right, far
+      b = { r = { x0 = 150, y0 = 300, x1 = 250, y1 = 400 } }   -- up-right, near, off the beam
+      c = { r = { x0 = -300, y0 = 0, x1 = -200, y1 = 100 } }   -- left
+    ''')
+    assert lua.eval('GamepadMenu._geo.best(src, {b, a, c}, "right") == a')
+    assert lua.eval('GamepadMenu._geo.best(src, {b, a, c}, "up") == b')
+    assert lua.eval('GamepadMenu._geo.best(src, {b, a, c}, "left") == c')
+    assert lua.eval('GamepadMenu._geo.best(src, {b, a, c}, "down") == nil')
+    if report: report('ok geometry: back ranks, confirm names, arrows, beam rule')
+
+
+def module_only():
+    text = g.lua_script(NAME, SYNTHETIC).decode('utf8')
+    return text[text.index(g.MENU_BEGIN):]
+
+
+def check_injection():
+    once = g.lua_script(NAME, SYNTHETIC)
+    text, plain = once.decode('utf8'), SYNTHETIC.decode('utf8').replace('\r\n', '\n')
+    assert g.lua_script(NAME, once) == once and g.lua_script(NAME, once.replace(b'\n', b'\r\n')) == once
+    assert '\r' not in text and text.count(g.MENU_BEGIN) == text.count(g.MENU_END) == 1
+    assert text.count(g.ENSURE) == 1 and g.UI_OPEN + g.ENSURE in text and text.endswith(g.MENU_END)
+    block = text[text.index(g.MENU_BEGIN):]
+    assert text.replace(block, '').replace(g.ENSURE, '') == plain.rstrip('\n') + '\n'
+    stale = text.replace(block, g.MENU_BEGIN + 'GamepadMenu = nil\n' + g.MENU_END)
+    assert g.lua_script(NAME, stale.encode('utf8')) == once
+    rejected = 0
+    for broken in (plain.replace(g.UI_OPEN, ''), plain.replace(g.UI_OPEN, g.UI_OPEN + g.UI_OPEN)):
+        try:
+            g.lua_script(NAME, broken.encode('utf8'))
+        except AssertionError:
+            rejected += 1
+    assert rejected == 2
+    return once
+
+
+def run(script=None, report=None):
+    synthetic = script is None
+    if synthetic:
+        script = check_injection()
+    else:
+        assert g.lua_script(NAME, script) == script
+    text = script.decode('utf8')
+    LuaRuntime().execute('assert(load(...))', text)
+    check_geometry(report)
+    if synthetic:
+        chunk = text
+    else:
+        # A complete stock UI.lua cannot run in the mock: the bundle contributes its module, with the
+        # synthetic UI.Open carrying the start call.
+        chunk = g.lua_script(NAME, SYNTHETIC).decode('utf8').split(g.MENU_BEGIN)[0] + text[text.index(g.MENU_BEGIN):]
+    focus_logs = scenario(chunk, report)
+    return {'menuLayerExecutedInMockRuntime': True, 'syntheticUiSource': synthetic,
+            'anchorRequiredExactlyOnce': True, 'patchIdempotent': True, 'realtimeTimer': True,
+            'popupBlocksMenuBelow': True, 'scrollListReachesClippedItems': True, 'tabsAndBack': True,
+            'storyAdvanceSkipChoices': True, 'optionalCursor': True, 'idleWhileFightHudOwnsPad': True,
+            'errorLoggedOnceAndRecovered': True, 'debugFocusLines': focus_logs, 'patchedLuaSyntaxPassed': True}
+
+
+def run_bundle(source):
+    import asset_tools as w
+    _, raw = w.unityfs(w.transform(source))
+    _, objects = w.serialized_objects(raw)
+    script, = [raw[o['script_start']:o['script_start'] + o['script_length']]
+               for o in objects if o.get('name') == NAME]
+    return run(script)
+
+
+if __name__ == '__main__':
+    print(run(report=print))

@@ -116,6 +116,9 @@ RAW_STEPS = [
     ("failSkill = false; pad.buttons[1] = false", ""),
     ("pad.buttons[1] = true", ""),                                       # stays disabled until Stop
     ("pad.buttons[1] = false; pad.h = -1", "move -1.00 0.00"),           # other actions still work
+    ("GamepadMenu = { owner = 'menu' }", "move 0.00 0.00"),              # a window covers the HUD: release
+    ("pad.buttons[0] = true", ""),                                       # the menu layer has the pad
+    ("GamepadMenu = { owner = 'fight' }; pad.buttons[0] = false", "move -1.00 0.00"),
 ]
 # The same layer when the InputManager has no gcgpad_aN entry: only stock axis names answer.
 STOCK_STEPS = [
