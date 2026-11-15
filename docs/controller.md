@@ -46,11 +46,13 @@ it:
   released, through `Game.Utils.ExecutePointerDownEvents`, `...UpEvents` and
   `ExecuteClickEvents` (the calls of the client's own UI test runner). Hold A on
   a hold-to-repeat button and it repeats, as under a finger.
-- **Main action**: a full-screen target is left out of focus moves (it is a
-  backdrop), unless it is a whole window or is named start, tap, continue, next,
-  click or touch. Then it is the screen's main action, such as the title's "Tap
-  Screen to Start" (the `UI_Login` window itself is the button): the frame runs
-  along the screen edges and the d-pad reaches it through a box at its centre.
+- **Main action**: a full-screen Button that is not named like a backdrop (mask,
+  bg, black, blank, shadow, empty, close) is the screen's main action, such as
+  the title's "Tap Screen to Start" (`UI_Login` `PnlBG/BtnLogin`). A full-screen
+  hand-wired trigger, often a drag area, counts only when it is a whole window or
+  is named start, tap, continue, next, click or touch. The frame of a main action
+  runs along the screen edges, and the d-pad reaches it through a box at its
+  centre. Other full-screen targets stay out of focus moves; B taps a backdrop.
 - **First focus** of a new page or popup: the tutorial's target when a tutorial
   step is open, else the control last used in that window, else the window's
   main action, else a confirm/OK button, else the control nearest the screen

@@ -458,9 +458,11 @@ local function collect()
 	end
 	local nav = {}
 	for _, c in ipairs(result) do
-		-- a full-screen target that is a whole window (the title's tap area) or says so by name is that
-		-- screen's main action: it stays in the focus moves, through a box at its centre
-		if c.big and not G.isBackdrop(c.go.name) and (c.go.name == c.win or G.isMainAction(c.go.name)) then
+		-- a full-screen button (the title's BtnLogin, "Tap Screen to Start") is that screen's main action,
+		-- unless its name says backdrop; a full-screen hand-wired trigger (often a drag area) only when it is
+		-- a whole window or says so by name. A main action stays in the focus moves, through a box at its centre
+		if c.big and not G.isBackdrop(c.go.name)
+			and (c.kind ~= 'trigger' or c.go.name == c.win or G.isMainAction(c.go.name)) then
 			c.main = true
 			c.nr = G.mainBox(c.r)
 		end
