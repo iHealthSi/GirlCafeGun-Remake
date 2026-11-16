@@ -2772,6 +2772,14 @@ export function createGatewayServer({
           const level = chapterCatalog.get(chapter, index, difficulty);
           if (!level?.storyOnly) {
             logger.warn("chapter.story.invalid", { chapter, index, difficulty });
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: 540,
+                tbParam: { tbNew: [] },
+              }),
+            );
             return;
           }
 
@@ -4003,6 +4011,14 @@ export function createGatewayServer({
                 difficulty,
                 star,
               });
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("ChapterMsg", {
+                  nError: 1,
+                  nState: 1,
+                }),
+              );
               return;
             }
             const player =
