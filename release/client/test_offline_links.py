@@ -14,6 +14,9 @@ import patch_offline_links as g
 
 OLD_WIKI = 'https://girlcafegun.boom-app.wiki/'
 NEW_WIKI = 'https://wiki.girl.cafe/'
+# Settings > Other: Terms, Privacy, Support; then the bilibili pages that only the Chinese client shows.
+HIDDEN = ('Content/List1/Grid/Btn1', 'Content/List1/Grid/Btn2', 'Content/List1/Grid/Btn7', 'Content/List1/Grid/Btn13',
+          'Content/List1/Grid/Btn14', 'Content/Title2', 'Content/List2')
 SURVEY = 'https://docs.google.com/forms/d/e/1FAIpQLSevCq76gs6OF2HooAP89RdtiaZ3gpyg0SjTWloMs00RjJESuA/viewform'
 FUNCTIONS = {'EvaluateGuide.lua': 'function tbClass:CheckEvaluateTip(type,pEndCall)\n',
              'DropWay.lua': 'function DropWay:LoadTargetUI( target, tbParam )\n',
@@ -78,6 +81,10 @@ function tbClass:OnInit()
 \t\t\tend, nil, UIText("UI_User.Btn13"), UIText("UI_OtherTips.WikiContent"))
 \t\tend,self.ui.qita)
 \tself.ui.qita:Find("Content/List1/Grid/Btn7").gameObject:SetActive(true)
+\tself.ui.qita:Find("Content/List1/Grid/Btn13").gameObject:SetActive(true)
+\tself.ui.qita:Find("Content/List1/Grid/Btn14").gameObject:SetActive(true)
+\tself.ui.qita:Find("Content/Title2").gameObject:SetActive(true)
+\tself.ui.qita:Find("Content/List2").gameObject:SetActive(true)
 \t------------------------其他界面   End-------------------------------------------
 end
 ''',
@@ -282,15 +289,15 @@ def run(scripts=None, report=None):
     user = texts['UI_User.lua']
     call = '\tOfflineLinks.HideButtons(self.ui.qita)\n'
     assert user.count(call) == 1 and user.index(call) < user.index(g.OTHER_END)
-    for path in ('Content/List1/Grid/Btn1', 'Content/List1/Grid/Btn2', 'Content/List1/Grid/Btn7'):
+    for path in HIDDEN:
         # Stock code that shows the button runs before the call, never after it.
         shown = [i for i in range(len(user)) if user.startswith(path, i)]
         assert all(i < user.index(call) for i in shown), path
     hide = lua.eval('function(paths) local have = {}; for _, p in ipairs(paths) do have[p] = true end; return OfflineLinks.HideButtons(root(have)) end')
     reset()
-    assert hide(lua.table('Content/List1/Grid/Btn1', 'Content/List1/Grid/Btn2', 'Content/List1/Grid/Btn7', 'Content/List1/Grid/Btn5')) == 3
-    assert joined() == ('SetActive Content/List1/Grid/Btn1 false|SetActive Content/List1/Grid/Btn2 false|'
-                        'SetActive Content/List1/Grid/Btn7 false'), joined()
+    assert list(lua.eval('OfflineLinks.HIDDEN').values()) == list(HIDDEN)
+    assert hide(lua.table(*HIDDEN, 'Content/List1/Grid/Btn5')) == len(HIDDEN)
+    assert joined() == '|'.join('SetActive %s false' % path for path in HIDDEN), joined()
     reset()
     assert hide(lua.table('Content/List1/Grid/Btn7')) == 1 and joined() == 'SetActive Content/List1/Grid/Btn7 false'
     assert lua.eval('OfflineLinks.HideButtons(nil)') == 0
@@ -300,7 +307,8 @@ def run(scripts=None, report=None):
         reset()
         lua.execute(line[0].strip())
         assert joined() == 'OpenURL ' + NEW_WIKI, (name, joined())
-    if report: report('ok settings: Btn1, Btn2, Btn7 hidden after the stock code that shows them; wiki buttons open %s' % NEW_WIKI)
+    if report: report('ok settings: %d buttons and rows hidden after the stock code that shows them; wiki buttons open %s'
+                      % (len(HIDDEN), NEW_WIKI))
 
     if synthetic:
         # The module's locals do not leak into Lib.lua; OfflineLinks is a global.
@@ -310,7 +318,7 @@ def run(scripts=None, report=None):
         assert whole.eval('LibGlobals()') == (None, None, None, None) and whole.eval('type(OfflineLinks.Url)') == 'function'
         if report: report('ok whole Lib.lua: the locals of the module do not leak, OfflineLinks is a global')
     return {'syntheticSources': synthetic, 'addressesChecked': len(MOVED + CLOSED + KEPT), 'bannerTargetsChecked': len(cases),
-            'rateWindowNeverOpens': True, 'settingsButtonsHidden': ['Btn1', 'Btn2', 'Btn7'], 'wikiOpens': NEW_WIKI,
+            'rateWindowNeverOpens': True, 'settingsButtonsHidden': [path.rsplit('/', 1)[1] for path in HIDDEN], 'wikiOpens': NEW_WIKI,
             'eachAnchorRequiredExactlyOnce': synthetic, 'patchIdempotent': True, 'patchedLuaSyntaxPassed': True}
 
 

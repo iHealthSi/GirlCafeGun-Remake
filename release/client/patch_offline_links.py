@@ -11,7 +11,9 @@ SDK windows of the publisher that are gone. What the player sees with this patch
                   survey form of the English release) opens nothing, not even the confirm window before it.
                   Every other address opens as before.
   UI_User         Settings > Other: Terms, Privacy (publisher account kit) and Support (publisher help desk)
-                  are hidden. The wiki button (Japanese client only) opens the new wiki.
+                  are hidden, and so are the bilibili rows that the Chinese client (zh_CN) adds: the SDK list,
+                  account deletion and the video editor row. The call runs after the stock code that shows
+                  them. The wiki button (Japanese client only) opens the new wiki.
   UI_JPTip        The wiki button of the Japanese tip window opens the new wiki.
 No prefab, table or other asset changes. Patching a patched script only refreshes the module.
 """

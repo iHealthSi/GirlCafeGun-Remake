@@ -44,10 +44,19 @@ end
 -- Settings > Other: buttons with nothing behind them in the offline build.
 --   Btn1, Btn2  Terms and Privacy: the publisher's account kit shows its own pages.
 --   Btn7        Support: the publisher's help desk (a closed web form for this client).
+-- The Chinese client (language zh_CN) also shows these; the English client hides them:
+--   Btn13       the third-party SDK list, a page of game.bilibili.com.
+--   Btn14       account deletion, the bilibili help desk game.bilibili.com/kf/.
+--   Title2, List2  the row of the bilibili video editor: its button asks member.bilibili.com for a download
+--               address, with the device id in the query.
 P.HIDDEN = {
 	'Content/List1/Grid/Btn1',
 	'Content/List1/Grid/Btn2',
 	'Content/List1/Grid/Btn7',
+	'Content/List1/Grid/Btn13',
+	'Content/List1/Grid/Btn14',
+	'Content/Title2',
+	'Content/List2',
 }
 
 -- Hides the buttons above under root (the Other page of the settings window).
