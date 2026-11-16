@@ -2514,7 +2514,7 @@ export function createGatewayServer({
               COMMAND.NTF_S2C_CALL,
               0,
               makeServerLuaCall("GetLastGacha", {
-                bTen: true,
+                bTen: pendingGacha.ten,
                 bGetCard: true,
                 tbAwards: result.awards,
                 ...(result.getItem ? { getItem: result.getItem } : {}),
@@ -2525,7 +2525,7 @@ export function createGatewayServer({
               send(
                 COMMAND.NTF_S2C_CALL,
                 0,
-                makeServerLuaCall("Lottery", {
+                makeServerLuaCall("GetLastGacha", {
                   err: "error.gacha.cash",
                 }),
               );
