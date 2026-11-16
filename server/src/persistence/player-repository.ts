@@ -6933,74 +6933,22 @@ export class PlayerRepository {
       if (settlementEvents.length > 0)
         this.#activities.dispatch(player, settlementEvents);
 
-      for (const [genre, detail, particular, templateLevel, rawCount] of awards) {
-        const count = Math.max(0, rawCount);
-        if (count === 0) continue;
-
-        const moneyId =
-          genre === 15 && detail === 1
-            ? MONEY_GOLD
-            : genre === 15 && detail === 2
-              ? MONEY_DIAMOND
-              : null;
-        if (moneyId !== null) {
-          let money = player.money.find(({ id }) => id === moneyId);
-          if (!money) {
-            money = { id: moneyId, count: 0 };
-            player.money.push(money);
-          }
-          money.count += count;
-          updatedMoneyIds.add(moneyId);
-          continue;
-        }
-
-        if (INSTANCE_GENRES.has(genre)) {
-          for (let itemIndex = 0; itemIndex < count; itemIndex += 1) {
-            const item: InventoryEntryState = {
-              guid: player.nextItemGuid++,
-              genre,
-              detail,
-              particular,
-              templateLevel,
-              count: 1,
-              createTime: unixTime(),
-              enhanceLevel: initialEnhanceLevel(genre),
-              enhanceExp: 0,
-              breakLevel: 0,
-              lockOn: 0,
-            };
-            player.inventory.push(item);
-            updatedItemGuids.add(item.guid);
-          }
-        } else {
-          let item = player.inventory.find(
-            (candidate) =>
-              !isInventoryInstance(candidate) &&
-              candidate.genre === genre &&
-              candidate.detail === detail &&
-              candidate.particular === particular &&
-              candidate.templateLevel === templateLevel,
-          );
-          if (!item) {
-            item = {
-              guid: player.nextItemGuid++,
-              genre,
-              detail,
-              particular,
-              templateLevel,
-              count: 0,
-              createTime: unixTime(),
-              enhanceLevel: 0,
-              enhanceExp: 0,
-              breakLevel: 0,
-              lockOn: 0,
-            };
-            player.inventory.push(item);
-          }
-          item.count += count;
-          updatedItemGuids.add(item.guid);
-        }
-      }
+      // Chapter first-clear awards include gallery (Riki) items, which unlock a
+      // task instead of becoming a stack: pay them like every other claim.
+      grantAwards(
+        player,
+        awards.map(
+          ([genre, detail, particular, templateLevel, count]): BaseAward => [
+            genre,
+            detail,
+            particular,
+            templateLevel,
+            count,
+          ],
+        ),
+        updatedItemGuids,
+        updatedMoneyIds,
+      );
       const girlReconciliation = reconcileGirlAppearanceState(player, updatedItemGuids);
       for (const girlId of girlReconciliation.updatedGirlIds) {
         updatedGirlIds.add(girlId);
