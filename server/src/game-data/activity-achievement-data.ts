@@ -21,6 +21,8 @@ import type {
   ActivityPlayerState,
 } from "../activities/activity-engine.js";
 import type { DomainEvent } from "../activities/domain-events.js";
+import { CafeCatalog } from "./cafe-catalog.js";
+import { cafeComfort } from "./cafe-runtime.js";
 import type { BaseAward } from "./chapter-config.js";
 
 export const ACHIEVEMENT_TASK_GROUP = 6;
@@ -339,7 +341,10 @@ export interface ActivityAchievementPlayer extends ActivityPlayerState {
   girls: readonly { level: number }[];
   inventory: readonly { genre: number; enhanceLevel: number; breakLevel: number }[];
   eightDaySignUp: { cumulativeDays: number };
-  cafe?: { level?: number };
+  cafe?: {
+    level?: number;
+    furniture?: readonly { roomId: number; templateId: number }[];
+  };
   formations?: readonly {
     fightCards: readonly { mainCardGuid: number; usedCardGuid: number }[];
   }[];
@@ -347,6 +352,30 @@ export interface ActivityAchievementPlayer extends ActivityPlayerState {
 
 const CARD_GENRE = 1;
 const WEAPON_GENRE = 2;
+
+/**
+ * Values that need a table besides the player state. A missing source leaves
+ * the stored progress of its type alone.
+ */
+export interface AchievementSources {
+  /** Comfort of the placed furniture, as cafeComfort reports it to the client. */
+  cafeComfort?: () => number;
+}
+
+/** Reads the comfort once per run, and only when a type 75 row asks for it. */
+export function playerAchievementSources(
+  player: ActivityAchievementPlayer,
+  catalog: () => CafeCatalog = () => CafeCatalog.loadDefault(),
+): AchievementSources {
+  let comfort: number | undefined;
+  return {
+    cafeComfort: () => {
+      const cafe = player.cafe;
+      comfort ??= cafe ? cafeComfort({ cafe }, catalog()) : 0;
+      return comfort;
+    },
+  };
+}
 
 /**
  * The conditions of Mission/AchieveType.txt that the v1 player state answers
@@ -361,12 +390,14 @@ const WEAPON_GENRE = 2;
  * - 54 character cards with limit break N [cards, break level]
  * - 59 secondary cards equipped in team 1 [cards]
  * - 71 weapons at level N [weapons, level]
+ * - 75 cafe comfort [comfort], from sources.cafeComfort
  * - 79 cafe level [level]
  * - 85 girls at affection level N [girls, level]
  */
 export function derivedAchievementProgress(
   player: ActivityAchievementPlayer,
   config: AchievementConfig,
+  sources: AchievementSources = {},
 ): number | null {
   const counts = config.counts;
   const second = counts[1];
@@ -408,6 +439,8 @@ export function derivedAchievementProgress(
       return player.inventory.filter(
         ({ genre, enhanceLevel }) => genre === WEAPON_GENRE && enhanceLevel >= second,
       ).length;
+    case 75:
+      return sources.cafeComfort ? sources.cafeComfort() : null;
     case 79:
       return player.cafe?.level ?? 1;
     case 85:
@@ -425,10 +458,11 @@ export function derivedAchievementProgress(
 export function projectAchievementProgress(
   player: ActivityAchievementPlayer,
   config: AchievementConfig,
+  sources: AchievementSources = {},
 ): number {
   const taskId = String(makeAchievementTaskId(config.group, config.id));
   const current = player.taskValues[taskId] ?? 0;
-  const derived = derivedAchievementProgress(player, config) ?? 0;
+  const derived = derivedAchievementProgress(player, config, sources) ?? 0;
   const next = makeAchievementTaskValue(
     Math.max(achievementProgress(current), derived),
     hasClaimedAchievement(current),
@@ -442,6 +476,7 @@ export function reconcileActivityAchievements(
   player: ActivityAchievementPlayer,
   catalog: ActivityAchievementCatalog,
   now: number,
+  sources: AchievementSources = {},
 ): void {
   for (const activityId of catalog.shownActivityIds(now, player.registerTime)) {
     for (const achievementId of catalog.activityAchievementIds(activityId)) {
@@ -449,7 +484,7 @@ export function reconcileActivityAchievements(
         ACTIVITY_ACHIEVEMENT_TASK_GROUP,
         achievementId,
       );
-      if (config) projectAchievementProgress(player, config);
+      if (config) projectAchievementProgress(player, config, sources);
     }
   }
 }
@@ -466,6 +501,7 @@ export function reconcileActivityAchievements(
  * - 40 weapon limit breaks [total]
  * - 42 bounty clears [total]
  * - 76 coffees sold [total]
+ * - 137 furniture bought [total]: one per piece bought in the furniture shop
  */
 export function countedAchievementIncrement(
   config: AchievementConfig,
@@ -491,6 +527,8 @@ export function countedAchievementIncrement(
       return event.type === "bounty.cleared" ? 1 : 0;
     case 76:
       return event.type === "coffee.sold" ? event.count : 0;
+    case 137:
+      return event.type === "cafe.furniture_bought" ? event.count : 0;
     default:
       return 0;
   }
@@ -545,6 +583,8 @@ export const activityAchievementActivity: ActivityHandler<ActivityAchievementPla
     "coffee.sold",
     "weapon.broken",
     "cafe.level_changed",
+    "cafe.comfort_changed",
+    "cafe.furniture_bought",
     "formation.updated",
   ],
   reconcile(player, context) {
@@ -552,11 +592,17 @@ export const activityAchievementActivity: ActivityHandler<ActivityAchievementPla
       player,
       ActivityAchievementCatalog.loadDefault(),
       context.now,
+      playerAchievementSources(player),
     );
   },
   onEvent(player, event, context) {
     const catalog = ActivityAchievementCatalog.loadDefault();
     countActivityAchievements(player, catalog, event, context.now);
-    reconcileActivityAchievements(player, catalog, context.now);
+    reconcileActivityAchievements(
+      player,
+      catalog,
+      context.now,
+      playerAchievementSources(player),
+    );
   },
 };
