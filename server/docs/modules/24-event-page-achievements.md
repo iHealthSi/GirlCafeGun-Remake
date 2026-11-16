@@ -5,9 +5,9 @@
 Core implementation; automated tests only, no phone playtest yet.
 
 The claim gate works for every event page that lists achievements. Progress
-comes from the saved player state for eight condition types. Conditions that
-need a counter (stage clears in total, gifts, coffee sold and so on) stay at
-their stored value, so their Claim buttons do not appear yet.
+comes from the saved player state for nine condition types and from counters
+for seven more. The other conditions of the shown pages stay at their stored
+value, so their Claim buttons do not appear (see Known gaps).
 
 ## Client contract
 
@@ -21,7 +21,9 @@ Source: `NormalActivityConfig.lua`, `UI_NormalActivity.lua`,
   `Achievement.txt` (the achievement panel) task group 6. Bit 0 of the task
   value is the claim mark, bits 1-31 are the progress.
 - The page shows Claim when progress >= `missionMax[assistparam[1]]`
-  (`MissionManager:CheckInfoState`). The client never counts by itself.
+  (`MissionManager:CheckInfoState`). The client never counts by itself: of its
+  151 `SetTaskValue` calls, only `OnlineTeamBattle.lua:183` writes group 18 (a
+  reset to 0 in an online mode) and none writes group 6.
 - Claim on an event page: `NormalActivityGetAward {nActivityId, nId, nType = 1}`.
   Claim in the achievement panel: `AchievementGetAward {nId, nType = 0}`.
 - Both are answered with `MissionMgrMsg {nError, nMission = 0}`. `nError` is
@@ -37,20 +39,20 @@ Source: `NormalActivityConfig.lua`, `UI_NormalActivity.lua`,
 and the time is inside the show window. Twelve rows have no end date, so they
 show at any date:
 
-| Activity | `Name`                      | Template and table     | Handled                                                      |
-| -------- | --------------------------- | ---------------------- | ------------------------------------------------------------ |
-| 1        | `activity.dailysign`        | 3                      | module 11                                                    |
-| 2        | `activity.capter`           | 2, `ActivityTemplate2` | claims; progress for all 6 achievements (type 2)             |
-| 3        | `activity.level`            | 2, `ActivityTemplate2` | claims; progress for 8 of 10 (types 39, 54, 71; not 40, 41)  |
-| 8        | `activity.power`            | 4, `EnergyActivity`    | no (`NormalActivityGetAward` without `nType`)                |
-| 14       | `activity.battle`           | 2, `ActivityTemplate2` | claims; no progress source (types 22, 42, 59, 104, 105)      |
-| 15       | `activity.girl`             | 2, `ActivityTemplate2` | claims; progress for 10 of 16 (types 37, 85; not 18, 29)     |
-| 16       | `activity.coffee`           | 2, `ActivityTemplate2` | claims; no progress source (types 75, 76, 137)               |
-| 20       | `activity.suduku`           | 6, `SodukuActivity`    | cell progress for 4 of 9 cells; line rewards are not handled |
-| 29       | `activity.eightsign`        | 12, `EightDaysSignUp`  | module 11 (unchanged); the same table rows work here         |
-| 83       | `activity.HalfYearFestival` | 21                     | no                                                           |
-| 108      | `activity.NewMisson`        | 2, `ActivityTemplate2` | claims; progress for 2 of 19 (type 71)                       |
-| 149      | `activity.15DayRecruit`     | 26                     | no; shown for the first 30 days of an account                |
+| Activity | `Name`                      | Template and table     | Handled                                                       |
+| -------- | --------------------------- | ---------------------- | ------------------------------------------------------------- |
+| 1        | `activity.dailysign`        | 3                      | module 11                                                     |
+| 2        | `activity.capter`           | 2, `ActivityTemplate2` | claims; progress for all 6 achievements (type 2)              |
+| 3        | `activity.level`            | 2, `ActivityTemplate2` | claims; progress for 9 of 10 (types 39, 40, 54, 71; not 41)   |
+| 8        | `activity.power`            | 4, `EnergyActivity`    | no (`NormalActivityGetAward` without `nType`)                 |
+| 14       | `activity.battle`           | 2, `ActivityTemplate2` | claims; progress for 6 of 14 (types 22, 42; not 59, 104, 105) |
+| 15       | `activity.girl`             | 2, `ActivityTemplate2` | claims; progress for all 16 (types 18, 29, 37, 85)            |
+| 16       | `activity.coffee`           | 2, `ActivityTemplate2` | claims; progress for 3 of 9 (type 76; not 75, 137)            |
+| 20       | `activity.suduku`           | 6, `SodukuActivity`    | cell progress for 6 of 9 cells; line rewards are not handled  |
+| 29       | `activity.eightsign`        | 12, `EightDaysSignUp`  | module 11 (unchanged); the same table rows work here          |
+| 83       | `activity.HalfYearFestival` | 21                     | no                                                            |
+| 108      | `activity.NewMisson`        | 2, `ActivityTemplate2` | claims; progress for 2 of 19 (type 71)                        |
+| 149      | `activity.15DayRecruit`     | 26                     | no; shown for the first 30 days of an account                 |
 
 Every other row with `Sort` not 0 has an end date in 2022 or earlier. Their
 achievement lists are loaded as well (`ActivityTemplate4`, `ActivityTemplate5`,
@@ -139,13 +141,37 @@ the save:
 | 43   | login days `[days, paid sign-in activity]`            | `eightDaySignUp.cumulativeDays` |
 | 54   | cards with limit break N `[cards, break level]`       | `breakLevel` of genre 1         |
 | 71   | weapons at level N `[weapons, level]`                 | `enhanceLevel` of genre 2       |
+| 79   | cafe level `[level]`                                  | `cafe.level` (1 if unset)       |
 | 85   | girls at affection level N `[girls, level]`           | `girls[].level`                 |
 
 The `activity-achievements` activity handler projects them into task group 18
 for the achievements of the pages the client shows now. It runs at login and
-account load (`reconcile`) and on `level.cleared` and `weapon.enhanced`. The
+account load (`reconcile`) and on every domain event it subscribes. The
 projection only raises progress and never touches the claim mark. A claim
 projects its own achievement again before the check.
+
+`countedAchievementIncrement` answers the types that need a counter. The rules
+follow the GCG2-Offline C# build (`MissionCountersFeature`,
+`ChapterCombatProgress`, `GirlActionAchievements`):
+
+| Type | Condition (`missionMax`)           | Domain event, increment                                  |
+| ---- | ---------------------------------- | -------------------------------------------------------- |
+| 18   | gifts given `[total]`              | `girl.gift_sent`, one per gift item                      |
+| 22   | stage clears `[times, difficulty]` | `level.cleared` of a fight at that difficulty, not story |
+| 24   | vigour spent `[total]`             | `vigour.spent`, the amount (won, lost and bounty fights) |
+| 29   | girl trainings `[total]`           | `girl.training_finished`, one                            |
+| 40   | weapon limit breaks `[total]`      | `weapon.broken`, one                                     |
+| 42   | bounty clears `[total]`            | `bounty.cleared`, one                                    |
+| 76   | coffees sold `[total]`             | `coffee.sold`, the cups of one cafe request              |
+
+A counter adds to the stored progress of the achievements of the pages shown at
+that time; a page that opens later starts from zero. The save gets no new field.
+
+Events that only trigger the projection: `player.level_changed` (fight and
+bounty experience), `card.progressed` (card enhance, Fantasy Oath card reward),
+`girl.affection_changed` (headpat, gift, training end, phone moments and
+letters) and `cafe.level_changed`. Each of these paths sends `TASK_VALUE_RSP`
+when an achievement moved, so the page updates without a new login.
 
 Login days are the existing eight-day counter: one per operational day
 (Asia/Shanghai 04:00), at most 8.
@@ -160,17 +186,27 @@ Login days are the existing eight-day counter: one per operational day
   `ActivityTemplate4`, `ActivityTemplate5` (both lists), `EightDaysSignUp2` and
   `WeaponMCGacha`; refusal of foreign, incomplete, award-less and unsupported
   claims; login days counted once per day; the achievement panel claim.
+- `test/activity-achievement-progress.test.ts`: headpat, card enhance, won and
+  lost fights, story level, bounty, gift, training and weapon limit break move
+  their achievements in the same transaction; a counter keeps the claim mark.
+- `test/cafe-persistence.test.ts`: one sold coffee counts once (achievement 61).
 - `test/activity-achievement-gateway.test.ts`: both Lua calls over TCP, the
-  order of task sync and callback, and the refusal answer.
+  order of task sync and callback, and the refusal answer; a gift that moves
+  only an event achievement sends the task values.
 
 ## Known gaps
 
-- No counters. Types 18, 22, 24, 29, 40, 41, 42, 59, 75, 76, 79, 104, 105, 107,
-  109, 137, 171, 193, 195-199 and 230 of the shown pages have no progress source.
-- Girl affection and card level change without a domain event, so their
-  progress reaches the client at the next login.
-- Page 16 has no progress source yet. Its awards (`14-1-4-1`) are paid as coffee
-  coins by an inferred rule, see Awards.
+- Types 41, 59, 75, 104, 105, 107, 109, 137, 171, 193, 195-199 and 230 of the
+  shown pages have no progress source:
+  - 59 (secondary cards in team 1) and 75 (cafe comfort) can be read from the
+    save; 75 needs the cafe catalog in the projection. Not done yet.
+  - 137 (furniture bought) needs a count from the cafe shop. Not done yet.
+  - 41 (card skill upgrades), 104 (co-op stages), 105 (tower stages), 107 (club
+    tasks), 109 (friend support), 171 (card remodel), 193 and 230 (sync rate) and
+    195-199 (parts and modules) belong to features this server does not have.
+- Counters start at this version. Progress made before it is not recovered.
+- Page 16 awards (`14-1-4-1`) are paid as coffee coins by an inferred rule, see
+  Awards.
 - Stacks of auto-use items that an older build put into a save are not
   converted.
 - A reward path that does not send the task values after `grantAwards` shows a
