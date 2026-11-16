@@ -43,6 +43,20 @@ def has_save_answer(out):
     sys.exit('cannot tell whether the phone has a save (raw output: %r): stopped, nothing changed' % out)
 
 
+DAILY_NONE = '__none'
+
+
+def daily_names_answer(code, out):
+    """The answer of the daily-copy listing: the file names, [] when the folder is missing, or a stop.
+    A failed adb call must not look like "no daily copies": push and wipe delete that folder next."""
+    if code == 0 and out.strip() == DAILY_NONE:
+        return []
+    names = out.split()
+    if code != 0 or DAILY_NONE in names or any(not re.fullmatch(r'[A-Za-z0-9._-]+', n) for n in names):
+        sys.exit('cannot list the daily copies on the phone (raw output: %r): stopped, nothing changed' % out)
+    return names
+
+
 class Phone:
     """The phone, through adb. The tests replace this class with one that keeps the files in memory."""
 
@@ -91,8 +105,7 @@ class Phone:
         return self._read(SAVE)
 
     def daily_names(self):
-        code, out = self.app('ls %s 2>/dev/null' % DAILY)
-        return [n for n in out.split() if re.fullmatch(r'[A-Za-z0-9._-]+', n)] if code == 0 else []
+        return daily_names_answer(*self.app('if [ -d %s ]; then ls %s; else echo %s; fi' % (DAILY, DAILY, DAILY_NONE)))
 
     def read_daily(self, name):
         return self._read(DAILY + '/' + name)
@@ -155,11 +168,17 @@ def add_daily_copies(phone, folder):
     added = 0
     for name in phone.daily_names():
         copy = phone.read_daily(name)
+        if not looks_like_a_save(copy):
+            sys.exit('the daily copy %s on the phone is not a JSON object: stopped, nothing changed' % name)
         if sha(copy) in copies.values():
             continue
+        stored = name
+        if stored in copies:  # the server rewrote the copy of that date: keep both
+            stem, dot, ext = name.rpartition('.')
+            stored = '%s-%s.%s' % (stem, sha(copy)[:8], ext) if dot else '%s-%s' % (name, sha(copy)[:8])
         (folder / 'phone-daily-copies').mkdir(parents=True, exist_ok=True)
-        (folder / 'phone-daily-copies' / name).write_bytes(copy)
-        copies[name] = sha(copy)
+        (folder / 'phone-daily-copies' / stored).write_bytes(copy)
+        copies[stored] = sha(copy)
         added += 1
     if added:
         info['dailyCopies'] = copies

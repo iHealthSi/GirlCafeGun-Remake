@@ -133,6 +133,28 @@ def test_save_tool():
         assert garbage.save == first and garbage.daily == daily
         print('ok an unreadable phone: push and wipe stop before they change anything')
 
+        clash = Path(tmp) / 'clash'
+        clash.mkdir()
+        old, new = b'{"players": {"g": 7}}\n', b'{"players": {"g": 8}}\n'
+        assert save_tool.add_daily_copies(FakePhone(first, {'state-20260105.json': old}), clash)[0] == 1
+        added, copies = save_tool.add_daily_copies(FakePhone(first, {'state-20260105.json': new}), clash)
+        rewritten = 'state-20260105-%s.json' % save_tool.sha(new)[:8]
+        assert added == 1 and set(copies) == {'state-20260105.json', rewritten}
+        assert (clash / 'phone-daily-copies' / 'state-20260105.json').read_bytes() == old
+        assert (clash / 'phone-daily-copies' / rewritten).read_bytes() == new
+        print('ok a daily copy the server rewrote under the same name: both versions are kept')
+
+        broken = FakePhone(first, {'state-20260106.json': b'run-as: error\n'})
+        assert 'not a JSON object' in stops(lambda: run(broken, store, 'wipe')) and broken.save == first
+        print('ok a daily copy that is no save: wipe stops before it removes anything')
+
+        assert save_tool.daily_names_answer(0, '__none\n') == []
+        assert save_tool.daily_names_answer(0, '') == []
+        assert save_tool.daily_names_answer(0, 'a.json\nb.json\n') == ['a.json', 'b.json']
+        for code, out in ((1, ''), (0, 'run-as: package not found\n'), (1, '__none\n')):
+            assert 'cannot list' in stops(lambda: save_tool.daily_names_answer(code, out))
+        print('ok the daily-copy listing: a failed or garbled answer stops instead of looking empty')
+
 
 def manifest(value, on='application', kind=0x12):
     """A small binary manifest: <manifest><application android:debuggable=value/></manifest>."""
