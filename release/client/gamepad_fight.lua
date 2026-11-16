@@ -119,10 +119,9 @@ end
 
 -- while the pause menu or another window has the pad, keep the button states current, so a button
 -- that is still down when the HUD gets the pad back is not taken as a new press
+local EDGES = { dodge = 'dodge', s1 = 'skill1', s2 = 'skill2', s3 = 'skill3', auto = 'auto' }
 local function syncEdges(cfg)
-	for name, list in pairs({ dodge = cfg.dodge, s1 = cfg.skill1, s2 = cfg.skill2, s3 = cfg.skill3, auto = cfg.auto }) do
-		st.prev[name] = anyKey(list)
-	end
+	for name, key in pairs(EDGES) do st.prev[name] = anyKey(cfg[key]) end
 end
 
 local function joystickNames()

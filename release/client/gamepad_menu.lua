@@ -953,12 +953,14 @@ function M.Tick()
 	clearSelection()
 
 	if hudOwns() then
+		if M.owner ~= 'fight' then
+			if st.shown or st.cursorOn then hideFrame(); showCursor(false) end
+			-- start from scratch when the HUD gives the pad back: no cursor, and the first pad input only
+			-- shows the frame, so A still held from firing does not press the window that opens
+			st.shown, st.cursorOn, st.dirHeld, st.prev, st.pending = false, false, nil, {}, nil
+			st.focus, st.pressed = nil, nil
+		end
 		M.owner = 'fight'
-		if st.shown or st.cursorOn then hideFrame(); showCursor(false) end
-		-- start from scratch when the HUD gives the pad back: no cursor, and the first pad input only
-		-- shows the frame, so A still held from firing does not press the window that opens
-		st.shown, st.cursorOn, st.dirHeld, st.prev, st.pending = false, false, nil, {}, nil
-		st.focus, st.pressed = nil, nil
 		return
 	end
 	M.owner = 'menu'
