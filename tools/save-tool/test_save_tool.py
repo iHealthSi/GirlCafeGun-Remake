@@ -147,7 +147,43 @@ def test_manifest():
     print('ok manifest: refused without the attribute, on another tag, with another type, on a cut file')
 
 
+def test_failed_sign():
+    """A wrong keystore password: no full-size temporary APK and no half-signed output stay behind."""
+    import argparse, shutil, subprocess, zipfile
+    from unittest import mock
+
+    def fake_run(args, **kw):
+        args = [str(x) for x in args]
+        if Path(args[0]).name.startswith('zipalign'):
+            shutil.copyfile(args[-2], args[-1])
+        elif 'sign' in args:
+            Path(args[args.index('--out') + 1]).write_bytes(b'PK half written')
+            return subprocess.CompletedProcess(args, 1, '', 'keystore password was incorrect')
+        return subprocess.CompletedProcess(args, 0, '', '')
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp = Path(tmp)
+        apk = tmp / 'in.apk'
+        with zipfile.ZipFile(apk, 'w') as z:
+            z.writestr(playtest_apk.MANIFEST, manifest(0))
+            z.writestr('assets/data', b'data')
+            z.writestr('META-INF/CERT.RSA', b'old signature')
+        tools = tmp / 'bt'
+        (tools / 'lib').mkdir(parents=True)
+        (tools / 'zipalign.exe').write_bytes(b'')
+        (tools / 'lib' / 'apksigner.jar').write_bytes(b'')
+        out = tmp / 'out' / 'playtest.apk'
+        a = argparse.Namespace(apk=apk, out=out, build_tools=str(tools), ks=tmp / 'my.jks', ks_pass='pass:wrong',
+                               ks_key_alias=None, ks_type=None, java='java')
+        with mock.patch.object(playtest_apk.subprocess, 'run', fake_run):
+            assert 'keystore password was incorrect' in str(stops(lambda: playtest_apk.build(a)))
+        left = sorted(p.name for p in out.parent.iterdir())
+        assert left == [], left
+    print('ok playtest build: a failed sign leaves no unsigned, aligned or half-signed APK')
+
+
 if __name__ == '__main__':
     test_save_tool()
     test_manifest()
+    test_failed_sign()
     print('all checks passed')
