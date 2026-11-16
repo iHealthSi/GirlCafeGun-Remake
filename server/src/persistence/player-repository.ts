@@ -19,6 +19,7 @@ import {
   reconcileHeadpatCharges,
   type HeadpatResponse,
 } from "../game-data/headpat-data.js";
+import { isClientWritableTaskId } from "../game-data/client-task-policy.js";
 import { createDefaultActivityEngine } from "../activities/default-activity-engine.js";
 import type { DomainEvent } from "../activities/domain-events.js";
 import {
@@ -1121,6 +1122,17 @@ function reconcileChapterStarTaskValues(player: Player): void {
       chapterStarClaimedMask(currentValue),
     );
   }
+}
+
+/** Ids that setTaskValues never overwrites, whoever asks. */
+function isSkippedTaskWrite(id: number): boolean {
+  return (
+    isDailyMissionTaskValueId(id) ||
+    isRotationSelectionTaskId(id) ||
+    isHeadpatTaskId(id) ||
+    isCafePetTaskId(id, CafePetCatalog.loadDefault()) ||
+    (id >>> 16 === 60 && (id & 0xffff) >= 101 && (id & 0xffff) <= 104)
+  );
 }
 
 function makeGirlTaskId(group: number, girlId: number, offset: number): number {
@@ -4237,20 +4249,49 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       for (const { id, value } of changes) {
-        if (
-          isDailyMissionTaskValueId(id) ||
-          isRotationSelectionTaskId(id) ||
-          isHeadpatTaskId(id) ||
-          isCafePetTaskId(id, CafePetCatalog.loadDefault()) ||
-          (id >>> 16 === 60 && (id & 0xffff) >= 101 && (id & 0xffff) <= 104)
-        )
-          continue;
+        if (isSkippedTaskWrite(id)) continue;
         player.taskValues[String(id)] = value;
       }
     });
     this.#logger.info("player.tasks.updated", { account, changes });
     if (!player) throw new Error(`Failed to update player tasks: ${account}`);
     return structuredClone(player);
+  }
+
+  /**
+   * TASK_CHANGE_REQ from the client. Writes only the ids the client owns
+   * (client-task-policy.ts); every other id keeps its stored value and is
+   * returned in `refusedIds`, so the gateway can send the true value back.
+   */
+  async applyClientTaskChanges(
+    account: string,
+    changes: readonly TaskChange[],
+  ): Promise<{ player: Player; refusedIds: number[] }> {
+    const accepted: TaskChange[] = [];
+    const refusedIds: number[] = [];
+    for (const change of changes) {
+      if (
+        isClientWritableTaskId(change.id) &&
+        !isSkippedTaskWrite(change.id) &&
+        Number.isSafeInteger(change.value)
+      ) {
+        accepted.push(change);
+      } else {
+        refusedIds.push(change.id);
+      }
+    }
+    if (refusedIds.length > 0) {
+      this.#logger.warn("player.tasks.client_write_refused", {
+        account,
+        refused: changes.filter(({ id }) => refusedIds.includes(id)),
+      });
+    }
+    if (accepted.length > 0) {
+      return { player: await this.setTaskValues(account, accepted), refusedIds };
+    }
+    const player = this.get(account);
+    if (!player) throw new Error(`Unknown player account: ${account}`);
+    return { player: structuredClone(player), refusedIds };
   }
 
   async recordDailyMissionProgress(
