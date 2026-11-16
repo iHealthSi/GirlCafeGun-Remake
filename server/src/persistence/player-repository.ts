@@ -5098,6 +5098,7 @@ export class PlayerRepository {
       counters.total += buyNum;
       counters.shelf += buyNum;
       if (shelfEntry) shelfEntry.bought += buyNum;
+      incrementDailyMissionProgress(player, 108, 1, now);
       result = buildShopGoodsList(player, catalog, shopId, now);
     });
     if (!player || !result) {
