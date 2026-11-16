@@ -200,6 +200,17 @@ interface GatewayServerOptions {
 }
 
 const SETTLEMENT_CACHE_TTL_MS = 120_000;
+// Client text keys ui.Error.<code> used by the error replies below.
+const RENAME_FAILED = 11015; // "Failed to rename. Please try again."
+const FORMATION_REJECTED = 20072; // "Teaming error. Please select again or adjust the teaming."
+const BAD_REQUEST = 29999; // "Request parameters error"
+const PVP_NOT_VERIFIED = 1;
+const PVP_RESPONSES = new Map<number, number>([
+  [COMMAND.PVP_APPLY_CREATE_TEAM_REQ, COMMAND.PVP_APPLY_CREATE_TEAM_RSP],
+  [COMMAND.PVP_APPLY_BEGIN_MATCH_REQ, COMMAND.PVP_APPLY_BEGIN_MATCH_RSP],
+  [COMMAND.PVP_APPLY_TEAM_READY_REQ, COMMAND.PVP_APPLY_TEAM_READY_RSP],
+  [COMMAND.PVP_APPLY_UPDATE_PLAYERINFO_REQ, COMMAND.PVP_APPLY_UPDATE_PLAYERINFO_RSP],
+]);
 const MAIL_RESPONSES = new Map<number, number>([
   [COMMAND.GET_MAIL_REQ, COMMAND.GET_MAIL_RSP],
   [COMMAND.GET_MAIL_ITEM_REQ, COMMAND.GET_MAIL_ITEM_RSP],
@@ -834,6 +845,11 @@ export function createGatewayServer({
       });
     }
 
+    // S2C.CallClientError hides the blocking overlay and shows ui.Error.<err>.
+    function sendCallClientError(err: number): void {
+      send(COMMAND.NTF_S2C_CALL, 0, makeServerLuaCall("CallClientError", { err }));
+    }
+
     function updateMailbox(action: MailAction, now: number) {
       const bannerIds = activeGachaBannerIds(now, config.gachaRotationDays);
       const awards = dailyPullMailAwards(
@@ -1276,8 +1292,20 @@ export function createGatewayServer({
       }
 
       if (packet.command === COMMAND.RENAME_REQ) {
-        const name = parseRenameName(packet.payload);
-        context.player = await players.rename(context.account, name);
+        try {
+          const name = parseRenameName(packet.payload);
+          context.player = await players.rename(context.account, name);
+        } catch (error) {
+          // UI_ChangeName waits for this reply; a non-zero code shows
+          // ui.Error.<code> ("Failed to rename. Please try again.").
+          send(COMMAND.RENAME_RSP, packet.serial, Buffer.alloc(0), RENAME_FAILED);
+          logger.warn("player.rename_failed", {
+            peer,
+            account: context.account,
+            message: String(error),
+          });
+          return;
+        }
         send(COMMAND.RENAME_RSP, packet.serial);
         return;
       }
@@ -2590,11 +2618,30 @@ export function createGatewayServer({
                 .map(Number)
                 .filter((id) => Number.isSafeInteger(id) && id > 0)
             : [];
-          context.player = await players.setGachaCustomUp(
-            context.account,
-            poolId,
-            itemIds,
-          );
+          // UI_GachaCardSelected shows a 300 s blocking overlay until a reply.
+          // Never answer with SetCardCustomUp for a bad pool: the client then
+          // looks the pool up and fails on nil.
+          let customUpPlayer: Player;
+          try {
+            if (!gachaCatalog.get(poolId) || itemIds.length === 0) {
+              throw new Error("Invalid card custom-up pool or selection");
+            }
+            customUpPlayer = await players.setGachaCustomUp(
+              context.account,
+              poolId,
+              itemIds,
+            );
+          } catch (error) {
+            sendCallClientError(BAD_REQUEST);
+            logger.warn("gacha.custom_up.rejected", {
+              account: context.account,
+              poolId: parameters.nId,
+              itemIds,
+              message: String(error),
+            });
+            return;
+          }
+          context.player = customUpPlayer;
           send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(context.player.taskValues));
           send(
             COMMAND.NTF_S2C_CALL,
@@ -3960,18 +4007,42 @@ export function createGatewayServer({
           return;
         }
 
-        const formationUpdate = parseFormationUpdateCall(call, context.player);
-        if (formationUpdate) {
-          context.player = await players.updateFormation(
-            context.account,
-            formationUpdate.formation,
-          );
+        let formationUpdate: FormationUpdateCall | null;
+        let formationPlayer: Player | null = null;
+        try {
+          formationUpdate = parseFormationUpdateCall(call, context.player);
+          if (formationUpdate) {
+            formationPlayer = await players.updateFormation(
+              context.account,
+              formationUpdate.formation,
+            );
+            context.player = formationPlayer;
+          }
+        } catch (error) {
+          // The parser returns null for anything but 21/22/23, so a throw here
+          // is a rejected team (bad card data, or a card or weapon that is no
+          // longer owned). Do not send the LuaCall success callback: its
+          // client handler continues with the unsaved team whatever the result.
+          // CallClientError shows the message and leaves the screen open.
+          sendCallClientError(FORMATION_REJECTED);
+          logger.warn("formation.update_rejected", {
+            peer,
+            account: context.account,
+            message: String(error),
+          });
+          return;
+        }
+        if (formationUpdate && formationPlayer) {
           send(
             COMMAND.FORMATION_UPDATE_NTF,
             0,
             makeFormationUpdateNotification(formationUpdate.formation),
           );
-          send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(context.player.taskValues));
+          send(
+            COMMAND.TASK_VALUE_RSP,
+            0,
+            makeTaskValueSync(formationPlayer.taskValues),
+          );
           send(
             COMMAND.NTF_S2C_CALL,
             0,
@@ -4382,11 +4453,35 @@ export function createGatewayServer({
             }
           } else if (girlAppearanceCall) {
             let callback: Record<string, unknown>;
-            if (girlAppearanceCall.command === "SetMainGirl") {
-              context.player = await players.setMainGirl(
-                context.account,
-                girlAppearanceCall.girlId,
+            // GirlLogic's dispatcher hides the blocking overlay for any reply
+            // with this sCmd; nError routes it to On<sCmd>Error.
+            const rejectAppearance = (error: unknown): void => {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("GirlLogic", {
+                  sCmd: girlAppearanceCall.command,
+                  nId: girlAppearanceCall.girlId,
+                  nError: 1,
+                }),
               );
+              logger.warn("girl.appearance.rejected", {
+                peer,
+                account: context.account,
+                ...girlAppearanceCall,
+                reason: String(error),
+              });
+            };
+            if (girlAppearanceCall.command === "SetMainGirl") {
+              try {
+                context.player = await players.setMainGirl(
+                  context.account,
+                  girlAppearanceCall.girlId,
+                );
+              } catch (error) {
+                rejectAppearance(error);
+                return;
+              }
               send(
                 COMMAND.TASK_VALUE_RSP,
                 0,
@@ -4426,11 +4521,16 @@ export function createGatewayServer({
                 return;
               }
             } else {
-              context.player = await players.setGirlFightModel(
-                context.account,
-                girlAppearanceCall.girlId,
-                girlAppearanceCall.enabled,
-              );
+              try {
+                context.player = await players.setGirlFightModel(
+                  context.account,
+                  girlAppearanceCall.girlId,
+                  girlAppearanceCall.enabled,
+                );
+              } catch (error) {
+                rejectAppearance(error);
+                return;
+              }
               send(
                 COMMAND.TASK_VALUE_RSP,
                 0,
@@ -4926,6 +5026,15 @@ export function createGatewayServer({
             });
           }
         }
+        return;
+      }
+
+      const pvpResponse = PVP_RESPONSES.get(packet.command);
+      if (pvpResponse !== undefined && !context.player) {
+        // Before VERIFY there is no save to build a team from. Answer instead
+        // of dropping the request, so the room UI does not wait forever.
+        send(pvpResponse, packet.serial, Buffer.alloc(0), PVP_NOT_VERIFIED);
+        logger.warn("pvp.request_before_verify", { peer, command: packet.command });
         return;
       }
 
