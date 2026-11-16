@@ -431,6 +431,33 @@ def scenario(chunk, report):
     check(lua, 'pad.axes[5] = -1; frame(0.1); pad.axes[5] = 0; frame()', '', 'right stick scrolls up', report)
     assert ev('content.transform.ay') < before
 
+    # right stick over a list that holds no focus: the scene is scanned for the list a few times a second,
+    # not on every 10 ms tick
+    lua.execute('''
+      list.active = false
+      gal = window('UI_Gallery', 10)
+      ok = el(gal, 'BtnOk', 100, 100, 300, 160)
+      gview, gcontent, gsr = scrollList(gal, 'Pics', 600, 200, 1300, 800)
+      for i = 1, 8 do el(gcontent, 'Pic' .. i, 600, 800 - i * 190, 1300, 800 - i * 190 + 170, 'image') end
+      UI.Open("UI_Gallery"); frame(0.3)
+      scrollScans = 0
+      local find = U3D.Object.FindObjectsOfType
+      U3D.Object.FindObjectsOfType = function(ty)
+        if ty == T.ScrollRect then scrollScans = scrollScans + 1 end
+        return find(ty)
+      end
+      gstart = gcontent.transform.ay
+      pad.axes[5] = 1
+      for i = 1, 100 do frame(0.01) end''')
+    assert ev('focusName()') == 'BtnOk', ev('focusName()')
+    assert ev('gcontent.transform.ay') > ev('gstart')          # the list under the stick still scrolls
+    scans = ev('scrollScans')
+    assert 1 <= scans <= 6, scans                               # one second held: about 4 scans, was 100
+    # the list goes away: the next tick looks again at once instead of moving a hidden list
+    lua.execute('gview.active = false; gsr.isActiveAndEnabled = false; scrollScans = 0; frame(0.01)')
+    assert ev('scrollScans') == 1, ev('scrollScans')
+    lua.execute('pad.axes[5] = 0; frame(); gal.active = false; frame(0.3)')
+
     # slider: left / right change its value
     lua.execute('''
       list.active = false

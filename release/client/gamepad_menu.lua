@@ -769,29 +769,41 @@ local function skipStory()
 	end
 end
 
-local function scrollBy(rx, ry, dt)
-	local c = st.focus
-	local sr = c and c.scroll
-	if not sr then
-		-- the largest reachable list
-		local best, ba
-		for _, ty in ipairs(scrollTypesOf()) do
-			local arr = U3D.Object.FindObjectsOfType(ty)
-			for i = 0, arr.Length - 1 do
-				local s = arr[i]
-				local vr = s.isActiveAndEnabled and screenRect(viewportOf(s))
-				if vr then
-					local x, y = G.center(vr)
-					local h = rayHit(x, y)
-					if h and h.transform:IsChildOf(s.transform) then
-						local a = (vr.x1 - vr.x0) * (vr.y1 - vr.y0)
-						if not ba or a > ba then best, ba = s, a end
-					end
+-- The list the right stick moves when the focus is in none. The scene scan is costly, so its result
+-- (also "no list") is kept for SCROLL_RESCAN seconds while the stick stays tilted.
+local SCROLL_RESCAN = 0.25
+local function largestScroll()
+	local t = now()
+	local cached = st.scrollPick
+	if cached and t - cached.at < SCROLL_RESCAN
+		and (cached.sr == nil or (alive(cached.sr) and cached.sr.isActiveAndEnabled)) then
+		return cached.sr
+	end
+	-- the largest reachable list
+	local best, ba
+	for _, ty in ipairs(scrollTypesOf()) do
+		local arr = U3D.Object.FindObjectsOfType(ty)
+		for i = 0, arr.Length - 1 do
+			local s = arr[i]
+			local vr = s.isActiveAndEnabled and screenRect(viewportOf(s))
+			if vr then
+				local x, y = G.center(vr)
+				local h = rayHit(x, y)
+				if h and h.transform:IsChildOf(s.transform) then
+					local a = (vr.x1 - vr.x0) * (vr.y1 - vr.y0)
+					if not ba or a > ba then best, ba = s, a end
 				end
 			end
 		end
-		sr = best
 	end
+	st.scrollPick = { sr = best, at = t }
+	return best
+end
+
+local function scrollBy(rx, ry, dt)
+	local c = st.focus
+	local sr = c and c.scroll
+	if not sr then sr = largestScroll() end
 	if not sr then return end
 	local vr = viewportOf(sr).rect
 	local k = M.cfg.scrollSpeed * dt
@@ -852,8 +864,9 @@ local function showFrame(r)
 	place(o.bars[3], x0, y0, t, h)          -- left
 	place(o.bars[4], x1, y0, t, h)          -- right
 	local f = M.cfg.frame
+	local color = U3D.Color(f[1], f[2], f[3], pulse)
 	for i = 1, 4 do
-		o.bars[i].img.color = U3D.Color(f[1], f[2], f[3], pulse)
+		o.bars[i].img.color = color
 		o.bars[i].go:SetActive(true)
 	end
 end
