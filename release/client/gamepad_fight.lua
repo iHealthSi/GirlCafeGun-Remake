@@ -117,6 +117,14 @@ local function pressed(name, list)
 	return now and not was
 end
 
+-- while the pause menu or another window has the pad, keep the button states current, so a button
+-- that is still down when the HUD gets the pad back is not taken as a new press
+local function syncEdges(cfg)
+	for name, list in pairs({ dodge = cfg.dodge, s1 = cfg.skill1, s2 = cfg.skill2, s3 = cfg.skill3, auto = cfg.auto }) do
+		st.prev[name] = anyKey(list)
+	end
+end
+
 local function joystickNames()
 	local t, n = {}, U3D.Input.GetJoystickNames()
 	for i = 0, n.Length - 1 do t[#t + 1] = n[i] end
@@ -155,9 +163,9 @@ function P.Tick()
 
 	-- pause works even while the fight HUD is hidden
 	if pressed("pause", cfg.pause) then try("pause", pause) end
-	if UI.IsOpen("UI_MissionPause") then P.Reset(); return end
+	if UI.IsOpen("UI_MissionPause") then P.Reset(); syncEdges(cfg); return end
 	-- a window covers the HUD (story, results, rewards): the menu layer (gamepad_menu.lua) has the pad
-	if GamepadMenu and GamepadMenu.owner == 'menu' then P.Reset(); return end
+	if GamepadMenu and GamepadMenu.owner == 'menu' and not GamepadMenu.off then P.Reset(); syncEdges(cfg); return end
 
 	-- move: stock Horizontal/Vertical (left stick = joystick axes 1/2, and the arrow keys), else the hat
 	local x, y = U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
@@ -197,13 +205,43 @@ function P.Tick()
 	if pressed("auto", cfg.auto) then try("auto", autoFight) end
 end
 
+local function now()
+	local ok, t = pcall(function() return U3D.Time.realtimeSinceStartup end)
+	return ok and t or 0
+end
+
+-- A failed tick (for example while the scene loads) is skipped and logged once. After this many
+-- failures in a row the controller turns itself off until the next fight.
+local MAX_ERRORS = 120
+local errors, errLogged = 0, {}
+local function tick()
+	P.lastTick = now()
+	if broken.tick then return end
+	local ok, err = pcall(P.Tick)
+	if ok then errors = 0; return end
+	errors = errors + 1
+	local msg = tostring(err)
+	if not errLogged[msg] then errLogged[msg] = true; print("[pad] tick error: " .. msg) end
+	if errors >= MAX_ERRORS then
+		broken.tick = true
+		P.Reset()
+		print("[pad] tick disabled after " .. errors .. " errors in a row")
+	end
+end
+
 function P.Start()
-	if P.timer then return end
+	if P.timer then
+		-- the timer runs every 10 ms: one that has not run for a second was cleared without OnClose
+		if now() - (P.lastTick or 0) < 1 then return end
+		pcall(Game.Timer.Delete, P.timer); P.timer = nil
+		broken, errors, errLogged = {}, 0, {}
+		print("[pad] the old timer stopped: restarting")
+	end
 	P.Reset()
 	-- never break the fight HUD: a failure here only turns the controller off
 	-- real time: the pause menu sets the game's timer scale to 0, and Start must still close it
-	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, function() try("tick", P.Tick) end, true, false)
-	if ok then P.timer = t; print("[pad] started") else print("[pad] start failed: " .. tostring(t)) end
+	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, tick, true, false)
+	if ok then P.timer = t; P.lastTick = now(); print("[pad] started") else print("[pad] start failed: " .. tostring(t)) end
 end
 
 function P.Reset()
@@ -215,6 +253,6 @@ end
 function P.Stop()
 	if P.timer then pcall(Game.Timer.Delete, P.timer); P.timer = nil end
 	P.Reset()
-	broken = {}
+	broken, errors, errLogged = {}, 0, {}
 	print("[pad] stopped")
 end

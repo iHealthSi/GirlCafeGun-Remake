@@ -53,7 +53,9 @@ U3D = {
     end,
     GetJoystickNames = function() return { Length = 1, [0] = "Mock Pad" } end,
   },
+  Time = setmetatable({}, { __index = function(t, k) if k == "realtimeSinceStartup" then return clock end end }),
 }
+clock = 100
 local cam = {
   OnFight = function(self, v) log(string.format("fire %.2f %.2f", v.x, v.y)) end,
   OnFightStop = function(self) log("firestop") end,
@@ -73,12 +75,14 @@ Game = {
                   RemoveLuaEvent = function() hud[#hud + 1] = 'remove' end },
   eEventName = { OnNotifyUpdateAutoFight = 1 },
 }
-UI = { IsOpen = function(n) return n == "UI_MissionPause" and paused end,
+UI = { IsOpen = function(n)
+         if failTick then error("scene not ready") end
+         return n == "UI_MissionPause" and paused end,
        Open = function(n) paused = true; log("open " .. n) end,
        Close = function(n) paused = false; log("close " .. n) end,
        Register = function() registered = {}; return registered end }
 key, move, skill, pause, axis, st, try, P = 1, 2, 3, 4, 5, 6, 7, 8
-function frame() for _, fn in pairs(timers) do fn() end end
+function frame() clock = clock + 0.01; for _, fn in pairs(timers) do fn() end end
 function take() local c = calls; calls = {}; return table.concat(c, "|") end
 function timerCount() local n = 0; for _ in pairs(timers) do n = n + 1 end; return n end
 function errorCount() local n, most = 0, 0
@@ -109,16 +113,21 @@ RAW_STEPS = [
     ("pad.axes[6] = 0", "move 0.00 0.00"),
     ("pad.buttons[0] = true", "fire 0.00 0.00"),
     ("pad.buttons[10] = true", "open UI_MissionPause|firestop"),         # pause stops fire
-    ("pad.buttons[10] = false", ""),
-    ("pad.buttons[10] = true", "close UI_MissionPause|fire 0.00 0.00"),
-    ("pad.buttons[10] = false; pad.buttons[0] = false", "firestop"),
+    ("pad.buttons[10] = false; pad.buttons[2] = true", ""),            # X pressed in the pause menu
+    ("pad.buttons[10] = true", "close UI_MissionPause|fire 0.00 0.00"),  # still down after it: no skill
+    ("pad.buttons[10] = false; pad.buttons[0] = false; pad.buttons[2] = false", "firestop"),
     ("failSkill = true; pad.buttons[1] = true", ""),                     # error -> disabled, no crash
     ("failSkill = false; pad.buttons[1] = false", ""),
     ("pad.buttons[1] = true", ""),                                       # stays disabled until Stop
     ("pad.buttons[1] = false; pad.h = -1", "move -1.00 0.00"),           # other actions still work
+    ("failTick = true", ""),                                             # one failed tick (scene loading)
+    ("failTick = false", "move -1.00 0.00"),                             # does not end the controller
     ("GamepadMenu = { owner = 'menu' }", "move 0.00 0.00"),              # a window covers the HUD: release
-    ("pad.buttons[0] = true", ""),                                       # the menu layer has the pad
-    ("GamepadMenu = { owner = 'fight' }; pad.buttons[0] = false", "move -1.00 0.00"),
+    ("pad.buttons[0] = true; pad.buttons[4] = true", ""),                # the menu layer has the pad
+    ("GamepadMenu = { owner = 'fight' }; pad.buttons[0] = false", "move -1.00 0.00"),  # LB still down: no dodge
+    ("pad.buttons[4] = false", "move -1.00 0.00"),
+    ("pad.buttons[4] = true", "move -1.00 0.00|skill 3"),                # a new press dodges
+    ("pad.buttons[4] = false; GamepadMenu = { owner = 'menu', off = true }", "move -1.00 0.00"),  # menu layer off: not muted
 ]
 # The same layer when the InputManager has no gcgpad_aN entry: only stock axis names answer.
 STOCK_STEPS = [
@@ -188,6 +197,34 @@ def play(chunk, start, stop, raw_axes, steps, report):
     return lua, printed
 
 
+def check_restart(chunk, start, stop, report):
+    """Start after a lost timer, a second Start, and a tick that fails on every frame."""
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute(MOCK)
+    printed = []
+    lua.globals().print = lambda *a: printed.append(' '.join(str(x) for x in a))
+    lua.globals().rawAxes = True
+    lua.execute(chunk)
+    lua.execute(start + '\n' + start + '\ntake()')
+    assert lua.eval('timerCount()') == 1 and printed.count('[pad] started') == 1   # a live timer is kept
+    lua.execute('failSkill = true; pad.buttons[2] = true; frame(); pad.buttons[2] = false; frame(); failSkill = false')
+    assert lua.eval('take()') == '' and '[pad] skill disabled' in ''.join(printed)
+    # The game clears its timers without closing the HUD; the next fight opens the HUD again.
+    lua.execute('timers = {}; for i = 1, 200 do clock = clock + 0.01 end')
+    lua.execute(start)
+    assert lua.eval('timerCount()') == 1 and printed.count('[pad] started') == 2, printed
+    lua.execute('pad.buttons[2] = true; frame(); pad.buttons[2] = false; frame()')
+    assert lua.eval('take()') == 'skill 0'          # the new fight starts with every action on again
+    if report: report('ok restart: a lost timer is replaced at the next Start, a live one is kept')
+    # A tick that fails on every frame: logged once, then the controller turns itself off for this fight.
+    lua.execute('failTick = true; for i = 1, 130 do frame() end; failTick = false; pad.h = 1; frame()')
+    assert lua.eval('take()') == '' and sum('tick disabled' in p for p in printed) == 1, printed
+    assert sum('[pad] tick error' in p for p in printed) == 1, printed
+    lua.execute(stop + '\n' + start + '\nframe()')
+    assert lua.eval('take()') == 'move 1.00 0.00'   # the next fight has the controller again
+    if report: report('ok tick errors: logged once, off after 120 in a row, back at the next fight')
+
+
 def run(script=None, report=None):
     synthetic = script is None
     if synthetic:
@@ -216,11 +253,14 @@ def run(script=None, report=None):
     # Each absent axis name raised once (two hat axes, three roles, one debug probe) and was then skipped.
     assert lua.eval('errorCount()') == (28, 1), lua.eval('errorCount()')
     assert not any('disabled' in p for p in printed), printed
+    check_restart(chunk, start, stop, report)
     return {'controllerLayerExecutedInMockRuntime': True, 'syntheticHudSource': synthetic,
             'rawAxisSteps': len(RAW_STEPS), 'stockAxisSteps': len(STOCK_STEPS),
             'eachAnchorRequiredExactlyOnce': True, 'patchIdempotent': True,
             'moduleLocalsDoNotLeakIntoHudScript': synthetic,
             'absentAxisNamesAskedOnce': True, 'failedActionDisabledAlone': True,
+            'failedTickRecovers': True, 'noSkillFromButtonHeldOverAWindow': True,
+            'notMutedByStoppedMenuLayer': True, 'lostTimerRestarted': True,
             'patchedLuaSyntaxPassed': True}
 
 
