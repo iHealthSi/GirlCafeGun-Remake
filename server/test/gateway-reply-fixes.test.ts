@@ -319,3 +319,104 @@ it("answers GetLastGacha without enough diamonds as a Lottery error and not as G
     },
   );
 }, 15_000);
+
+it("lets the first 10-pull re-roll for free, spends the permit once on save, and closes the pool after", async () => {
+  // Alex, 2026-11-16: the first 10-pull (pool 666, the story permit) is an infinite
+  // re-roll; only the accepted roll is granted, and the permit is spent on accept.
+  const account = "reply-fix-first-ten";
+  const pools = GachaCatalog.loadDefault();
+  const pool = pools.get(666)!;
+  expect(pool.judgeType).toBe(2);
+  const permit = pool.costTen!;
+  const isPermit = (item: { genre: number; detail: number; particular: number; templateLevel: number }) =>
+    item.genre === permit[0] &&
+    item.detail === permit[1] &&
+    item.particular === permit[2] &&
+    item.templateLevel === permit[3];
+  await withGateway(
+    account,
+    async (store) => {
+      await store.update((state) => {
+        const player = state.players[account]!;
+        player.inventory.push({
+          guid: player.nextItemGuid++,
+          genre: permit[0],
+          detail: permit[1],
+          particular: permit[2],
+          templateLevel: permit[3],
+          count: 1,
+          enhanceLevel: 0,
+          enhanceExp: 0,
+          breakLevel: 0,
+          lockOn: 0,
+          createTime: 1,
+        });
+      });
+    },
+    async (call, store) => {
+      const start = structuredClone(store.snapshot().players[account]!);
+      for (let roll = 0; roll < 3; roll++) {
+        const reply = clientCalls(await call("Lottery", { nId: 666, bTen: true }));
+        expect(reply.at(-1)!.parameters.bGetCard).toBe(false);
+        const player = store.snapshot().players[account]!;
+        // A roll grants nothing and spends nothing.
+        expect(player.inventory).toEqual(start.inventory);
+        expect(player.money).toEqual(start.money);
+        expect(player.gacha.pending?.poolId).toBe(666);
+      }
+      const accepted = structuredClone(store.snapshot().players[account]!.gacha.pending!);
+
+      const saved = clientCalls(await call("GetLastGacha", true));
+      expect(saved.at(-1)!.method).toBe("GetLastGacha");
+      expect(saved.at(-1)!.parameters.bGetCard).toBe(true);
+      expect(saved.at(-1)!.parameters.tbAwards).toEqual(accepted.awards);
+      const after = store.snapshot().players[account]!;
+      expect(after.gacha.pending).toBeNull();
+      expect(after.inventory.filter(isPermit).reduce((sum, item) => sum + item.count, 0)).toBe(0);
+      for (const award of accepted.awards) {
+        const [genre, detail, particular, templateLevel] = award.tbGDPL;
+        expect(
+          after.inventory.some(
+            (item) =>
+              item.genre === genre &&
+              item.detail === detail &&
+              item.particular === particular &&
+              item.templateLevel === templateLevel,
+          ),
+        ).toBe(true);
+      }
+
+      // Without the permit the pool is closed: no new roll, nothing changes.
+      const before = structuredClone(after);
+      const again = clientCalls(await call("Lottery", { nId: 666, bTen: true }));
+      expect(again).toEqual([
+        { method: "Lottery", parameters: { err: "error.gacha.cash" } },
+      ]);
+      expect(store.snapshot().players[account]!).toEqual(before);
+    },
+  );
+}, 20_000);
+
+it("answers a free month-card claim while a card is active with DoRecharge Error 20021 and changes nothing", async () => {
+  const account = "reply-fix-month-card";
+  await withGateway(
+    account,
+    async () => {},
+    async (call, store) => {
+      const recharge = { sCmd: 10000, tbParam: { Type: 2, Id: 1 } };
+      const first = clientCalls(await call("LuaCall", recharge));
+      expect(first).toContainEqual({ method: "BuyMonth", parameters: { nType: 2, bMonth: 1, nId: 1 } });
+
+      const before = structuredClone(store.snapshot().players[account]!);
+      const second = clientCalls(await call("LuaCall", recharge));
+      // IBLogic:ResponseTradeNo shows ui.Error.<Error>; 20021 = "You can buy no more of this".
+      expect(second).toEqual([
+        {
+          method: "LuaCall",
+          parameters: { sCmd: 10000, tbParam: { Type: 2, Id: 1, Error: 20021 } },
+        },
+      ]);
+      expect(store.snapshot().players[account]!).toEqual(before);
+    },
+  );
+}, 15_000);

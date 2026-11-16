@@ -107,7 +107,6 @@ import {
   MONTH_CARD_DAYS,
   MONTH_CARD_DIAMONDS,
   MONTH_CARD_ITEM_ID,
-  MONTH_CARD_LIMIT_DAYS,
 } from "../game-data/ib-shop-data.js";
 import {
   isGoodsInWindow,
@@ -751,8 +750,12 @@ export interface IBItemFreeResult {
 
 export class IBShopError extends Error {
   constructor(
-    readonly reason: "unknown_item" | "limit_reached",
-    readonly clientError: number = reason === "limit_reached" ? 20075 : 20074,
+    readonly reason: "unknown_item" | "limit_reached" | "month_card_active",
+    readonly clientError: number = reason === "limit_reached"
+      ? 20075
+      : reason === "month_card_active"
+        ? 20021
+        : 20074,
   ) {
     super(`IB shop error: ${reason}`);
     this.name = "IBShopError";
@@ -5123,11 +5126,30 @@ export class PlayerRepository {
     poolId: number,
     ten: boolean,
     roll: GachaRollResult,
+    /**
+     * The item that unlocks the pool. A roll does not use it up (re-rolls are
+     * free until the result is saved), but without it the pool is closed: the
+     * client hides it (GachaCommon.lua GetCurPools, JudgeType 2 checks nTen),
+     * and the item is spent when the result is saved.
+     */
+    requiredItem: Gdpln | null = null,
   ): Promise<Player> {
     let player: Player | undefined;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      if (requiredItem) {
+        const [genre, detail, particular, templateLevel, count] = requiredItem;
+        const held = player.inventory.some(
+          (item) =>
+            item.genre === genre &&
+            item.detail === detail &&
+            item.particular === particular &&
+            item.templateLevel === templateLevel &&
+            item.count >= count,
+        );
+        if (!held) throw new InsufficientGachaCurrencyError(poolId);
+      }
       player.gacha.pending = {
         poolId,
         ten,
@@ -5198,6 +5220,15 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      // The month card is free in this offline build, so it may not stack: a
+      // claim is allowed only when no card is active, which gives one card and
+      // 300 diamonds per 30 days (Alex, 2026-11-16, card gcg2#55). The client
+      // table sets no limit (PurchaseIB.txt Id 1: MaxBuy empty, "Unlimited").
+      const monthTaskId = String(makeMonthCardTaskId());
+      const nowSeconds = Math.floor(now / 1000);
+      if ((player.taskValues[monthTaskId] ?? 0) > nowSeconds) {
+        throw new IBShopError("month_card_active");
+      }
       const taskId = String(makeIBItemTaskId(itemId));
       purchaseCount = (player.taskValues[taskId] ?? 0) + 1;
       player.taskValues[taskId] = purchaseCount;
@@ -5210,14 +5241,7 @@ export class PlayerRepository {
       diamond.count += MONTH_CARD_DIAMONDS;
       updatedMoneyIds.add(MONEY_DIAMOND);
 
-      const monthTaskId = String(makeMonthCardTaskId());
-      const nowSeconds = Math.floor(now / 1000);
-      const currentEnd = player.taskValues[monthTaskId] ?? 0;
-      const base = Math.max(nowSeconds, currentEnd);
-      monthCardEndTime = Math.min(
-        base + MONTH_CARD_DAYS * 86_400,
-        nowSeconds + MONTH_CARD_LIMIT_DAYS * 86_400,
-      );
+      monthCardEndTime = nowSeconds + MONTH_CARD_DAYS * 86_400;
       player.taskValues[monthTaskId] = monthCardEndTime;
     });
     if (!player) throw new Error(`Failed to claim IB item: ${account}`);
