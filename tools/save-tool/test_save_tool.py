@@ -10,6 +10,7 @@ import save_tool
 class FakePhone:
     """A phone that keeps the private folder of the app in memory."""
     package = save_tool.PACKAGE
+    PROBE = 'test -f %s && echo yes || echo no' % save_tool.SAVE
 
     def __init__(self, save=None, daily=None, debuggable=True):
         self.save, self.daily, self.debuggable, self.stops = save, dict(daily or {}), debuggable, 0
@@ -20,7 +21,11 @@ class FakePhone:
 
     def model(self): return 'Test phone'
     def stop(self): self.stops += 1
-    def has_save(self): return self.save is not None
+    def app(self, command):
+        """The shell as the app: answers the save probe from the in-memory save; nothing else says anything."""
+        return (0, 'yes\n' if self.save is not None else 'no\n') if command == self.PROBE else (0, '')
+    def has_save(self):
+        return save_tool.has_save_answer(self.app(self.PROBE)[1])
     def read_save(self): return self.save
     def daily_names(self): return sorted(self.daily)
     def read_daily(self, name): return self.daily[name]
@@ -32,6 +37,13 @@ class FakePhone:
     def remove_save(self):
         self.save, self.daily = None, {}
         return ''
+
+
+class GarbagePhone(FakePhone):
+    """A phone whose app shell answers the save probe with garbage: an adb hiccup or a run-as error."""
+
+    def app(self, command):
+        return 0, 'run-as: package not found\n'
 
 
 def run(phone, store, *argv):
@@ -87,6 +99,21 @@ def test_save_tool():
         assert phone.save == first and len(save_tool.saves(store)) == 3
         print('ok push: by a part of the name and by file; the save that was on the phone is stored first')
 
+        phone.daily['state-20260102.json'] = b'{"players": {"d": 4}}\n'
+        out = run(phone, store, 'wipe')
+        assert 'already stored' in out and 'added 1 daily copies' in out
+        assert (folder / 'phone-daily-copies' / 'state-20260102.json').read_bytes() == b'{"players": {"d": 4}}\n'
+        assert phone.save is None and phone.daily == {}
+        print('ok wipe: a daily copy added while the save was already stored is stored before the phone loses it')
+
+        phone.daily = {'state-20260103.json': b'{"players": {"e": 5}}\n'}
+        out = run(phone, store, 'push', 'chapter-3')
+        daily_only = [p for p in store.iterdir() if (p / 'phone-daily-copies' / 'state-20260103.json').is_file()]
+        assert len(daily_only) == 1 and not (daily_only[0] / 'state.json').is_file()
+        assert (daily_only[0] / 'phone-daily-copies' / 'state-20260103.json').read_bytes() == b'{"players": {"e": 5}}\n'
+        assert 'added 1 daily copies' in out and phone.save == first and phone.daily == {}
+        print('ok push: daily copies of a phone without a save get their own folder first')
+
         assert 'names 0 saves' in stops(lambda: run(phone, store, 'push', 'nothing-like-this'))
         assert 'names 3 saves' in stops(lambda: run(phone, store, 'push', '20'))
         bad = Path(tmp) / 'not-a-save.json'
@@ -98,6 +125,35 @@ def test_save_tool():
 
         assert 'not debuggable' in stops(lambda: run(FakePhone(first, debuggable=False), store, 'wipe'))
         print('ok a release build: the tool stops before it changes anything')
+
+        garbage = GarbagePhone(first, {'state-20260104.json': b'{"players": {"f": 6}}\n'})
+        daily = dict(garbage.daily)
+        assert 'cannot tell' in stops(lambda: run(garbage, store, 'push', 'chapter-3'))
+        assert 'cannot tell' in stops(lambda: run(garbage, store, 'wipe'))
+        assert garbage.save == first and garbage.daily == daily
+        print('ok an unreadable phone: push and wipe stop before they change anything')
+
+        clash = Path(tmp) / 'clash'
+        clash.mkdir()
+        old, new = b'{"players": {"g": 7}}\n', b'{"players": {"g": 8}}\n'
+        assert save_tool.add_daily_copies(FakePhone(first, {'state-20260105.json': old}), clash)[0] == 1
+        added, copies = save_tool.add_daily_copies(FakePhone(first, {'state-20260105.json': new}), clash)
+        rewritten = 'state-20260105-%s.json' % save_tool.sha(new)[:8]
+        assert added == 1 and set(copies) == {'state-20260105.json', rewritten}
+        assert (clash / 'phone-daily-copies' / 'state-20260105.json').read_bytes() == old
+        assert (clash / 'phone-daily-copies' / rewritten).read_bytes() == new
+        print('ok a daily copy the server rewrote under the same name: both versions are kept')
+
+        broken = FakePhone(first, {'state-20260106.json': b'run-as: error\n'})
+        assert 'not a JSON object' in stops(lambda: run(broken, store, 'wipe')) and broken.save == first
+        print('ok a daily copy that is no save: wipe stops before it removes anything')
+
+        assert save_tool.daily_names_answer(0, '__none\n') == []
+        assert save_tool.daily_names_answer(0, '') == []
+        assert save_tool.daily_names_answer(0, 'a.json\nb.json\n') == ['a.json', 'b.json']
+        for code, out in ((1, ''), (0, 'run-as: package not found\n'), (1, '__none\n')):
+            assert 'cannot list' in stops(lambda: save_tool.daily_names_answer(code, out))
+        print('ok the daily-copy listing: a failed or garbled answer stops instead of looking empty')
 
 
 def manifest(value, on='application', kind=0x12):
