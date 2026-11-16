@@ -12,6 +12,10 @@ import patch_index as indexes
 import asset_tools
 import manifest_paths
 from runtime_asset_guard import validate_assetfile
+import patch_tracking
+import test_tracking
+import patch_crasheye
+import test_crasheye
 import test_login
 import test_card_display
 import test_gacha
@@ -20,10 +24,6 @@ import patch_selectors
 import test_selectors
 import test_title
 import test_offline_web
-import patch_tracking
-import test_tracking
-import patch_crasheye
-import test_crasheye
 
 SOURCE_SHA='d9da0751b540d05a535dd76704a355110b6d63bcf30d8b876d63f3cfdf7c9b78'
 CACHE_SHA='a2012a54d479ef5eed6232374a543b9f31b038146202e27705a19199cacf3f5e'
