@@ -182,6 +182,7 @@ import {
   hasClaimedAchievement,
   makeAchievementTaskId,
   makeAchievementTaskValue,
+  playerAchievementSources,
   projectAchievementProgress,
   requiredAchievementCount,
 } from "../game-data/activity-achievement-data.js";
@@ -3313,7 +3314,6 @@ export class PlayerRepository {
         girls = new Set<number>();
       const beforeTasks = JSON.stringify(player.taskValues);
       const cafeLevelBefore = player.cafe.level ?? 1;
-      const comfortBefore = cafeComfort(player, catalog);
       let coffeesSold = 0,
         furnitureBought = 0;
       const automaticFurniture: number[] = [];
@@ -3437,9 +3437,6 @@ export class PlayerRepository {
         cafeEvents.push({ type: "cafe.level_changed", level: cafeLevel });
       if (furnitureBought > 0)
         cafeEvents.push({ type: "cafe.furniture_bought", count: furnitureBought });
-      const comfort = cafeComfort(player, catalog);
-      if (comfort !== comfortBefore)
-        cafeEvents.push({ type: "cafe.comfort_changed", comfort });
       if (cafeEvents.length > 0) this.#activities.dispatch(player, cafeEvents, now);
       const result = promiseResult(player, response, items, money, girls);
       return {
@@ -4722,7 +4719,11 @@ export class PlayerRepository {
       if (!player) throw new Error(`Unknown player account: ${account}`);
       reconcileEightDaySignUp(player);
 
-      const taskValue = projectAchievementProgress(player, config);
+      const taskValue = projectAchievementProgress(
+        player,
+        config,
+        playerAchievementSources(player),
+      );
       if (hasClaimedAchievement(taskValue)) {
         throw new AchievementAwardError("already_claimed");
       }

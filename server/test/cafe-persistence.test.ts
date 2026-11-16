@@ -620,6 +620,26 @@ describe("cafe event page achievements", () => {
     expect(achievement(player, 67)).toBe(comfort);
   });
 
+  it("a claim projects the comfort before its check (type 75)", async () => {
+    const f = await fixture();
+    // 15 x furniture 102 (AddScore 40) in the cafe room: comfort 600, without an
+    // event or a login.
+    await f.store.update((state) => {
+      state.players.tester!.cafe.furniture = Array.from({ length: 15 }, (_, index) =>
+        furniture(10_000 + index, 102),
+      );
+    });
+    expect(cafeComfort(f.players.get("tester")!, catalog)).toBe(600);
+    expect(achievement(f.players.get("tester")!, 67)).toBe(0);
+    const result = await f.players.claimActivityAchievementAward("tester", 16, 67);
+    expect(achievement(result.player, 67)).toBe(600);
+    expect(
+      result.player.taskValues[
+        String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 67))
+      ]! & 1,
+    ).toBe(1);
+  });
+
   it("a batch furniture buy counts every piece (type 137)", async () => {
     const f = await fixture();
     await f.store.update((state) => {
