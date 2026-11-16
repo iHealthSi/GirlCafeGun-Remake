@@ -1322,8 +1322,32 @@ export function createGatewayServer({
 
       if (packet.command === COMMAND.TASK_CHANGE_REQ) {
         const changes = parseTaskChanges(packet.payload);
-        context.player = await players.setTaskValues(context.account, changes);
-        send(COMMAND.TASK_CHANGE_RSP, packet.serial, packet.payload);
+        const { player, refusedIds } = await players.applyClientTaskChanges(
+          context.account,
+          changes,
+        );
+        context.player = player;
+        const stored = (id: number): number => player.taskValues[String(id)] ?? 0;
+        if (refusedIds.length > 0) {
+          // The client already holds the refused value locally. Send the true
+          // value back before the reply; an id with no stored value goes as 0.
+          send(
+            COMMAND.TASK_VALUE_RSP,
+            0,
+            makeTaskValueSync({
+              ...player.taskValues,
+              ...Object.fromEntries(refusedIds.map((id) => [String(id), stored(id)])),
+            }),
+          );
+        }
+        // Like the C# build: the reply carries the stored values, not the request.
+        send(
+          COMMAND.TASK_CHANGE_RSP,
+          packet.serial,
+          makeTaskValueSync(
+            Object.fromEntries(changes.map(({ id }) => [String(id), stored(id)])),
+          ),
+        );
         return;
       }
 
