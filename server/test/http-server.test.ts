@@ -7,7 +7,11 @@ import { expect, it } from "vitest";
 
 import { loadConfig } from "../src/config.js";
 import type { LogFields, Logger } from "../src/logger.js";
-import { createHttpServer } from "../src/servers/http-server.js";
+import {
+  DAILY_RESET_PLACEHOLDER,
+  createHttpServer,
+  localDailyResetTime,
+} from "../src/servers/http-server.js";
 import { mkdtemp } from "./helpers/temp.js";
 
 const logger: Logger = {
@@ -201,5 +205,20 @@ it("answers 400 for a request whose Host header is not a valid URL", async () =>
     await once(socket, "close");
     const firstLine = Buffer.concat(chunks).toString("utf8").split("\r\n")[0];
     expect(firstLine).toBe("HTTP/1.1 400 Bad Request");
+  });
+});
+
+it("shows the daily reset on the device's clock in the served notices", async () => {
+  // 04:00 UTC+8 is 20:00 UTC; the local time depends on the device's zone.
+  const at = new Date(Date.UTC(2026, 10, 16, 12, 0, 0));
+  const reset = new Date(Date.UTC(2026, 10, 16, 20, 0, 0));
+  const pad = (value: number) => String(value).padStart(2, "0");
+  expect(localDailyResetTime(at)).toBe(
+    `${pad(reset.getHours())}:${pad(reset.getMinutes())}`,
+  );
+  await withServer({}, async (base) => {
+    const text = await (await fetch(`${base}/notice.txt`)).text();
+    expect(text).not.toContain(DAILY_RESET_PLACEHOLDER);
+    expect(text).toContain(`reset every day at ${localDailyResetTime()} (your device's time)`);
   });
 });

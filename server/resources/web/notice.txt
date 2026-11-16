@@ -18,7 +18,7 @@
       "priority": 2,
       "date": "2026-11-16",
       "title": "Daily power and resets",
-      "content": "Restore Power: claim free vigour twice a day, from 11:00 to 14:00 and from 18:00 to 20:00 (your device's time).\nDaily missions, shop limits and bounties reset at 04:00 (UTC+8).\nThe free month card can be claimed once every 30 days, when no card is active.",
+      "content": "Restore Power: claim free vigour twice a day, from 11:00 to 14:00 and from 18:00 to 20:00 (your device's time).\nDaily missions, shop limits and bounties reset every day at {dailyResetLocal} (your device's time).\nThe free month card can be claimed once every 30 days, when no card is active.",
       "startTime": "2000-01-01T00:00:00",
       "endTime": "2099-01-01T00:00:00"
     }
