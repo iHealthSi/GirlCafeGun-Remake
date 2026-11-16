@@ -209,6 +209,7 @@ import type {
 } from "../game-data/gacha-data.js";
 import {
   completedGuideMissionCount,
+  GUIDE_GIFT_MISSION_ID,
   guideMission,
   guideMissionProgress,
   guideProgressAward,
@@ -217,6 +218,8 @@ import {
   makeGuideMissionTaskValue,
   makeGuideTaskId,
   markGuideProgressAwardClaimed,
+  recordGuideGift,
+  recordGuideTrainingTypes,
 } from "../game-data/guide-mission-data.js";
 import { maximumFormationPower } from "../game-data/formation-power-data.js";
 import {
@@ -620,6 +623,8 @@ export interface GirlGiftResult {
   fetterUnlocks: GirlFetterUnlock[];
   /** Event page achievements moved: the client needs the task values again. */
   achievementsChanged: boolean;
+  /** Guide mission 40018 moved: the client needs the task values again. */
+  guideMissionsChanged: boolean;
 }
 
 export class GirlGiftError extends Error {
@@ -1218,6 +1223,51 @@ function unlockGirlLevelSecrets(
     }
   }
   return unlocked;
+}
+
+/**
+ * Credits guide missions 40014 and 40018 from what a save still shows: the
+ * types of the trainings running now, and marks only a gift can leave (the
+ * favourite-gift secrets and promise GiftCount progress). Finished trainings
+ * and other gifts from before these missions had a source leave no trace;
+ * they count again from the next training or gift.
+ */
+function reconcileGuideActionMissions(player: Player): void {
+  const trainingTypes: number[] = [];
+  let gaveGift = false;
+  for (const { girlId } of player.girls) {
+    const position =
+      player.taskValues[
+        String(
+          makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_TRAIN_POSITION_OFFSET),
+        )
+      ] ?? 0;
+    const training = getGirlTrainingConfig(position);
+    if (training) trainingTypes.push(training.type);
+    for (const { secretId } of favoriteGiftSecretIds(girlId)) {
+      const key = String(
+        makeGirlTaskId(
+          GIRL_STATE_TASK_GROUP,
+          girlId,
+          GIRL_SECRET_OFFSET + secretId - 1,
+        ),
+      );
+      if ((player.taskValues[key] ?? 0) !== 0) gaveGift = true;
+    }
+  }
+  if (player.promise) {
+    const catalog = PromiseCatalog.loadDefault();
+    if (
+      Object.values(player.promise.girls).some((girl) =>
+        girl.taskdatas.some(
+          (task) => task.count > 0 && catalog.task(task.id)?.strtype === "GiftCount",
+        ),
+      )
+    )
+      gaveGift = true;
+  }
+  recordGuideTrainingTypes(player, trainingTypes);
+  if (gaveGift) recordGuideGift(player);
 }
 
 export interface GirlFetterUnlock {
@@ -3589,6 +3639,7 @@ export class PlayerRepository {
         reconcileBounty(player);
         reconcileChapterStarTaskValues(player);
         reconcileMaximumFightPower(player);
+        reconcileGuideActionMissions(player);
         this.#activities.reconcile(player);
         this.#seedDefaultCafe(player);
         if (player.cafe.pets)
@@ -3707,6 +3758,7 @@ export class PlayerRepository {
       reconcileChapterStarTaskValues(player);
       reconcileMaximumFightPower(player);
       reconcileGirlFetterUnlocks(player);
+      reconcileGuideActionMissions(player);
       this.#activities.reconcile(player, now);
       reconcilePlayerPhoneEvents(player, now);
       player.lastLoginAt = new Date(now).toISOString();
@@ -3950,6 +4002,7 @@ export class PlayerRepository {
         )
       ] = DEFAULT_TRAINING_OUTDOOR_ID;
       incrementDailyMissionProgress(player, 106, 1, now);
+      recordGuideTrainingTypes(player, [config.type]);
     });
     if (!player) throw new Error(`Failed to start girl training: ${account}`);
     this.#logger.info("player.girl_training.started", {
@@ -3991,6 +4044,7 @@ export class PlayerRepository {
     const unlockedSecretIds: number[] = [];
     let fetterUnlocks: GirlFetterUnlock[] = [];
     let achievementsChanged = false;
+    let guideMissionsChanged = false;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
@@ -4060,6 +4114,10 @@ export class PlayerRepository {
           ],
           now,
         ).changedTaskIds.length > 0;
+      const giftMissionKey = String(makeGuideTaskId(GUIDE_GIFT_MISSION_ID));
+      const giftMissionBefore = player.taskValues[giftMissionKey];
+      recordGuideGift(player);
+      guideMissionsChanged = player.taskValues[giftMissionKey] !== giftMissionBefore;
 
       const taskValues = player.taskValues;
       unlockedSecretIds.push(
@@ -4131,6 +4189,7 @@ export class PlayerRepository {
       unlockedSecretIds,
       fetterUnlocks,
       achievementsChanged,
+      guideMissionsChanged,
     };
   }
 

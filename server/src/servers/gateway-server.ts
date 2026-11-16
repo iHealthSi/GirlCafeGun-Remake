@@ -4594,7 +4594,8 @@ export function createGatewayServer({
               if (
                 result.unlockedSecretIds.length > 0 ||
                 result.fetterUnlocks.length > 0 ||
-                result.achievementsChanged
+                result.achievementsChanged ||
+                result.guideMissionsChanged
               ) {
                 send(
                   COMMAND.TASK_VALUE_RSP,
