@@ -9,6 +9,7 @@ import {
   ACTIVITY_ACHIEVEMENT_TASK_GROUP,
   ActivityAchievementCatalog,
   achievementProgress,
+  activityAchievementActivity,
   countActivityAchievements,
   countedAchievementIncrement,
   derivedAchievementProgress,
@@ -197,6 +198,16 @@ describe("activity achievement progress", () => {
     expect(
       derivedAchievementProgress(makePlayer({ formations: [] }), other(34)),
     ).toBe(0);
+
+    // A team change moves the progress at once, without a new login.
+    expect(activityAchievementActivity.subscriptions).toContain("formation.updated");
+    activityAchievementActivity.onEvent?.(
+      player,
+      { type: "formation.updated", formationId: 1, hasEquippedWeapon: false },
+      { now, emit() {} },
+    );
+    const taskId = String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 34));
+    expect(achievementProgress(player.taskValues[taskId] ?? 0)).toBe(2);
   });
 
   it("never lowers stored progress and keeps the claim mark", () => {
