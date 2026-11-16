@@ -5279,7 +5279,7 @@ export class PlayerRepository {
       if (!player) throw new Error(`Unknown player account: ${account}`);
       // The month card is free in this offline build, so it may not stack: a
       // claim is allowed only when no card is active, which gives one card and
-      // 300 diamonds per 30 days (Alex, 2026-11-16, card gcg2#55). The client
+      // 300 diamonds per 30 days. The client
       // table sets no limit (PurchaseIB.txt Id 1: MaxBuy empty, "Unlimited").
       const monthTaskId = String(makeMonthCardTaskId());
       const nowSeconds = Math.floor(now / 1000);

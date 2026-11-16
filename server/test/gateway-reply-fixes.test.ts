@@ -321,7 +321,7 @@ it("answers GetLastGacha without enough diamonds as a Lottery error and not as G
 }, 15_000);
 
 it("lets the first 10-pull re-roll for free, spends the permit once on save, and closes the pool after", async () => {
-  // Alex, 2026-11-16: the first 10-pull (pool 666, the story permit) is an infinite
+  // The first 10-pull (pool 666, the story permit) is an infinite
   // re-roll; only the accepted roll is granted, and the permit is spent on accept.
   const account = "reply-fix-first-ten";
   const pools = GachaCatalog.loadDefault();
