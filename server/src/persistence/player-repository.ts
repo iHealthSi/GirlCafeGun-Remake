@@ -24,6 +24,7 @@ import type { DomainEvent } from "../activities/domain-events.js";
 import {
   addCardExperience,
   CARD_EXP_MATERIALS,
+  CARD_MAXIMUM_ENHANCE_LEVEL,
   type CardEnhancementMaterial,
 } from "../game-data/card-enhancement-data.js";
 import {
@@ -5617,6 +5618,10 @@ export class PlayerRepository {
         (entry) => entry.guid === guid && isCharacterCard(entry),
       );
       if (!enhancedCard) throw new Error(`Unknown character card: ${guid}`);
+
+      if (enhancedCard.enhanceLevel >= CARD_MAXIMUM_ENHANCE_LEVEL) {
+        throw new Error(`Card is already at its level cap: ${guid}`);
+      }
 
       for (const material of materials) {
         if (material.kind !== 1) {

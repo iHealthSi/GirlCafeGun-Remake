@@ -20,7 +20,6 @@ import {
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
-  MONEY_DIAMOND,
   makeGachaTaskId,
   makeInitialState,
   PlayerRepository,
