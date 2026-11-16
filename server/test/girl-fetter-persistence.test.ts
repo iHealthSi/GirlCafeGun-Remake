@@ -191,3 +191,34 @@ describe("view girl story", () => {
     expect(result.player.taskValues[key]).toBe(2);
   });
 });
+
+describe("set girl main story id", () => {
+  const mainStoryKey = (girlId: number) =>
+    String((3 << 16) | ((girlId - 1) * 2_000 + 14));
+
+  it("stores on an owned girl, refuses skips and lower values, and ignores unowned girls", async () => {
+    const { repository } = await createRepository();
+
+    // value 1 on an owned girl stores 1
+    const first = await repository.setGirlMainStoryId("tester", 2, 1);
+    expect(first.changed).toBe(true);
+    expect(first.player.taskValues[mainStoryKey(2)]).toBe(1);
+
+    // value 3 (skip) is refused
+    const skip = await repository.setGirlMainStoryId("tester", 2, 3);
+    expect(skip.changed).toBe(false);
+    expect(skip.player.taskValues[mainStoryKey(2)]).toBe(1);
+
+    // the next story in sequence is accepted, then a lower value does not lower it
+    const second = await repository.setGirlMainStoryId("tester", 2, 2);
+    expect(second.changed).toBe(true);
+    const lower = await repository.setGirlMainStoryId("tester", 2, 1);
+    expect(lower.changed).toBe(false);
+    expect(lower.player.taskValues[mainStoryKey(2)]).toBe(2);
+
+    // a girl not owned is refused
+    const unowned = await repository.setGirlMainStoryId("tester", 1, 1);
+    expect(unowned.changed).toBe(false);
+    expect(unowned.player.taskValues[mainStoryKey(1)] ?? 0).toBe(0);
+  });
+});

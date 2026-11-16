@@ -20,6 +20,8 @@ export interface GirlFetterCond {
 export interface GirlFetterNode {
   index: number;
   requiredLevel: number;
+  // Fetter.txt 的 Main 列（大剧情节点）。
+  isMain: boolean;
   // SubCond[1] == -1 表示官方未开放，永不解锁。
   unavailable: boolean;
   cond: GirlFetterCond | null;
@@ -93,6 +95,7 @@ export class GirlFetterCatalog {
         nodes.push({
           index: mainIndex,
           requiredLevel: rowLevel,
+          isMain: true,
           unavailable: false,
           cond: null,
           awards: parseAwards(values[3]),
@@ -106,6 +109,7 @@ export class GirlFetterCatalog {
         nodes.push({
           index: subIndex,
           requiredLevel,
+          isMain: false,
           unavailable,
           cond,
           awards: parseAwards(values[4 + (sub - 1) * 4 + 2]),

@@ -2764,6 +2764,26 @@ export function createGatewayServer({
           }
           return;
         }
+
+        if (luaCommand === 256) {
+          const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
+          const girlId = Number(wrapped.tbParam?.nId);
+          const value = Number(wrapped.tbParam?.nValue);
+          const result = await players.setGirlMainStoryId(
+            context.account,
+            girlId,
+            value,
+          );
+          context.player = result.player;
+          if (result.changed) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          return;
+        }
         if (luaCommand === 540) {
           const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
           const chapter = Number(wrapped.tbParam?.Chapter);

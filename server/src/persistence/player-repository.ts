@@ -294,6 +294,7 @@ const GIRL_CAFE_POSITION_OFFSET = 3;
 const GIRL_FIGHT_MODEL_OFFSET = 9;
 const GIRL_TRAIN_POSITION_OFFSET = 11;
 const GIRL_TRAIN_END_TIME_OFFSET = 12;
+const GIRL_MAIN_STORY_OFFSET = 14;
 const GIRL_TRAIN_OUTDOOR_ID_OFFSET = 16;
 const GIRL_SECRET_OFFSET = 100;
 const GIRL_LEVEL_AWARD_OFFSET = 500;
@@ -647,6 +648,11 @@ export interface GirlViewStoryResult {
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
   alreadyRead: boolean;
+}
+
+export interface GirlMainStoryIdResult {
+  player: Player;
+  changed: boolean;
 }
 
 export interface IBShopState {
@@ -4128,6 +4134,67 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       alreadyRead,
     };
+  }
+
+  async setGirlMainStoryId(
+    account: string,
+    girlId: number,
+    value: number,
+  ): Promise<GirlMainStoryIdResult> {
+    const mainStoryCount = defaultGirlFetterCatalog()
+      .nodes(girlId)
+      .filter((node) => node.isMain).length;
+    let player: Player | undefined;
+    let changed = false;
+    let reason: string | null = null;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const key = String(
+        makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET),
+      );
+      const current = player.taskValues[key] ?? 0;
+      const owned = player.girls.some((girl) => girl.girlId === girlId);
+      if (
+        !Number.isSafeInteger(girlId) ||
+        girlId <= 0 ||
+        !Number.isSafeInteger(value) ||
+        value < 0 ||
+        value > mainStoryCount
+      ) {
+        reason = "invalid_value";
+        return;
+      }
+      if (!owned) {
+        reason = "girl_not_owned";
+        return;
+      }
+      if (value <= current) {
+        return;
+      }
+      if (value > current + 1) {
+        reason = "skips_story";
+        return;
+      }
+      player.taskValues[key] = value;
+      changed = true;
+    });
+    if (!player) throw new Error(`Failed to set girl main story id: ${account}`);
+    if (reason) {
+      this.#logger.warn("player.girl_main_story.rejected", {
+        account,
+        girlId,
+        value,
+        reason,
+      });
+    } else if (changed) {
+      this.#logger.info("player.girl_main_story.updated", {
+        account,
+        girlId,
+        value,
+      });
+    }
+    return { player: structuredClone(player), changed };
   }
 
   async endGirlTraining(
