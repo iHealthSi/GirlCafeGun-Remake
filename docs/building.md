@@ -29,7 +29,9 @@ than editing the original. Both ARM libraries retain the Unity allocator and
 Cubism compatibility fixes. Native developer entry points are disabled before
 their UI, socket or command paths execute; developer Lua and UI content are
 removed. The test-automation listener (UAutoSDK, TCP port 13000) and Unity's own
-analytics are switched off in `data.unity3d`. The launcher, embedded server,
+analytics are switched off in `data.unity3d`, and the Crasheye crash and session
+reporter is never set up (`Crasheye.init` in `classes.dex` returns false). The
+only DEX the overlay may replace is `classes.dex`. The launcher, embedded server,
 resource installer and updater are Java source under `release/android/`.
 
 The launcher is named **Girl Cafe Gun**. Its regular and round icons at all six
