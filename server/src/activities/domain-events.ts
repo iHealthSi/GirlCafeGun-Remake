@@ -66,6 +66,18 @@ export interface CafeLevelChangedEvent {
   level: number;
 }
 
+/** The furniture placed in the cafe and rest rooms changed the comfort. */
+export interface CafeComfortChangedEvent {
+  type: "cafe.comfort_changed";
+  comfort: number;
+}
+
+/** Furniture pieces bought in the furniture shop (shop 40001). */
+export interface CafeFurnitureBoughtEvent {
+  type: "cafe.furniture_bought";
+  count: number;
+}
+
 export interface WeaponEnhancedEvent {
   type: "weapon.enhanced";
   guid: number;
@@ -97,6 +109,8 @@ export type DomainEvent =
   | BountyClearedEvent
   | CoffeeSoldEvent
   | WeaponBrokenEvent
-  | CafeLevelChangedEvent;
+  | CafeLevelChangedEvent
+  | CafeComfortChangedEvent
+  | CafeFurnitureBoughtEvent;
 
 export type DomainEventType = DomainEvent["type"];

@@ -22,6 +22,8 @@ import {
   requiredAchievementCount,
   type ActivityAchievementPlayer,
 } from "../src/game-data/activity-achievement-data.js";
+import { CafeCatalog } from "../src/game-data/cafe-catalog.js";
+import { cafeComfort } from "../src/game-data/cafe-runtime.js";
 import { EIGHT_DAY_SIGN_UP_REWARDS } from "../src/game-data/eight-day-sign-up-data.js";
 
 const catalog = ActivityAchievementCatalog.loadDefault();
@@ -195,9 +197,9 @@ describe("activity achievement progress", () => {
       ],
     });
     expect(derivedAchievementProgress(player, other(34))).toBe(2); // type 59
-    expect(
-      derivedAchievementProgress(makePlayer({ formations: [] }), other(34)),
-    ).toBe(0);
+    expect(derivedAchievementProgress(makePlayer({ formations: [] }), other(34))).toBe(
+      0,
+    );
 
     // A team change moves the progress at once, without a new login.
     expect(activityAchievementActivity.subscriptions).toContain("formation.updated");
@@ -208,6 +210,51 @@ describe("activity achievement progress", () => {
     );
     const taskId = String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 34));
     expect(achievementProgress(player.taskValues[taskId] ?? 0)).toBe(2);
+  });
+
+  it("derives the cafe comfort (type 75)", () => {
+    const sources = { cafeComfort: () => 750 };
+    expect(derivedAchievementProgress(makePlayer(), other(67), sources)).toBe(750);
+    expect(derivedAchievementProgress(makePlayer(), other(98), sources)).toBe(750);
+    // Without a comfort source the stored progress is left alone.
+    expect(derivedAchievementProgress(makePlayer(), other(67))).toBeNull();
+  });
+
+  it("projects the comfort of the placed furniture when the layout changes (type 75)", () => {
+    const cafe = CafeCatalog.loadDefault();
+    const player = makePlayer({
+      cafe: {
+        level: 30,
+        furniture: [
+          { roomId: 1, templateId: 101 },
+          { roomId: 0, templateId: 102 },
+        ],
+      },
+    });
+    const comfort = cafeComfort({ cafe: player.cafe! }, cafe);
+    expect(comfort).toBeGreaterThan(0);
+    expect(activityAchievementActivity.subscriptions).toContain("cafe.comfort_changed");
+    activityAchievementActivity.onEvent?.(
+      player,
+      { type: "cafe.comfort_changed", comfort },
+      { now, emit() {} },
+    );
+    const task = (id: number): number =>
+      achievementProgress(
+        player.taskValues[
+          String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id))
+        ] ?? 0,
+      );
+    expect(task(67)).toBe(comfort); // activity 16
+    expect(task(98)).toBe(comfort); // activity 20
+    // A player without a cafe gets no value and no error.
+    const empty = makePlayer();
+    activityAchievementActivity.reconcile?.(empty, { now, emit() {} });
+    expect(
+      empty.taskValues[
+        String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 67))
+      ],
+    ).toBeUndefined();
   });
 
   it("never lowers stored progress and keeps the claim mark", () => {
@@ -311,6 +358,24 @@ describe("counted event page achievements", () => {
     expect(task(57)).toBe(makeAchievementTaskValue(2, false));
     // Only gift achievements moved.
     expect(Object.keys(player.taskValues)).toHaveLength(3);
+  });
+
+  it("counts every furniture piece bought (type 137)", () => {
+    const bought = { type: "cafe.furniture_bought", count: 3 } as const;
+    expect(countedAchievementIncrement(other(64), bought)).toBe(3);
+    expect(countedAchievementIncrement(other(67), bought)).toBe(0);
+    expect(activityAchievementActivity.subscriptions).toContain(
+      "cafe.furniture_bought",
+    );
+    const player = makePlayer();
+    activityAchievementActivity.onEvent?.(player, bought, { now, emit() {} });
+    const task = (id: number): number | undefined =>
+      player.taskValues[
+        String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id))
+      ];
+    expect(task(64)).toBe(makeAchievementTaskValue(3, false));
+    expect(task(65)).toBe(makeAchievementTaskValue(3, false));
+    expect(task(66)).toBe(makeAchievementTaskValue(3, false));
   });
 
   it("derives the cafe level (type 79)", () => {
