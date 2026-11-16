@@ -245,23 +245,26 @@ export class JsonStore<T extends PersistedDocument> {
         }
       }
       const existing = await listBackups(backups.directory);
-      // A date earlier than the newest copy means the clock was set back,
-      // and trimming here would delete the newest real backups.
+      // A copy dated after today means the clock is behind it now, or was
+      // ahead when that copy was written. Either clock can be the wrong one,
+      // so write today's copy but remove nothing until the clock passes the
+      // newest copy: no real backup is lost either way.
       const newest = existing[existing.length - 1];
       const newestDate = newest ? BACKUP_NAME.exec(newest)?.[1] : undefined;
-      if (newestDate && newestDate > today) {
-        this.#logger.warn("persistence.backup_skipped", {
-          file: target,
-          newestBackup: newest,
-        });
-        return;
-      }
+      const clockBehind = newestDate !== undefined && newestDate > today;
       if (!existing.includes(path.basename(target))) {
         const tempPath = `${target}.${process.pid}.tmp`;
         await writeFileDurably(tempPath, body);
         await rename(tempPath, target);
         existing.push(path.basename(target));
         this.#logger.info("persistence.backup_created", { file: target });
+      }
+      if (clockBehind) {
+        this.#logger.warn("persistence.backup_trim_skipped", {
+          file: target,
+          newestBackup: newest,
+        });
+        return;
       }
       for (const name of rankBackups(existing, today).slice(backups.keep)) {
         await rm(path.join(backups.directory, name), { force: true });

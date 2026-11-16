@@ -233,19 +233,30 @@ describe("backup retention with a moved clock", () => {
       "state-20261123.json",
     ]);
 
-    // A start dated before the newest copy writes nothing and removes
-    // nothing, so the real daily copies survive the clock returning.
+    // Starts dated before the newest copy still write their own copy but
+    // remove nothing: either clock may be the wrong one.
     await openStore(filePath, backupDirectory).initialize(START);
     await openStore(filePath, backupDirectory).initialize(START + DAY);
     await openStore(filePath, backupDirectory).initialize(START + 2 * DAY);
     expect(await readdir(backupDirectory)).toEqual([
+      "state-20261114.json",
+      "state-20261115.json",
+      "state-20261116.json",
       "state-20261121.json",
       "state-20261122.json",
       "state-20261123.json",
     ]);
+
+    // Once the clock passes the newest copy, trimming resumes.
+    await openStore(filePath, backupDirectory).initialize(START + 10 * DAY);
+    expect(await readdir(backupDirectory)).toEqual([
+      "state-20261122.json",
+      "state-20261123.json",
+      "state-20261124.json",
+    ]);
   });
 
-  it("writes nothing and removes nothing when the clock is behind every backup", async () => {
+  it("keeps the real copies and adds today's when the clock is behind every backup", async () => {
     const { filePath, backupDirectory } = await workspace();
     // The first start of a fresh save creates it without a copy.
     await openStore(filePath, backupDirectory).initialize(START - DAY);
@@ -255,6 +266,7 @@ describe("backup retention with a moved clock", () => {
 
     await openStore(filePath, backupDirectory).initialize(Date.UTC(2000, 0, 1));
     expect(await readdir(backupDirectory)).toEqual([
+      "state-20000101.json",
       "state-20261114.json",
       "state-20261115.json",
       "state-20261116.json",
