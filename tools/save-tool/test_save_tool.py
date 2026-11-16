@@ -87,6 +87,21 @@ def test_save_tool():
         assert phone.save == first and len(save_tool.saves(store)) == 3
         print('ok push: by a part of the name and by file; the save that was on the phone is stored first')
 
+        phone.daily['state-20260102.json'] = b'{"players": {"d": 4}}\n'
+        out = run(phone, store, 'wipe')
+        assert 'already stored' in out and 'added 1 daily copies' in out
+        assert (folder / 'phone-daily-copies' / 'state-20260102.json').read_bytes() == b'{"players": {"d": 4}}\n'
+        assert phone.save is None and phone.daily == {}
+        print('ok wipe: a daily copy added while the save was already stored is stored before the phone loses it')
+
+        phone.daily = {'state-20260103.json': b'{"players": {"e": 5}}\n'}
+        out = run(phone, store, 'push', 'chapter-3')
+        daily_only = [p for p in store.iterdir() if (p / 'phone-daily-copies' / 'state-20260103.json').is_file()]
+        assert len(daily_only) == 1 and not (daily_only[0] / 'state.json').is_file()
+        assert (daily_only[0] / 'phone-daily-copies' / 'state-20260103.json').read_bytes() == b'{"players": {"e": 5}}\n'
+        assert 'added 1 daily copies' in out and phone.save == first and phone.daily == {}
+        print('ok push: daily copies of a phone without a save get their own folder first')
+
         assert 'names 0 saves' in stops(lambda: run(phone, store, 'push', 'nothing-like-this'))
         assert 'names 3 saves' in stops(lambda: run(phone, store, 'push', '20'))
         bad = Path(tmp) / 'not-a-save.json'

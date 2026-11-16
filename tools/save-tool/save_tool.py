@@ -127,35 +127,67 @@ def looks_like_a_save(body):
         return False
 
 
-def backup(phone, store, label, why='', now=None):
-    """Copy the phone's save to a new folder. Returns the folder, or None when the phone has no save."""
-    if not phone.has_save():
-        print('the phone has no save: nothing to back up')
-        return None
-    body = phone.read_save()
-    if not looks_like_a_save(body):
-        sys.exit('the save on the phone is not a JSON object (%d bytes): stopped, nothing changed' % len(body))
-    same = [r for r in saves(store) if r['sha256'] == sha(body)]
-    if same:
-        print('the phone\'s save is already stored as %s' % same[-1]['name'])
-        return same[-1]['path'].parent
+def new_folder(store, label, now=None):
     label = re.sub(r'[^A-Za-z0-9_-]+', '-', label or '').strip('-')
     stamp = time.strftime('%Y%m%d-%H%M%S', time.localtime(now))
     folder = store / (stamp + ('-' + label if label else ''))
     while folder.exists():  # two backups in one second
         folder = folder.with_name(folder.name + '-b')
     folder.mkdir(parents=True)
-    (folder / 'state.json').write_bytes(body)
-    copies = {}
+    return folder
+
+
+def add_daily_copies(phone, folder):
+    """Copy the phone's daily copies that are not stored in folder yet. Returns (how many were added, the stored copies)."""
+    info_path = folder / 'info.json'
+    info = json.loads(info_path.read_text(encoding='utf8')) if info_path.is_file() else {}
+    copies = dict(info.get('dailyCopies') or {})
+    added = 0
     for name in phone.daily_names():
         copy = phone.read_daily(name)
-        (folder / 'phone-daily-copies').mkdir(exist_ok=True)
+        if sha(copy) in copies.values():
+            continue
+        (folder / 'phone-daily-copies').mkdir(parents=True, exist_ok=True)
         (folder / 'phone-daily-copies' / name).write_bytes(copy)
         copies[name] = sha(copy)
+        added += 1
+    if added:
+        info['dailyCopies'] = copies
+        info_path.write_text(json.dumps(info, indent=2) + '\n', encoding='utf8')
+    return added, copies
+
+
+def backup(phone, store, label, why='', now=None):
+    """Copy the phone's save and its daily copies to a folder. Returns the folder, or None when the phone has neither."""
+    if not phone.has_save():
+        print('the phone has no save: nothing to back up')
+        if not phone.daily_names():
+            return None
+        folder = new_folder(store, label, now)
+        added, copies = add_daily_copies(phone, folder)
+        info = {'when': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)), 'label': label, 'reason': why,
+                'phone': phone.model(), 'package': phone.package, 'dailyCopies': copies}
+        (folder / 'info.json').write_text(json.dumps(info, indent=2) + '\n', encoding='utf8')
+        print('added %d daily copies to %s (the phone has no save)' % (added, folder))
+        return folder
+    body = phone.read_save()
+    if not looks_like_a_save(body):
+        sys.exit('the save on the phone is not a JSON object (%d bytes): stopped, nothing changed' % len(body))
+    same = [r for r in saves(store) if r['sha256'] == sha(body)]
+    if same:
+        print('the phone\'s save is already stored as %s' % same[-1]['name'])
+        folder = same[-1]['path'].parent
+        added, _ = add_daily_copies(phone, folder)
+        if added:
+            print('added %d daily copies to %s' % (added, folder))
+        return folder
+    folder = new_folder(store, label, now)
+    (folder / 'state.json').write_bytes(body)
+    added, copies = add_daily_copies(phone, folder)
     info = {'when': time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(now)), 'label': label, 'reason': why,
             'phone': phone.model(), 'package': phone.package, 'bytes': len(body), 'sha256': sha(body), 'dailyCopies': copies}
     (folder / 'info.json').write_text(json.dumps(info, indent=2) + '\n', encoding='utf8')
-    print('backed up: %s (%d bytes, sha256 %s, %d daily copies)' % (folder, len(body), sha(body)[:12], len(copies)))
+    print('backed up: %s (%d bytes, sha256 %s, %d daily copies)' % (folder, len(body), sha(body)[:12], added))
     return folder
 
 
