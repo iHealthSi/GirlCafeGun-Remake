@@ -245,6 +245,17 @@ export class JsonStore<T extends PersistedDocument> {
         }
       }
       const existing = await listBackups(backups.directory);
+      // A date earlier than the newest copy means the clock was set back,
+      // and trimming here would delete the newest real backups.
+      const newest = existing[existing.length - 1];
+      const newestDate = newest ? BACKUP_NAME.exec(newest)?.[1] : undefined;
+      if (newestDate && newestDate > today) {
+        this.#logger.warn("persistence.backup_skipped", {
+          file: target,
+          newestBackup: newest,
+        });
+        return;
+      }
       if (!existing.includes(path.basename(target))) {
         const tempPath = `${target}.${process.pid}.tmp`;
         await writeFileDurably(tempPath, body);

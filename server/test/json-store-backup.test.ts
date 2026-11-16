@@ -22,7 +22,7 @@ import { mkdtemp } from "./helpers/temp.js";
 // The save write and the backup write must be flushed to disk before they
 // are renamed into place, so mock the module and record the handle calls.
 vi.mock("node:fs/promises", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal<typeof fsp>();
   return {
     ...actual,
     open: vi.fn(actual.open),
@@ -233,14 +233,27 @@ describe("backup retention with a moved clock", () => {
       "state-20261123.json",
     ]);
 
+    // A start dated before the newest copy writes nothing and removes
+    // nothing, so the real daily copies survive the clock returning.
     await openStore(filePath, backupDirectory).initialize(START);
-    expect(await readdir(backupDirectory)).toEqual([
-      "state-20261114.json",
-      "state-20261121.json",
-      "state-20261122.json",
-    ]);
     await openStore(filePath, backupDirectory).initialize(START + DAY);
     await openStore(filePath, backupDirectory).initialize(START + 2 * DAY);
+    expect(await readdir(backupDirectory)).toEqual([
+      "state-20261121.json",
+      "state-20261122.json",
+      "state-20261123.json",
+    ]);
+  });
+
+  it("writes nothing and removes nothing when the clock is behind every backup", async () => {
+    const { filePath, backupDirectory } = await workspace();
+    // The first start of a fresh save creates it without a copy.
+    await openStore(filePath, backupDirectory).initialize(START - DAY);
+    await openStore(filePath, backupDirectory).initialize(START);
+    await openStore(filePath, backupDirectory).initialize(START + DAY);
+    await openStore(filePath, backupDirectory).initialize(START + 2 * DAY);
+
+    await openStore(filePath, backupDirectory).initialize(Date.UTC(2000, 0, 1));
     expect(await readdir(backupDirectory)).toEqual([
       "state-20261114.json",
       "state-20261115.json",
