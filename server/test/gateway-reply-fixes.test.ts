@@ -396,3 +396,27 @@ it("lets the first 10-pull re-roll for free, spends the permit once on save, and
     },
   );
 }, 20_000);
+
+it("answers a free month-card claim while a card is active with DoRecharge Error 20021 and changes nothing", async () => {
+  const account = "reply-fix-month-card";
+  await withGateway(
+    account,
+    async () => {},
+    async (call, store) => {
+      const recharge = { sCmd: 10000, tbParam: { Type: 2, Id: 1 } };
+      const first = clientCalls(await call("LuaCall", recharge));
+      expect(first).toContainEqual({ method: "BuyMonth", parameters: { nType: 2, bMonth: 1, nId: 1 } });
+
+      const before = structuredClone(store.snapshot().players[account]!);
+      const second = clientCalls(await call("LuaCall", recharge));
+      // IBLogic:ResponseTradeNo shows ui.Error.<Error>; 20021 = "You can buy no more of this".
+      expect(second).toEqual([
+        {
+          method: "LuaCall",
+          parameters: { sCmd: 10000, tbParam: { Type: 2, Id: 1, Error: 20021 } },
+        },
+      ]);
+      expect(store.snapshot().players[account]!).toEqual(before);
+    },
+  );
+}, 15_000);
