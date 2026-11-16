@@ -3567,22 +3567,15 @@ export function createGatewayServer({
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
             }
             context.player = players.get(context.account);
-            if (context.player) {
-              // Daily mission 108 (buy in the shop) advanced inside the purchase.
-              send(
-                COMMAND.TASK_VALUE_RSP,
-                0,
-                makeTaskValueSync(context.player.taskValues),
-              );
-            }
             if (updatedFurniture.length && context.player)
               send(
                 COMMAND.ADD_FURNITURE_RSP,
                 0,
                 makeAddFurnitureResponse(context.player.roleId, updatedFurniture),
               );
-            // A furniture buy moves the type 137 event page achievements; an
-            // award can also write a task value (head frame, skin).
+            // Daily mission 108 (buy in the shop) and, for furniture, the type 137
+            // event page achievements move inside the purchase; an award can also
+            // write a task value (head frame, skin).
             if (taskValuesChanged && context.player)
               send(
                 COMMAND.TASK_VALUE_RSP,
