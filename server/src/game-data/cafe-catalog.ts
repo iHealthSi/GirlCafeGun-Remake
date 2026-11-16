@@ -142,6 +142,17 @@ export interface CafeThemeConfig {
   poses: readonly CafeThemePose[];
   raw: CafeRawRow;
 }
+/** One row of the server-only NCafeDefautItems table: a new café's furniture. */
+export interface CafeDefaultItemConfig {
+  Id: number;
+  ItemId: number;
+  Room: number;
+  parentTemplateId: number;
+  posX: number;
+  posY: number;
+  rotate: number;
+  BizCount: number;
+}
 export interface CafeMusicConfig {
   Id: number;
   Type: number;
@@ -205,6 +216,7 @@ const TABLES = [
   "npet/petspeed",
   "npet/petgifts",
   "npet/achievementother",
+  "ncafedefautitems",
 ] as const;
 
 function numeric(row: CafeRawRow, key: string): number {
@@ -308,6 +320,7 @@ export class CafeCatalog {
   readonly #reset = new Map<number, number>();
   readonly #coffeePoints = new Map<number, number>();
   readonly #music = new Map<number, CafeMusicConfig>();
+  readonly #defaultItems = new Map<number, CafeDefaultItemConfig>();
   readonly maxLevel: number;
 
   constructor(contents: CafeCatalogContents) {
@@ -553,6 +566,21 @@ export class CafeCatalog {
     }
     for (const row of this.table("playerexp"))
       unique(this.#coffeePoints, numeric(row, "Level"), numeric(row, "Coffee"));
+    for (const row of this.table("ncafedefautitems")) {
+      // Pos is "Parent,X,Y,Rotate"; Parent is a native fixed scene object.
+      const pos = numbers(row.Pos, ",");
+      if (pos.length !== 4) throw new Error(`Invalid café default item ${row.Id}`);
+      const config: CafeDefaultItemConfig = Object.freeze({
+        ...numericFields(row, ["Id", "ItemId", "Room", "BizCount"] as const),
+        parentTemplateId: pos[0]!,
+        posX: pos[1]!,
+        posY: pos[2]!,
+        rotate: pos[3]!,
+      });
+      if (!this.#furniture.has(config.ItemId))
+        throw new Error(`Unknown café default item template ${config.ItemId}`);
+      unique(this.#defaultItems, config.Id, config);
+    }
   }
   static loadDefault(): CafeCatalog {
     if (!this.#shared)
@@ -640,6 +668,10 @@ export class CafeCatalog {
   }
   musicEntries(): readonly CafeMusicConfig[] {
     return [...this.#music.values()];
+  }
+  /** A new café's furniture in table Id order (empty when the table is absent). */
+  defaultItems(): readonly CafeDefaultItemConfig[] {
+    return [...this.#defaultItems.values()].sort((a, b) => a.Id - b.Id);
   }
   playerCoffeePoints(level: number): number {
     return (
