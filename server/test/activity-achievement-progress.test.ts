@@ -114,16 +114,19 @@ describe("event page achievements move without a new login", () => {
         girl.exp = 0;
       }
       player.girls.find(({ girlId }) => girlId === 2)!.exp = 95;
+      // A level set in the save directly, without an event or a login.
+      player.girls.find(({ girlId }) => girlId === 7)!.level = 10;
       player.taskValues[key(45)] = makeAchievementTaskValue(1, false);
     });
 
     const result = await repository.headpatGirl(account, 2, 0);
 
     expect(result.response).toMatchObject({ nOldLevel: 1 });
-    const level = highestAffection(result.player);
-    expect(level).toBeGreaterThan(1);
+    expect(result.response.nNewLevel).toBeGreaterThan(1);
     // 45: highest affection 5 (type 37).
-    expect(progress(result.player, 45)).toBe(level);
+    expect(progress(result.player, 45)).toBe(highestAffection(result.player));
+    // 99: one girl at affection 10 (type 85 [1, 10]).
+    expect(progress(result.player, 99)).toBe(1);
   });
 
   it("card enhance raises the card level achievements (type 39)", async () => {

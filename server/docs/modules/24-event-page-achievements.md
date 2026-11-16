@@ -21,9 +21,9 @@ Source: `NormalActivityConfig.lua`, `UI_NormalActivity.lua`,
   `Achievement.txt` (the achievement panel) task group 6. Bit 0 of the task
   value is the claim mark, bits 1-31 are the progress.
 - The page shows Claim when progress >= `missionMax[assistparam[1]]`
-  (`MissionManager:CheckInfoState`). The client never counts by itself: of its
-  151 `SetTaskValue` calls, only `OnlineTeamBattle.lua:183` writes group 18 (a
-  reset to 0 in an online mode) and none writes group 6.
+  (`MissionManager:CheckInfoState`). The client never counts by itself: of all
+  `SetTaskValue` call sites in its Lua, only `OnlineTeamBattle.lua:183` writes
+  group 18 (a reset to 0 in an online mode) and none writes group 6.
 - Claim on an event page: `NormalActivityGetAward {nActivityId, nId, nType = 1}`.
   Claim in the achievement panel: `AchievementGetAward {nId, nType = 0}`.
 - Both are answered with `MissionMgrMsg {nError, nMission = 0}`. `nError` is
@@ -190,9 +190,13 @@ Login days are the existing eight-day counter: one per operational day
   lost fights, story level, bounty, gift, training and weapon limit break move
   their achievements in the same transaction; a counter keeps the claim mark.
 - `test/cafe-persistence.test.ts`: one sold coffee counts once (achievement 61).
+- `test/girl-promise-persistence.test.ts`: a Fantasy Oath stage card projects
+  the limit break achievement (achievement 15).
 - `test/activity-achievement-gateway.test.ts`: both Lua calls over TCP, the
   order of task sync and callback, and the refusal answer; a gift that moves
   only an event achievement sends the task values.
+- `test/girl-promise-gateway.test.ts`: a stage card that moves an event
+  achievement sends the task values.
 
 ## Known gaps
 
