@@ -31,7 +31,7 @@ function parseTable(text: string): Row[] {
     .filter((line) => line.trim() !== "")
     .map((line) => line.split("\t"));
   if (rows.length < 4) throw new Error("EnergyActivity table is missing rows");
-  const header = rows[2];
+  const header = rows[2] ?? [];
   return rows.slice(3).map((cells) => {
     const row: Row = {};
     header.forEach((name, index) => {
