@@ -107,7 +107,9 @@ choices appear, the first one takes the focus.
 Select turns a cursor on. The left stick (or d-pad) moves it and A taps whatever
 lies under it with the same pointer events. Select again turns it off and the
 focus frame returns. The cursor is for the rare control that focus navigation
-does not reach; it is not the main control.
+does not reach; it is not the main control. When the fight HUD takes the pad,
+the cursor turns off. After the fight the first pad input only shows the focus
+frame, so A still held from firing does not press the result window.
 
 ## Axes
 
@@ -137,9 +139,16 @@ adb logcat -s Unity | grep "\[pad\]"
 
 `[pad] started` and `[pad] stopped` mark each fight; `[pad] menu: started` marks
 the start of the menu layer. A fight call that fails is turned off alone and
-reported once as `[pad] <action> disabled: ...`. A menu error is reported once as
-`[pad] menu: <error>` and the layer carries on; after 120 errors in a row it
-turns itself off.
+reported once as `[pad] <action> disabled: ...`. Any other fight error is
+reported once as `[pad] tick error: ...` and the layer carries on; after 120
+errors in a row it turns itself off until the next fight (`[pad] tick
+disabled ...`). A fight timer that the game cleared without closing the HUD is
+replaced at the next fight. A menu error is reported once as `[pad] menu:
+<error>` and the layer carries on; after 120 errors in a row it turns itself off
+and gives the pad to the fight layer. An error while the menu layer starts is
+reported as `[pad] menu: ensure: ...` and never stops a window from opening.
+Buttons pressed while the pause menu or another window has the pad do not fire a
+skill when the HUD gets the pad back.
 
 ## Limits
 
@@ -161,8 +170,8 @@ turns itself off.
 ## Validation
 
 `python release/client/test_gamepad.py` runs the fight layer in a mocked fight
-runtime (it needs only `lupa`): 30 steps with raw entries and 13 steps with stock
-axes only, plus the placement in a synthetic `UI_Fight.lua`, a second patch pass
+runtime (it needs only `lupa`): 35 steps with raw entries and 13 steps with stock
+axes only, a restart after a lost timer, a tick that fails on every frame, plus the placement in a synthetic `UI_Fight.lua`, a second patch pass
 that changes nothing, and a Lua syntax check.
 
 `python release/client/test_gamepad_menu.py` runs the menu layer in a mocked UI
@@ -171,7 +180,8 @@ Selectable registry, a toggle group, a scroll list and the client's click
 helpers. It walks a menu grid, a popup with a backdrop, a backdrop-only reward
 popup, a scroll list past its viewport, a slider, touch and pad changes, a story
 scene with choices, the cursor, the hand-over to and from the fight HUD and the
-pause menu, and one failing C# call. It also checks the placement in a synthetic
+pause menu, the end of a fight with A held and the cursor on, one failing C#
+call, a failing start inside `UI.Open`, and the layer turning itself off. It also checks the placement in a synthetic
 `UI.lua` and the geometry rules alone.
 
 `release/client/build.py` repeats both on the modules inside the built `lua.u`.
