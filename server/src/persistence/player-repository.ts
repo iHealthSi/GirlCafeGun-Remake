@@ -192,6 +192,12 @@ import {
   makeEightDaySignUpTaskId,
   makeEightDaySignUpTaskValue,
 } from "../game-data/eight-day-sign-up-data.js";
+import {
+  currentEnergyActivitySlot,
+  energyActivityDate,
+  loadEnergyActivitySlots,
+  makeEnergyActivityTaskId,
+} from "../game-data/energy-activity-data.js";
 import type {
   GachaAward,
   GachaPool,
@@ -446,6 +452,11 @@ export interface EightDaySignUpState {
   lastOperationalDate: string | null;
 }
 
+export interface EnergyActivityState {
+  /** Local calendar date (YYYY-MM-DD) of the last slot reset. */
+  lastDate: string | null;
+}
+
 export interface BountyState {
   operationalDate: string;
   completionCounts: Record<string, number>;
@@ -477,6 +488,7 @@ export interface Player {
   dailyMissions?: DailyMissionState;
   dailySignUp: DailySignUpState;
   eightDaySignUp: EightDaySignUpState;
+  energyActivity?: EnergyActivityState;
   bounty?: BountyState;
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
@@ -840,6 +852,17 @@ export interface DailyMissionClaimResult {
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
   updatedGirls: GirlState[];
+}
+
+export interface EnergyActivityClaimResult {
+  player: Player;
+  claimed: boolean;
+  /** "outside_window" or "already_claimed" when not claimed. */
+  reason: "outside_window" | "already_claimed" | null;
+  energy: number;
+  /** No vigour cap in this build, so a grant always lands fully. */
+  bFullAdd: boolean;
+  updatedMoney: MoneyState[];
 }
 
 export class DailyMissionError extends Error {
@@ -1505,6 +1528,22 @@ function reconcileEightDaySignUp(
       hasClaimedEightDaySignUpReward(current),
     );
   }
+}
+
+function makeInitialEnergyActivityState(): EnergyActivityState {
+  return {
+    lastDate: null,
+  };
+}
+
+function reconcileEnergyActivity(player: Player, now = Date.now()): void {
+  const state = (player.energyActivity ??= makeInitialEnergyActivityState());
+  const localDate = energyActivityDate(now);
+  if (state.lastDate === localDate) return;
+  for (const slot of loadEnergyActivitySlots()) {
+    player.taskValues[String(makeEnergyActivityTaskId(slot.id))] = 0;
+  }
+  state.lastDate = localDate;
 }
 
 function initialEnhanceLevel(genre: number): number {
@@ -3522,6 +3561,7 @@ export class PlayerRepository {
         gacha: makeInitialGachaState(),
         dailySignUp: makeInitialDailySignUpState(),
         eightDaySignUp: makeInitialEightDaySignUpState(),
+        energyActivity: makeInitialEnergyActivityState(),
         bounty: makeInitialBountyState(),
         ...makeStarterRoster(registerTime),
       };
@@ -3591,6 +3631,7 @@ export class PlayerRepository {
       reconcileDailyMissions(player, now);
       reconcileDailySignUp(player, now);
       reconcileEightDaySignUp(player, now, true);
+      reconcileEnergyActivity(player, now);
       reconcileBounty(player, now);
       reconcileChapterStarTaskValues(player);
       reconcileMaximumFightPower(player);
@@ -4646,6 +4687,55 @@ export class PlayerRepository {
       updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
+    };
+  }
+
+  /**
+   * Claims the time-limited power (NormalActivityGetAward activity 8 without
+   * nType, UI_EnergyGet.lua). Adds the active window's Energy to vigour and
+   * marks the slot task (group 20, 10000 + row Id) as claimed; slot values
+   * reset when the local date changes.
+   */
+  async claimEnergyActivity(
+    account: string,
+    now = Date.now(),
+  ): Promise<EnergyActivityClaimResult> {
+    let claimed = false;
+    let energy = 0;
+    let reason: "outside_window" | "already_claimed" | null = "outside_window";
+    const updatedMoneyIds = new Set<number>();
+    let player: Player | undefined;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      reconcileEnergyActivity(player, now);
+      const slot = currentEnergyActivitySlot(now);
+      if (!slot) return;
+      const taskId = String(makeEnergyActivityTaskId(slot.id));
+      if ((player.taskValues[taskId] ?? 0) === 1) {
+        reason = "already_claimed";
+        return;
+      }
+      addMoney(player, MONEY_VIGOUR, slot.energy, updatedMoneyIds);
+      player.taskValues[taskId] = 1;
+      energy = slot.energy;
+      claimed = true;
+    });
+    if (!player) throw new Error(`Failed to claim energy activity: ${account}`);
+    const snapshot = structuredClone(player);
+    if (claimed) {
+      this.#logger.info("player.energy_activity.claimed", {
+        account,
+        energy,
+      });
+    }
+    return {
+      player: snapshot,
+      claimed,
+      reason,
+      energy,
+      bFullAdd: true,
+      updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
     };
   }
 

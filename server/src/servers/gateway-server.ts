@@ -56,6 +56,7 @@ import {
 } from "../game-data/guide-data.js";
 import { NORMAL_ACTIVITY_ACHIEVEMENT_AWARD_TYPE } from "../game-data/activity-achievement-data.js";
 import { EIGHT_DAY_SIGN_UP_ACTIVITY_ID } from "../game-data/eight-day-sign-up-data.js";
+import { ENERGY_ACTIVITY_ID } from "../game-data/energy-activity-data.js";
 import {
   GachaCatalog,
   type GachaRollResult,
@@ -1716,6 +1717,46 @@ export function createGatewayServer({
                 activityId,
                 achievementId,
                 reason: error.reason,
+              });
+            }
+            return;
+          }
+          if (activityId === ENERGY_ACTIVITY_ID) {
+            const result = await players.claimEnergyActivity(context.account);
+            context.player = result.player;
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+            for (const money of result.updatedMoney) {
+              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            }
+            if (result.claimed) {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("NormalActivityMsg", {
+                  nType: 4,
+                  nEnergy: result.energy,
+                  bFullAdd: result.bFullAdd,
+                }),
+              );
+              logger.info("lua.callback", {
+                peer,
+                account: context.account,
+                method: "NormalActivityMsg",
+                feature: "energy_activity.claim",
+                activityId,
+                energy: result.energy,
+                bFullAdd: result.bFullAdd,
+              });
+            } else {
+              logger.warn("energy_activity.claim_rejected", {
+                peer,
+                account: context.account,
+                activityId,
+                reason: result.reason,
               });
             }
             return;
