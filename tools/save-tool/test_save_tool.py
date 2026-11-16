@@ -10,6 +10,7 @@ import save_tool
 class FakePhone:
     """A phone that keeps the private folder of the app in memory."""
     package = save_tool.PACKAGE
+    PROBE = 'test -f %s && echo yes || echo no' % save_tool.SAVE
 
     def __init__(self, save=None, daily=None, debuggable=True):
         self.save, self.daily, self.debuggable, self.stops = save, dict(daily or {}), debuggable, 0
@@ -20,7 +21,11 @@ class FakePhone:
 
     def model(self): return 'Test phone'
     def stop(self): self.stops += 1
-    def has_save(self): return self.save is not None
+    def app(self, command):
+        """The shell as the app: answers the save probe from the in-memory save; nothing else says anything."""
+        return (0, 'yes\n' if self.save is not None else 'no\n') if command == self.PROBE else (0, '')
+    def has_save(self):
+        return save_tool.has_save_answer(self.app(self.PROBE)[1])
     def read_save(self): return self.save
     def daily_names(self): return sorted(self.daily)
     def read_daily(self, name): return self.daily[name]
@@ -32,6 +37,13 @@ class FakePhone:
     def remove_save(self):
         self.save, self.daily = None, {}
         return ''
+
+
+class GarbagePhone(FakePhone):
+    """A phone whose app shell answers the save probe with garbage: an adb hiccup or a run-as error."""
+
+    def app(self, command):
+        return 0, 'run-as: package not found\n'
 
 
 def run(phone, store, *argv):
@@ -113,6 +125,13 @@ def test_save_tool():
 
         assert 'not debuggable' in stops(lambda: run(FakePhone(first, debuggable=False), store, 'wipe'))
         print('ok a release build: the tool stops before it changes anything')
+
+        garbage = GarbagePhone(first, {'state-20260104.json': b'{"players": {"f": 6}}\n'})
+        daily = dict(garbage.daily)
+        assert 'cannot tell' in stops(lambda: run(garbage, store, 'push', 'chapter-3'))
+        assert 'cannot tell' in stops(lambda: run(garbage, store, 'wipe'))
+        assert garbage.save == first and garbage.daily == daily
+        print('ok an unreadable phone: push and wipe stop before they change anything')
 
 
 def manifest(value, on='application', kind=0x12):

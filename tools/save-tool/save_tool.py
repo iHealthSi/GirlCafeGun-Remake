@@ -33,6 +33,16 @@ def default_store():
     return Path(os.environ['GCG_SAVES']) if os.environ.get('GCG_SAVES') else Path.home() / 'gcg-offline-saves'
 
 
+def has_save_answer(out):
+    """The answer of `test -f <SAVE> && echo yes || echo no`: True, False, or a stop with the raw output."""
+    text = out.strip()
+    if text == 'yes':
+        return True
+    if text == 'no':
+        return False
+    sys.exit('cannot tell whether the phone has a save (raw output: %r): stopped, nothing changed' % out)
+
+
 class Phone:
     """The phone, through adb. The tests replace this class with one that keeps the files in memory."""
 
@@ -44,7 +54,7 @@ class Phone:
         out = r.stdout if binary else r.stdout.decode('utf8', 'replace').replace('\r\n', '\n')
         return r.returncode, out, r.stderr.decode('utf8', 'replace')
 
-    def _app(self, command):
+    def app(self, command):
         """Run a shell command as the app, inside its private folder. Returns (exit code, output)."""
         code, out, err = self._adb('shell', 'run-as %s sh -c "%s"; echo __rc=$?' % (self.package, command))
         m = re.search(r'__rc=(\d+)\s*$', out)
@@ -62,7 +72,7 @@ class Phone:
             sys.exit('no phone on adb (%s)' % (out + err).strip())
         if 'package:' not in self._adb('shell', 'pm path ' + self.package)[1]:
             sys.exit(self.package + ' is not installed on the phone')
-        code, out = self._app('echo ok')
+        code, out = self.app('echo ok')
         if code or 'ok' not in out:
             sys.exit('the tool cannot reach the save: the installed APK is not debuggable.\n'
                      'Make a playtest build with tools/save-tool/playtest_apk.py (see the README there).')
@@ -75,13 +85,13 @@ class Phone:
         time.sleep(1)
 
     def has_save(self):
-        return self._app('test -f %s' % SAVE)[0] == 0
+        return has_save_answer(self.app('test -f %s && echo yes || echo no' % SAVE)[1])
 
     def read_save(self):
         return self._read(SAVE)
 
     def daily_names(self):
-        code, out = self._app('ls %s 2>/dev/null' % DAILY)
+        code, out = self.app('ls %s 2>/dev/null' % DAILY)
         return [n for n in out.split() if re.fullmatch(r'[A-Za-z0-9._-]+', n)] if code == 0 else []
 
     def read_daily(self, name):
@@ -94,12 +104,12 @@ class Phone:
             return 'adb push failed: ' + out + err
         # Copy as the app, then rename: the game never sees a half-written file. The daily copies of
         # the other save go away (the backup holds them), so the server does not mix two saves.
-        code, out = self._app('mkdir -p %s && cp %s %s.pc && mv %s.pc %s && rm -rf %s' % (DATA, TEMP, SAVE, SAVE, SAVE, DAILY))
+        code, out = self.app('mkdir -p %s && cp %s %s.pc && mv %s.pc %s && rm -rf %s' % (DATA, TEMP, SAVE, SAVE, SAVE, DAILY))
         self._adb('shell', 'rm', '-f', TEMP)
         return out.strip() or 'copy failed' if code else ''
 
     def remove_save(self):
-        code, out = self._app('rm -f %s && rm -rf %s' % (SAVE, DAILY))
+        code, out = self.app('rm -f %s && rm -rf %s' % (SAVE, DAILY))
         return out.strip() or 'remove failed' if code else ''
 
 
