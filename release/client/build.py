@@ -20,6 +20,8 @@ import patch_selectors
 import test_selectors
 import test_title
 import test_offline_web
+import patch_tracking
+import test_tracking
 
 SOURCE_SHA='d9da0751b540d05a535dd76704a355110b6d63bcf30d8b876d63f3cfdf7c9b78'
 CACHE_SHA='a2012a54d479ef5eed6232374a543b9f31b038146202e27705a19199cacf3f5e'
@@ -67,6 +69,9 @@ def main():
             name='lib/'+abi+'/libil2cpp.so';body,p=patch_native.build(apk.read(name),abi)
             replacements[name]=write(name,body);proofs[name]=p
             print('Verified native developer removal: '+abi,flush=True)
+        data,proofs['trackingData']=test_tracking.run_data(apk.read(patch_tracking.DATA))
+        replacements[patch_tracking.DATA]=write(patch_tracking.DATA,data)
+        print('Verified UAutoSDK listener and Unity analytics off',flush=True)
         vfx=apk.read('assets/p_skill/neptune_note.u');assert sha(vfx)=='292efa63f877ae354768a974a9191b3387e547855acbe198fc1eec93f1feef8f'
         _,vfx_asset=patch_model.stage.stock.model_objects(vfx)
         proofs['runtimeVfxGuard']=validate_assetfile(vfx_asset)
