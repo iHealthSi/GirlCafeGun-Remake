@@ -291,11 +291,14 @@ describe("backup retention with a moved clock", () => {
 });
 
 describe("unreadable saves", () => {
-  it("keeps a broken save and stops instead of starting a new game", async () => {
+  it("keeps a broken save and stops instead of starting a new game when no backup loads", async () => {
     const { filePath, backupDirectory } = await workspace();
     await openStore(filePath, backupDirectory).initialize(START);
     await openStore(filePath, backupDirectory).initialize(START);
     await writeFile(filePath, '{"schemaVersion":1,"players":{', "utf8");
+    // A loadable backup would now be restored (see "recovery from a daily
+    // backup"), so this case breaks the only backup too.
+    await writeFile(path.join(backupDirectory, "state-20261114.json"), "{", "utf8");
 
     const failure = await openStore(filePath, backupDirectory)
       .initialize(START + DAY)
@@ -371,5 +374,113 @@ describe("unreadable saves", () => {
     const reopened = openStore(filePath, backupDirectory);
     await reopened.initialize(START + DAY);
     expect(reopened.snapshot().players.tester?.account).toBe("tester");
+  });
+});
+
+describe("recovery from a daily backup", () => {
+  const BROKEN = '{"schemaVersion":1,"players":{';
+
+  function saveBody(marker: string): string {
+    return `${JSON.stringify({ ...makeInitialState(), updatedAt: marker }, null, 2)}\n`;
+  }
+
+  function recordingLogger() {
+    const warnings: { event: string; fields: unknown }[] = [];
+    const recorder: Logger = {
+      ...logger,
+      warn(event, fields) {
+        warnings.push({ event, fields });
+      },
+    };
+    return { recorder, warnings };
+  }
+
+  async function brokenSaveWithBackups(backups: Record<string, string>) {
+    const { filePath, backupDirectory } = await workspace();
+    await fsp.mkdir(backupDirectory, { recursive: true });
+    for (const [name, body] of Object.entries(backups)) {
+      await writeFile(path.join(backupDirectory, name), body, "utf8");
+    }
+    await writeFile(filePath, BROKEN, "utf8");
+    return { filePath, backupDirectory };
+  }
+
+  it("loads the newest backup and keeps the broken save as state.json.corrupt-<time>", async () => {
+    const { filePath, backupDirectory } = await brokenSaveWithBackups({
+      "state-20261113.json": saveBody("older"),
+      "state-20261114.json": saveBody("newest"),
+    });
+    const { recorder, warnings } = recordingLogger();
+    const store = new JsonStore({
+      filePath,
+      initialState: makeInitialState(),
+      logger: recorder,
+      backups: { directory: backupDirectory, keep: 3 },
+      validate: assertLoadableState,
+    });
+
+    await store.initialize(START + DAY);
+
+    expect(store.snapshot().updatedAt).toBe("newest");
+    const brokenPath = `${filePath}.corrupt-20261115T063005Z`;
+    expect(await readFile(brokenPath, "utf8")).toBe(BROKEN);
+    expect(JSON.parse(await readFile(filePath, "utf8")).updatedAt).toBe("newest");
+    expect(warnings).toContainEqual({
+      event: "persistence.recovered_from_backup",
+      fields: {
+        file: filePath,
+        broken: brokenPath,
+        backup: path.join(backupDirectory, "state-20261114.json"),
+      },
+    });
+    // The backups are left as they were: no copy of the recovered save is added.
+    expect(await readdir(backupDirectory)).toEqual([
+      "state-20261113.json",
+      "state-20261114.json",
+    ]);
+    // A second start loads the recovered save normally.
+    const reopened = openStore(filePath, backupDirectory);
+    await reopened.initialize(START + DAY + 60_000);
+    expect(reopened.snapshot().updatedAt).toBe("newest");
+  });
+
+  it("falls back to the backup before a broken newest backup", async () => {
+    const { filePath, backupDirectory } = await brokenSaveWithBackups({
+      "state-20261112.json": saveBody("oldest"),
+      "state-20261113.json": saveBody("older"),
+      "state-20261114.json": "{",
+    });
+    const store = openStore(filePath, backupDirectory);
+
+    await store.initialize(START + DAY);
+
+    expect(store.snapshot().updatedAt).toBe("older");
+    expect(await readFile(`${filePath}.corrupt-20261115T063005Z`, "utf8")).toBe(BROKEN);
+  });
+
+  it("throws SaveFileError as before when no backup exists", async () => {
+    const { filePath, backupDirectory } = await brokenSaveWithBackups({});
+
+    await expect(
+      openStore(filePath, backupDirectory).initialize(START + DAY),
+    ).rejects.toBeInstanceOf(SaveFileError);
+    expect(await readFile(filePath, "utf8")).toBe(BROKEN);
+  });
+
+  it("starts a fresh save when state.json is missing, even with backups (save tool wipe)", async () => {
+    const { filePath, backupDirectory } = await workspace();
+    await fsp.mkdir(backupDirectory, { recursive: true });
+    await writeFile(
+      path.join(backupDirectory, "state-20261114.json"),
+      saveBody("old game"),
+      "utf8",
+    );
+    const store = openStore(filePath, backupDirectory);
+
+    await store.initialize(START + DAY);
+
+    expect(store.snapshot()).toEqual(makeInitialState());
+    expect(JSON.parse(await readFile(filePath, "utf8")).updatedAt).toBeNull();
+    expect(await readdir(backupDirectory)).toEqual(["state-20261114.json"]);
   });
 });
