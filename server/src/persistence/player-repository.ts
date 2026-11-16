@@ -107,7 +107,9 @@ import {
   MONTH_CARD_LIMIT_DAYS,
 } from "../game-data/ib-shop-data.js";
 import {
+  goodsPos,
   isGoodsInWindow,
+  isGroupedPool,
   isShopOpen,
   nextPriceIndex,
   refreshFee,
@@ -1853,9 +1855,28 @@ function deductShopMoney(
   }
 }
 
-/** RefreshRule=1 的常驻商店使用随机货架；其余规则直接全量上架。 */
-function shopUsesShelf(tab: ShopTabConfig): boolean {
-  return tab.refreshRule === 1;
+/**
+ * 随机货架：RefreshRule=1 的常驻商店，以及自动刷新（RefreshRule 2/3，
+ * UI_ShopNew.lua:1215）的分组商店（20005、20006、20010）。其余规则直接全量
+ * 上架；4/5 规则的分组商店每组只有一件，全量上架即每组一件，且货架期计数
+ * 不能随货架重掷清零。
+ */
+function shopUsesShelf(catalog: ShopCatalog, tab: ShopTabConfig): boolean {
+  if (tab.refreshRule === 1) return true;
+  if (tab.refreshRule !== 2 && tab.refreshRule !== 3) return false;
+  return isGroupedPool(catalog.goodsForShop(tab.shopId));
+}
+
+/** 按栏位号（pos）稳定排序，没有 pos 的排在最后；客户端按回包顺序展示。 */
+function sortByPos(goodsList: ShopGoodsListEntry[]): ShopGoodsListEntry[] {
+  return goodsList
+    .map((entry, index) => ({ entry, index }))
+    .sort(
+      (a, b) =>
+        (a.entry.pos ?? Number.MAX_SAFE_INTEGER) -
+          (b.entry.pos ?? Number.MAX_SAFE_INTEGER) || a.index - b.index,
+    )
+    .map(({ entry }) => entry);
 }
 
 function rerollShelf(
@@ -1917,7 +1938,7 @@ function reconcileShopState(
       counters.week = 0;
     }
   }
-  if (shopUsesShelf(tab)) {
+  if (shopUsesShelf(catalog, tab)) {
     const baseKey = shopShelfKey(tab, now);
     const currentBase = shopState.shelfKey?.split("#")[0] ?? null;
     if (currentBase !== baseKey) {
@@ -1937,6 +1958,10 @@ function buildShopGoodsEntry(
     goodsid: config.goodsId,
     buynum: counters?.total ?? 0,
   };
+  // pos = Group 号（栏位）。社团商店 20006 没有 pos 时整店锁住
+  // （GoodsLogicC.lua:227-252）。
+  const pos = goodsPos(config);
+  if (pos !== null) entry.pos = pos;
   if (config.refreshLimitNum !== null) {
     entry.refreshbuynum = shelfEntry?.bought ?? 0;
   }
@@ -1979,7 +2004,7 @@ function buildShopGoodsList(
   }
   const shopState = reconcileShopState(player, catalog, tab, now);
   const goodsList: ShopGoodsListEntry[] = [];
-  if (shopUsesShelf(tab)) {
+  if (shopUsesShelf(catalog, tab)) {
     for (const shelfEntry of shopState.shelf) {
       const config = catalog.getGoods(shelfEntry.goodsId);
       if (!config || !isGoodsInWindow(config, nowSeconds)) continue;
@@ -1995,7 +2020,7 @@ function buildShopGoodsList(
     shopId,
     isOpen: true,
     refreshCount: shopState.refreshCount,
-    goodsList,
+    goodsList: sortByPos(goodsList),
     endTime: tab.end ?? 0,
   };
 }
@@ -4995,7 +5020,7 @@ export class PlayerRepository {
       if (!isGoodsInWindow(config, nowSeconds)) throw new ShopError("unknown_goods");
       const shopState = reconcileShopState(player, catalog, tab, now);
       const shelfEntry = shopState.shelf.find((entry) => entry.goodsId === goodsId);
-      if (tab.refreshRule === 1 && !shelfEntry) {
+      if (shopUsesShelf(catalog, tab) && !shelfEntry) {
         throw new ShopError("not_on_shelf");
       }
       const counters = shopState.counters[String(goodsId)] ?? {
