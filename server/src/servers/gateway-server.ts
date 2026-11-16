@@ -56,6 +56,7 @@ import {
 } from "../game-data/guide-data.js";
 import { NORMAL_ACTIVITY_ACHIEVEMENT_AWARD_TYPE } from "../game-data/activity-achievement-data.js";
 import { EIGHT_DAY_SIGN_UP_ACTIVITY_ID } from "../game-data/eight-day-sign-up-data.js";
+import { ENERGY_ACTIVITY_ID } from "../game-data/energy-activity-data.js";
 import {
   GachaCatalog,
   type GachaRollResult,
@@ -99,6 +100,7 @@ import {
   BountySettlementError,
   CafeOperationError,
   InsufficientGoldError,
+  CardLevelCapError,
   InsufficientVigourError,
   InsufficientGachaCurrencyError,
   EightDaySignUpError,
@@ -1720,6 +1722,46 @@ export function createGatewayServer({
             }
             return;
           }
+          if (activityId === ENERGY_ACTIVITY_ID) {
+            const result = await players.claimEnergyActivity(context.account);
+            context.player = result.player;
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+            for (const money of result.updatedMoney) {
+              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            }
+            if (result.claimed) {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("NormalActivityMsg", {
+                  nType: 4,
+                  nEnergy: result.energy,
+                  bFullAdd: result.bFullAdd,
+                }),
+              );
+              logger.info("lua.callback", {
+                peer,
+                account: context.account,
+                method: "NormalActivityMsg",
+                feature: "energy_activity.claim",
+                activityId,
+                energy: result.energy,
+                bFullAdd: result.bFullAdd,
+              });
+            } else {
+              logger.warn("energy_activity.claim_rejected", {
+                peer,
+                account: context.account,
+                activityId,
+                reason: result.reason,
+              });
+            }
+            return;
+          }
           if (Number(parameters.nType) === NORMAL_ACTIVITY_ACHIEVEMENT_AWARD_TYPE) {
             await claimAchievementAward(activityId, achievementId);
             return;
@@ -2514,7 +2556,7 @@ export function createGatewayServer({
               COMMAND.NTF_S2C_CALL,
               0,
               makeServerLuaCall("GetLastGacha", {
-                bTen: true,
+                bTen: pendingGacha.ten,
                 bGetCard: true,
                 tbAwards: result.awards,
                 ...(result.getItem ? { getItem: result.getItem } : {}),
@@ -2522,6 +2564,8 @@ export function createGatewayServer({
             );
           } catch (error) {
             if (error instanceof InsufficientGachaCurrencyError) {
+              // UI_Gacha.lua ShowLastGacha handles only error.gacha.nolast and then
+              // reads tbAwards; the Lottery handler (OnServerResponse) shows the error.
               send(
                 COMMAND.NTF_S2C_CALL,
                 0,
@@ -2764,6 +2808,26 @@ export function createGatewayServer({
           }
           return;
         }
+
+        if (luaCommand === 256) {
+          const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
+          const girlId = Number(wrapped.tbParam?.nId);
+          const value = Number(wrapped.tbParam?.nValue);
+          const result = await players.setGirlMainStoryId(
+            context.account,
+            girlId,
+            value,
+          );
+          context.player = result.player;
+          if (result.changed) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          return;
+        }
         if (luaCommand === 540) {
           const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
           const chapter = Number(wrapped.tbParam?.Chapter);
@@ -2772,6 +2836,14 @@ export function createGatewayServer({
           const level = chapterCatalog.get(chapter, index, difficulty);
           if (!level?.storyOnly) {
             logger.warn("chapter.story.invalid", { chapter, index, difficulty });
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: 540,
+                tbParam: { tbNew: [] },
+              }),
+            );
             return;
           }
 
@@ -3107,6 +3179,22 @@ export function createGatewayServer({
               request.materials,
             );
           } catch (error) {
+            if (error instanceof CardLevelCapError) {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("LuaCall", {
+                  sCmd: LUA_COMMAND_CARD_LEVEL_UP_COMMON,
+                  tbParam: { errorKey: "Error.1" },
+                }),
+              );
+              logger.warn("card.enhance.level_cap", {
+                peer,
+                account: context.account,
+                guid: request.guid,
+              });
+              return;
+            }
             if (!(error instanceof InsufficientGoldError)) throw error;
             send(
               COMMAND.NTF_S2C_CALL,
@@ -3398,6 +3486,14 @@ export function createGatewayServer({
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
             }
             context.player = players.get(context.account);
+            if (context.player) {
+              // Daily mission 108 (buy in the shop) advanced inside the purchase.
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(context.player.taskValues),
+              );
+            }
             if (updatedFurniture.length && context.player)
               send(
                 COMMAND.ADD_FURNITURE_RSP,
@@ -3722,6 +3818,13 @@ export function createGatewayServer({
               sendBountyCallback({ nError: 6 });
               return;
             }
+            const passDifficulty =
+              player.taskValues[String(makeBountyPassTaskId(bountyCall.activityId))] ??
+              0;
+            if (bountyCall.difficulty > Math.min(6, passDifficulty + 1)) {
+              sendBountyCallback({ nError: 1 });
+              return;
+            }
             let keyItem: [number, number, number, number, number] | null = null;
             if (!isBountyOpen(bountyCall.activityId)) {
               keyItem = bountyKeyItem(level.eventType, bountyCall.keyType);
@@ -4003,6 +4106,14 @@ export function createGatewayServer({
                 difficulty,
                 star,
               });
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("ChapterMsg", {
+                  nError: 1,
+                  nState: 1,
+                }),
+              );
               return;
             }
             const player =

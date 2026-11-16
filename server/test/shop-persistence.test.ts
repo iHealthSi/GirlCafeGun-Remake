@@ -6,6 +6,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  dailyMissionProgress,
+  makeDailyMissionTaskId,
+} from "../src/game-data/daily-mission-data.js";
+
+import {
   ShopCatalog,
   type GoodsConfig,
   type ShopTabConfig,
@@ -224,6 +229,17 @@ describe("shop buy", () => {
     expect(entry.dailybuynum).toBe(2);
     expect(entry.buynum).toBe(2);
     expect(entry.discount).toBe(100);
+  });
+
+  it("completes daily mission 108 on a successful purchase", async () => {
+    const { repository } = await createRepository();
+    await repository.buyShopGoods("tester", catalog, 20_010, 10, 1, NOW);
+    const player = repository.get("tester")!;
+    expect(
+      dailyMissionProgress(
+        player.taskValues[String(makeDailyMissionTaskId(108))] ?? 0,
+      ),
+    ).toBe(1);
   });
 
   it("falls back to pay diamonds when free diamonds run out", async () => {

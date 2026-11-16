@@ -51,7 +51,7 @@ describe("activity achievement tables", () => {
     const provenance = JSON.parse(
       readFileSync(path.join(root, "provenance.json"), "utf8"),
     ) as { files: Record<string, { sha256: string; bytes: number }> };
-    expect(Object.keys(provenance.files)).toHaveLength(10);
+    expect(Object.keys(provenance.files)).toHaveLength(11);
     for (const [name, expected] of Object.entries(provenance.files)) {
       const bytes = readFileSync(path.join(root, name));
       expect(bytes.length, name).toBe(expected.bytes);

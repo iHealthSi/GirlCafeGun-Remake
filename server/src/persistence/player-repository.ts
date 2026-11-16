@@ -24,6 +24,7 @@ import type { DomainEvent } from "../activities/domain-events.js";
 import {
   addCardExperience,
   CARD_EXP_MATERIALS,
+  CARD_MAXIMUM_ENHANCE_LEVEL,
   type CardEnhancementMaterial,
 } from "../game-data/card-enhancement-data.js";
 import {
@@ -191,6 +192,12 @@ import {
   makeEightDaySignUpTaskId,
   makeEightDaySignUpTaskValue,
 } from "../game-data/eight-day-sign-up-data.js";
+import {
+  currentEnergyActivitySlot,
+  energyActivityDate,
+  loadEnergyActivitySlots,
+  makeEnergyActivityTaskId,
+} from "../game-data/energy-activity-data.js";
 import type {
   GachaAward,
   GachaPool,
@@ -293,6 +300,7 @@ const GIRL_CAFE_POSITION_OFFSET = 3;
 const GIRL_FIGHT_MODEL_OFFSET = 9;
 const GIRL_TRAIN_POSITION_OFFSET = 11;
 const GIRL_TRAIN_END_TIME_OFFSET = 12;
+const GIRL_MAIN_STORY_OFFSET = 14;
 const GIRL_TRAIN_OUTDOOR_ID_OFFSET = 16;
 const GIRL_SECRET_OFFSET = 100;
 const GIRL_LEVEL_AWARD_OFFSET = 500;
@@ -444,6 +452,11 @@ export interface EightDaySignUpState {
   lastOperationalDate: string | null;
 }
 
+export interface EnergyActivityState {
+  /** Local calendar date (YYYY-MM-DD) of the last slot reset. */
+  lastDate: string | null;
+}
+
 export interface BountyState {
   operationalDate: string;
   completionCounts: Record<string, number>;
@@ -475,6 +488,7 @@ export interface Player {
   dailyMissions?: DailyMissionState;
   dailySignUp: DailySignUpState;
   eightDaySignUp: EightDaySignUpState;
+  energyActivity?: EnergyActivityState;
   bounty?: BountyState;
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
@@ -646,6 +660,11 @@ export interface GirlViewStoryResult {
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
   alreadyRead: boolean;
+}
+
+export interface GirlMainStoryIdResult {
+  player: Player;
+  changed: boolean;
 }
 
 export interface IBShopState {
@@ -835,6 +854,17 @@ export interface DailyMissionClaimResult {
   updatedGirls: GirlState[];
 }
 
+export interface EnergyActivityClaimResult {
+  player: Player;
+  claimed: boolean;
+  /** "outside_window" or "already_claimed" when not claimed. */
+  reason: "outside_window" | "already_claimed" | null;
+  energy: number;
+  /** No vigour cap in this build, so a grant always lands fully. */
+  bFullAdd: boolean;
+  updatedMoney: MoneyState[];
+}
+
 export class DailyMissionError extends Error {
   constructor(
     readonly reason:
@@ -874,6 +904,13 @@ export class InsufficientGoldError extends Error {
   ) {
     super(`Insufficient gold: required ${required}, available ${available}`);
     this.name = "InsufficientGoldError";
+  }
+}
+
+export class CardLevelCapError extends Error {
+  constructor(readonly guid: number) {
+    super(`Card is already at its level cap: ${guid}`);
+    this.name = "CardLevelCapError";
   }
 }
 
@@ -1498,6 +1535,22 @@ function reconcileEightDaySignUp(
       hasClaimedEightDaySignUpReward(current),
     );
   }
+}
+
+function makeInitialEnergyActivityState(): EnergyActivityState {
+  return {
+    lastDate: null,
+  };
+}
+
+function reconcileEnergyActivity(player: Player, now = Date.now()): void {
+  const state = (player.energyActivity ??= makeInitialEnergyActivityState());
+  const localDate = energyActivityDate(now);
+  if (state.lastDate === localDate) return;
+  for (const slot of loadEnergyActivitySlots()) {
+    player.taskValues[String(makeEnergyActivityTaskId(slot.id))] = 0;
+  }
+  state.lastDate = localDate;
 }
 
 function initialEnhanceLevel(genre: number): number {
@@ -3515,6 +3568,7 @@ export class PlayerRepository {
         gacha: makeInitialGachaState(),
         dailySignUp: makeInitialDailySignUpState(),
         eightDaySignUp: makeInitialEightDaySignUpState(),
+        energyActivity: makeInitialEnergyActivityState(),
         bounty: makeInitialBountyState(),
         ...makeStarterRoster(registerTime),
       };
@@ -3584,6 +3638,7 @@ export class PlayerRepository {
       reconcileDailyMissions(player, now);
       reconcileDailySignUp(player, now);
       reconcileEightDaySignUp(player, now, true);
+      reconcileEnergyActivity(player, now);
       reconcileBounty(player, now);
       reconcileChapterStarTaskValues(player);
       reconcileMaximumFightPower(player);
@@ -4129,6 +4184,67 @@ export class PlayerRepository {
     };
   }
 
+  async setGirlMainStoryId(
+    account: string,
+    girlId: number,
+    value: number,
+  ): Promise<GirlMainStoryIdResult> {
+    const mainStoryCount = defaultGirlFetterCatalog()
+      .nodes(girlId)
+      .filter((node) => node.isMain).length;
+    let player: Player | undefined;
+    let changed = false;
+    let reason: string | null = null;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const key = String(
+        makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET),
+      );
+      const current = player.taskValues[key] ?? 0;
+      const owned = player.girls.some((girl) => girl.girlId === girlId);
+      if (
+        !Number.isSafeInteger(girlId) ||
+        girlId <= 0 ||
+        !Number.isSafeInteger(value) ||
+        value < 0 ||
+        value > mainStoryCount
+      ) {
+        reason = "invalid_value";
+        return;
+      }
+      if (!owned) {
+        reason = "girl_not_owned";
+        return;
+      }
+      if (value <= current) {
+        return;
+      }
+      if (value > current + 1) {
+        reason = "skips_story";
+        return;
+      }
+      player.taskValues[key] = value;
+      changed = true;
+    });
+    if (!player) throw new Error(`Failed to set girl main story id: ${account}`);
+    if (reason) {
+      this.#logger.warn("player.girl_main_story.rejected", {
+        account,
+        girlId,
+        value,
+        reason,
+      });
+    } else if (changed) {
+      this.#logger.info("player.girl_main_story.updated", {
+        account,
+        girlId,
+        value,
+      });
+    }
+    return { player: structuredClone(player), changed };
+  }
+
   async endGirlTraining(
     account: string,
     girlId: number,
@@ -4578,6 +4694,56 @@ export class PlayerRepository {
       updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
+    };
+  }
+
+  /**
+   * Claims the time-limited power (NormalActivityGetAward activity 8 without
+   * nType, UI_EnergyGet.lua). Adds the active window's Energy to vigour and
+   * marks the slot task (group 20, 10000 + row Id) as claimed; slot values
+   * reset when the local date changes.
+   */
+  async claimEnergyActivity(
+    account: string,
+    now = Date.now(),
+  ): Promise<EnergyActivityClaimResult> {
+    let claimed = false;
+    let energy = 0;
+    let reason: "outside_window" | "already_claimed" | null = "outside_window";
+    const updatedMoneyIds = new Set<number>();
+    let player: Player | undefined;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      reconcileEnergyActivity(player, now);
+      const slot = currentEnergyActivitySlot(now);
+      if (!slot) return;
+      const taskId = String(makeEnergyActivityTaskId(slot.id));
+      if ((player.taskValues[taskId] ?? 0) === 1) {
+        reason = "already_claimed";
+        return;
+      }
+      addMoney(player, MONEY_VIGOUR, slot.energy, updatedMoneyIds);
+      player.taskValues[taskId] = 1;
+      energy = slot.energy;
+      claimed = true;
+      reason = null;
+    });
+    if (!player) throw new Error(`Failed to claim energy activity: ${account}`);
+    const snapshot = structuredClone(player);
+    if (claimed) {
+      this.#logger.info("player.energy_activity.claimed", {
+        account,
+        energy,
+      });
+    }
+    return {
+      player: snapshot,
+      claimed,
+      reason,
+      energy,
+      bFullAdd: true,
+      updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
     };
   }
 
@@ -5097,6 +5263,7 @@ export class PlayerRepository {
       counters.total += buyNum;
       counters.shelf += buyNum;
       if (shelfEntry) shelfEntry.bought += buyNum;
+      incrementDailyMissionProgress(player, 108, 1, now);
       result = buildShopGoodsList(player, catalog, shopId, now);
     });
     if (!player || !result) {
@@ -5617,6 +5784,10 @@ export class PlayerRepository {
         (entry) => entry.guid === guid && isCharacterCard(entry),
       );
       if (!enhancedCard) throw new Error(`Unknown character card: ${guid}`);
+
+      if (enhancedCard.enhanceLevel >= CARD_MAXIMUM_ENHANCE_LEVEL) {
+        throw new CardLevelCapError(guid);
+      }
 
       for (const material of materials) {
         if (material.kind !== 1) {
