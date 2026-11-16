@@ -4,6 +4,11 @@ import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ShopCatalog } from "../src/game-data/shop-data.js";
+import {
+  ACTIVITY_ACHIEVEMENT_TASK_GROUP,
+  achievementProgress,
+  makeAchievementTaskId,
+} from "../src/game-data/activity-achievement-data.js";
 import { CafeCatalog } from "../src/game-data/cafe-catalog.js";
 import {
   guideMissionProgress,
@@ -312,6 +317,15 @@ describe("atomic café business", () => {
         result.player.taskValues[String(makeGuideTaskId(40_017))] ?? 0,
       ),
     ).toBe(1);
+    // Event page achievement 61 (activity 16): sell 500 coffees.
+    expect(
+      achievementProgress(
+        result.player.taskValues[
+          String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 61))
+        ] ?? 0,
+      ),
+    ).toBe(1);
+    expect(result.taskValuesChanged).toBe(true);
     const before = f.store.snapshot();
     const duplicate = await f.call(116, { customeridx: id }, NOW + 240_000);
     expect(duplicate.response).toEqual(result.response);

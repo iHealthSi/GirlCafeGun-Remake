@@ -3052,7 +3052,10 @@ export function createGatewayServer({
               luaCommand,
               call?.parameters,
             );
-            sendPromiseUpdates(result, luaCommand === 229);
+            sendPromiseUpdates(
+              result,
+              luaCommand === 229 || result.achievementsChanged === true,
+            );
             send(
               COMMAND.NTF_S2C_CALL,
               0,
@@ -4566,7 +4569,8 @@ export function createGatewayServer({
               );
               if (
                 result.unlockedSecretIds.length > 0 ||
-                result.fetterUnlocks.length > 0
+                result.fetterUnlocks.length > 0 ||
+                result.achievementsChanged
               ) {
                 send(
                   COMMAND.TASK_VALUE_RSP,

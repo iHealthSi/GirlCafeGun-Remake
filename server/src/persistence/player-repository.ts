@@ -614,6 +614,8 @@ export interface GirlGiftResult {
   reachedMaxLevel: boolean;
   unlockedSecretIds: number[];
   fetterUnlocks: GirlFetterUnlock[];
+  /** Event page achievements moved: the client needs the task values again. */
+  achievementsChanged: boolean;
 }
 
 export class GirlGiftError extends Error {
@@ -2084,6 +2086,8 @@ export interface PromiseOperationResult {
   updatedMoney: MoneyState[];
   updatedGirls: GirlState[];
   completedTaskIds: number[];
+  /** Event page achievements moved: the client needs the task values again. */
+  achievementsChanged?: boolean;
 }
 export class PromiseOperationError extends Error {
   constructor(
@@ -2374,9 +2378,9 @@ function promiseCardReward(
   catalog: PromiseCatalog,
   items: Set<number>,
   girls: Set<number>,
-): void {
+): Player["inventory"][number] | null {
   const step = catalog.getStep(girl.girlid, girl.step);
-  if (!step || step.cardgdpl.length !== 4) return;
+  if (!step || step.cardgdpl.length !== 4) return null;
   let card = player.inventory.find(
     (item) =>
       item.guid === girl.cardguid &&
@@ -2433,6 +2437,7 @@ function promiseCardReward(
   items.add(card.guid);
   const changed = reconcileGirlAppearanceState(player, items);
   for (const id of changed.updatedGirlIds) girls.add(id);
+  return card;
 }
 function promiseResult(
   player: Player,
@@ -2683,6 +2688,7 @@ export class PlayerRepository {
       );
     }
     let result: PromiseOperationResult | undefined;
+    let achievementsChanged = false;
     await this.#store.update((state) => {
       const player = state.players[account];
       if (!player) throw new PromiseOperationError("player_not_found");
@@ -2821,8 +2827,22 @@ export class PlayerRepository {
               )
                 throw new PromiseOperationError("stage_not_ready");
               if (girl.step <= 6 && girl.rewardstep < girl.step) {
-                promiseCardReward(player, girl, catalog, items, girls);
+                const card = promiseCardReward(player, girl, catalog, items, girls);
                 girl.rewardstep = girl.step;
+                if (card)
+                  achievementsChanged =
+                    this.#activities.dispatch(
+                      player,
+                      [
+                        {
+                          type: "card.progressed",
+                          guid: card.guid,
+                          level: card.enhanceLevel,
+                          breakLevel: card.breakLevel,
+                        },
+                      ],
+                      now,
+                    ).changedTaskIds.length > 0;
               }
               if (girl.step < catalog.maxStep(girlId))
                 promiseSetStage(girl, girl.step + 1, catalog, now);
@@ -2855,7 +2875,10 @@ export class PlayerRepository {
           }
         }
       }
-      result = promiseResult(player, response, items, money, girls);
+      result = {
+        ...promiseResult(player, response, items, money, girls),
+        achievementsChanged,
+      };
     });
     return result!;
   }
@@ -2940,6 +2963,11 @@ export class PlayerRepository {
         unlockGirlLevelSecrets(player, girlId, gain.oldLevel, gain.newLevel);
         reconcileGirlFetterUnlocks(player, girlId);
         updatedGirlIds.add(girlId);
+        this.#activities.dispatch(
+          player,
+          [{ type: "girl.affection_changed", girlId, level: girl.level }],
+          now,
+        );
       }
       incrementDailyMissionProgress(player, 105, 1, now);
       const completedTaskIds = promiseIncrement(player, "TouchHead", girlId, 1);
@@ -3316,6 +3344,8 @@ export class PlayerRepository {
         money = new Set<number>(),
         girls = new Set<number>();
       const beforeTasks = JSON.stringify(player.taskValues);
+      const cafeLevelBefore = player.cafe.level ?? 1;
+      let coffeesSold = 0;
       const automaticFurniture: number[] = [];
       const hooks: CafeRuntimeHooks = {
         chargeMoney: (id, count) => {
@@ -3339,6 +3369,7 @@ export class PlayerRepository {
           girls.add(id);
         },
         coffeeSold: (_id, count) => {
+          coffeesSold += count;
           const mission = guideMission(40_017)!;
           const key = String(makeGuideTaskId(mission.id)),
             value = player.taskValues[key] ?? 0;
@@ -3425,6 +3456,13 @@ export class PlayerRepository {
         commerce.updatedFurniture.push(
           ...materializeOwnedCafeFurniture(player, pending, catalog, hooks),
         );
+      // The offline catch-up sells coffee one cup at a time: count it once.
+      const cafeEvents: DomainEvent[] = [];
+      if (coffeesSold > 0) cafeEvents.push({ type: "coffee.sold", count: coffeesSold });
+      const cafeLevel = player.cafe.level ?? 1;
+      if (cafeLevel !== cafeLevelBefore)
+        cafeEvents.push({ type: "cafe.level_changed", level: cafeLevel });
+      if (cafeEvents.length > 0) this.#activities.dispatch(player, cafeEvents, now);
       const result = promiseResult(player, response, items, money, girls);
       return {
         ...result,
@@ -3926,6 +3964,7 @@ export class PlayerRepository {
     let affection: GirlAffectionGain | undefined;
     const unlockedSecretIds: number[] = [];
     let fetterUnlocks: GirlFetterUnlock[] = [];
+    let achievementsChanged = false;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
@@ -3986,6 +4025,15 @@ export class PlayerRepository {
       inventoryItem.count -= count;
       girl.level = gain.newLevel;
       girl.exp = gain.newExperience;
+      achievementsChanged =
+        this.#activities.dispatch(
+          player,
+          [
+            { type: "girl.gift_sent", girlId, count },
+            { type: "girl.affection_changed", girlId, level: girl.level },
+          ],
+          now,
+        ).changedTaskIds.length > 0;
 
       const taskValues = player.taskValues;
       unlockedSecretIds.push(
@@ -4056,6 +4104,7 @@ export class PlayerRepository {
       reachedMaxLevel: affection.reachedMaxLevel,
       unlockedSecretIds,
       fetterUnlocks,
+      achievementsChanged,
     };
   }
 
@@ -4310,6 +4359,14 @@ export class PlayerRepository {
         )
       ] = 0;
       fetterUnlocks = reconcileGirlFetterUnlocks(player, girlId);
+      this.#activities.dispatch(
+        player,
+        [
+          { type: "girl.training_finished", girlId },
+          { type: "girl.affection_changed", girlId, level: girl.level },
+        ],
+        now,
+      );
     });
     if (!player || gain === undefined) {
       throw new Error(`Failed to end girl training: ${account}`);
@@ -5833,11 +5890,18 @@ export class PlayerRepository {
       );
       enhancedCard.enhanceLevel = enhanced.level;
       enhancedCard.enhanceExp = enhanced.experience;
+      const cardEvents: DomainEvent[] = [
+        {
+          type: "card.progressed",
+          guid,
+          level: enhancedCard.enhanceLevel,
+          breakLevel: enhancedCard.breakLevel,
+        },
+      ];
       if (reconcileMaximumFightPower(player)) {
-        this.#activities.dispatch(player, [
-          { type: "fight_power.changed", value: player.fightPower },
-        ]);
+        cardEvents.push({ type: "fight_power.changed", value: player.fightPower });
       }
+      this.#activities.dispatch(player, cardEvents);
       incrementDailyMissionProgress(player, 107);
     });
     if (!player || !enhancedCard) {
@@ -6095,10 +6159,12 @@ export class PlayerRepository {
       for (const { donor, count } of donors) donor.count -= count;
       money.count -= stage.currencyCount;
       weapon.breakLevel = stage.breakLevel;
+      const breakEvents: DomainEvent[] = [
+        { type: "weapon.broken", guid, breakLevel: weapon.breakLevel },
+      ];
       if (reconcileMaximumFightPower(player))
-        this.#activities.dispatch(player, [
-          { type: "fight_power.changed", value: player.fightPower },
-        ]);
+        breakEvents.push({ type: "fight_power.changed", value: player.fightPower });
+      this.#activities.dispatch(player, breakEvents);
       const snapshot = structuredClone(player);
       result = {
         player: snapshot,
@@ -6254,6 +6320,11 @@ export class PlayerRepository {
           affection.newLevel,
         );
         reconcileGirlFetterUnlocks(player, girl.girlId);
+        this.#activities.dispatch(
+          player,
+          [{ type: "girl.affection_changed", girlId: girl.girlId, level: girl.level }],
+          now,
+        );
       }
       return {
         player: structuredClone(player),
@@ -6337,6 +6408,9 @@ export class PlayerRepository {
         affection.newLevel,
       );
       reconcileGirlFetterUnlocks(player, girl.girlId);
+      this.#activities.dispatch(player, [
+        { type: "girl.affection_changed", girlId: girl.girlId, level: girl.level },
+      ]);
       return { player, affection, girl };
     });
     return structuredClone(result);
@@ -6493,6 +6567,10 @@ export class PlayerRepository {
         player.money.push({ id: MONEY_VIGOUR, count: -energyCost });
       }
       incrementDailyMissionProgress(player, 109, energyCost);
+      if (energyCost > 0)
+        this.#activities.dispatch(player, [
+          { type: "vigour.spent", amount: energyCost },
+        ]);
     });
     this.#logger.info("player.level.vigour_charged", { account, energyCost });
     if (!player) throw new Error(`Failed to charge level vigour: ${account}`);
@@ -6589,6 +6667,18 @@ export class PlayerRepository {
       if (experienceUpdate.vigourRecovery > 0) {
         updatedMoneyIds.add(MONEY_VIGOUR);
       }
+      const bountyEvents: DomainEvent[] = [
+        {
+          type: "bounty.cleared",
+          activityId: level.activityId,
+          difficulty: level.difficulty,
+        },
+      ];
+      if (energyCost > 0)
+        bountyEvents.push({ type: "vigour.spent", amount: energyCost });
+      if (experienceUpdate.levelsGained > 0)
+        bountyEvents.push({ type: "player.level_changed", level: player.level });
+      this.#activities.dispatch(player, bountyEvents);
       const girlReconciliation = reconcileGirlAppearanceState(player, updatedItemGuids);
       for (const girlId of girlReconciliation.updatedGirlIds) {
         updatedGirlIds.add(girlId);
@@ -6697,6 +6787,13 @@ export class PlayerRepository {
       if (experienceUpdate.vigourRecovery > 0) {
         updatedMoneyIds.add(MONEY_VIGOUR);
       }
+      const settlementEvents: DomainEvent[] = [];
+      if (energyCost > 0)
+        settlementEvents.push({ type: "vigour.spent", amount: energyCost });
+      if (experienceUpdate.levelsGained > 0)
+        settlementEvents.push({ type: "player.level_changed", level: player.level });
+      if (settlementEvents.length > 0)
+        this.#activities.dispatch(player, settlementEvents);
 
       for (const [genre, detail, particular, templateLevel, rawCount] of awards) {
         const count = Math.max(0, rawCount);
@@ -6826,6 +6923,7 @@ export class PlayerRepository {
           difficulty,
           stars: starMask,
           firstClear: true,
+          story: true,
         },
       ]);
       return {
