@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { BaseAward } from "./chapter-config.js";
@@ -218,6 +218,7 @@ const TABLES = [
   "npet/achievementother",
   "ncafedefautitems",
 ] as const;
+const OPTIONAL_TABLES: ReadonlySet<string> = new Set(["ncafedefautitems"]);
 
 function numeric(row: CafeRawRow, key: string): number {
   const value = (row[key] ?? "").trim();
@@ -586,13 +587,12 @@ export class CafeCatalog {
     if (!this.#shared)
       this.#shared = new CafeCatalog(
         Object.fromEntries(
-          TABLES.map((name) => [
-            name,
-            readFileSync(
-              path.resolve(process.cwd(), "resources/cafe", `${name}.txt`),
-              "utf8",
-            ),
-          ]),
+          TABLES.flatMap((name) => {
+            const file = path.resolve(process.cwd(), "resources/cafe", `${name}.txt`);
+            // An update package may ship a newer server over older tables.
+            if (OPTIONAL_TABLES.has(name) && !existsSync(file)) return [];
+            return [[name, readFileSync(file, "utf8")]];
+          }),
         ),
       );
     return this.#shared;

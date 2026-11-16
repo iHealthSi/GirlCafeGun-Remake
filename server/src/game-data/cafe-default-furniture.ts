@@ -51,12 +51,12 @@ export function reconcileDefaultCafeFurniture(
   catalog: CafeCatalog,
 ): number {
   const cafe = player.cafe;
-  if (cafe.defaultFurnitureSeeded) return 0;
+  // Without the table (an older resource folder) decide nothing; try next load.
+  if (cafe.defaultFurnitureSeeded || catalog.defaultItems().length === 0) return 0;
   cafe.defaultFurnitureSeeded = true;
   const furniture = cafe.furniture ?? [];
   if (furniture.some((item) => !isNativeFixedHouseObjectId(item.objId))) return 0;
   const seeded = makeDefaultCafeFurniture(catalog, furniture);
-  if (seeded.length === 0) return 0;
   cafe.furniture = [...furniture, ...seeded];
   const rooms = (cafe.rooms ??= []);
   for (const roomId of HOUSE_ROOM_IDS)

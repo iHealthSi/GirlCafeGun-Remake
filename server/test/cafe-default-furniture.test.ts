@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { CafeCatalog } from "../src/game-data/cafe-catalog.js";
+import { reconcileDefaultCafeFurniture } from "../src/game-data/cafe-default-furniture.js";
 import { validCafeSeat } from "../src/game-data/cafe-runtime.js";
 import { isNativeFixedHouseObjectId } from "../src/game-data/house-data.js";
 import type { Logger } from "../src/logger.js";
@@ -251,5 +253,31 @@ describe("default café furniture", () => {
     });
     const emptied = await f.login();
     expect(emptied.cafe.furniture).toEqual([]);
+  });
+
+  it("decides nothing when the resource folder predates the table", async () => {
+    const resources = path.resolve(process.cwd(), "resources/cafe");
+    const provenance = JSON.parse(
+      readFileSync(path.join(resources, "provenance.json"), "utf8"),
+    ) as { files: Record<string, unknown> };
+    const older = new CafeCatalog(
+      Object.fromEntries(
+        Object.keys(provenance.files)
+          .filter((name) => name !== "ncafedefautitems.txt")
+          .map((name) => [
+            name.replace(/\.txt$/, ""),
+            readFileSync(path.join(resources, name), "utf8"),
+          ]),
+      ),
+    );
+    expect(older.defaultItems()).toEqual([]);
+    const f = await fixture();
+    const player = await f.players.getOrCreate("tester");
+    delete player.cafe.defaultFurnitureSeeded;
+    player.cafe.furniture = [];
+    expect(reconcileDefaultCafeFurniture(player, older)).toBe(0);
+    expect(player.cafe.defaultFurnitureSeeded).toBeUndefined();
+    expect(reconcileDefaultCafeFurniture(player, catalog)).toBe(13);
+    expect(player.cafe.defaultFurnitureSeeded).toBe(true);
   });
 });
