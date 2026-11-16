@@ -340,6 +340,9 @@ export interface ActivityAchievementPlayer extends ActivityPlayerState {
   inventory: readonly { genre: number; enhanceLevel: number; breakLevel: number }[];
   eightDaySignUp: { cumulativeDays: number };
   cafe?: { level?: number };
+  formations?: readonly {
+    fightCards: readonly { mainCardGuid: number; usedCardGuid: number }[];
+  }[];
 }
 
 const CARD_GENRE = 1;
@@ -356,6 +359,7 @@ const WEAPON_GENRE = 2;
  * - 39 highest character card level [level]
  * - 43 login days [days, paid sign-in activity]
  * - 54 character cards with limit break N [cards, break level]
+ * - 59 secondary cards equipped in team 1 [cards]
  * - 71 weapons at level N [weapons, level]
  * - 79 cafe level [level]
  * - 85 girls at affection level N [girls, level]
@@ -393,6 +397,11 @@ export function derivedAchievementProgress(
       if (second === undefined) return null;
       return player.inventory.filter(
         ({ genre, breakLevel }) => genre === CARD_GENRE && breakLevel >= second,
+      ).length;
+    case 59:
+      return (player.formations?.[0]?.fightCards ?? []).filter(
+        ({ mainCardGuid, usedCardGuid }) =>
+          usedCardGuid !== 0 && usedCardGuid !== mainCardGuid,
       ).length;
     case 71:
       if (second === undefined) return null;
@@ -536,6 +545,7 @@ export const activityAchievementActivity: ActivityHandler<ActivityAchievementPla
     "coffee.sold",
     "weapon.broken",
     "cafe.level_changed",
+    "formation.updated",
   ],
   reconcile(player, context) {
     reconcileActivityAchievements(

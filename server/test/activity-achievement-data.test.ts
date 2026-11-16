@@ -174,6 +174,31 @@ describe("activity achievement progress", () => {
     expect(derivedAchievementProgress(player, other(31))).toBeNull(); // type 22 counter
   });
 
+  it("derives the secondary cards equipped in team 1 (type 59)", () => {
+    const player = makePlayer({
+      formations: [
+        {
+          fightCards: [
+            { mainCardGuid: 1, usedCardGuid: 2 },
+            { mainCardGuid: 3, usedCardGuid: 3 },
+            { mainCardGuid: 4, usedCardGuid: 0 },
+            { mainCardGuid: 5, usedCardGuid: 6 },
+          ],
+        },
+        {
+          fightCards: [
+            { mainCardGuid: 7, usedCardGuid: 8 },
+            { mainCardGuid: 9, usedCardGuid: 10 },
+          ],
+        },
+      ],
+    });
+    expect(derivedAchievementProgress(player, other(34))).toBe(2); // type 59
+    expect(
+      derivedAchievementProgress(makePlayer({ formations: [] }), other(34)),
+    ).toBe(0);
+  });
+
   it("never lowers stored progress and keeps the claim mark", () => {
     const taskId = String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, 45));
     const player = makePlayer({
