@@ -103,6 +103,7 @@ import {
   CardLevelCapError,
   InsufficientVigourError,
   InsufficientGachaCurrencyError,
+  PendingGachaExistsError,
   EightDaySignUpError,
   GuideMissionError,
   GirlGiftError,
@@ -2099,6 +2100,25 @@ export function createGatewayServer({
               logger.warn("gacha.insufficient_currency", {
                 account: context.account,
                 poolId,
+              });
+              return;
+            }
+            if (error instanceof PendingGachaExistsError) {
+              // UI_Gacha.lua OnServerResponse shows Text(err) in a message box. The client
+              // text table has no gacha text for this case; ui.Error.20095 reads
+              // "You already have an unfinished task." The player saves the pending
+              // result with the Save button (GetLastGacha true).
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("Lottery", {
+                  err: "ui.Error.20095",
+                }),
+              );
+              logger.warn("gacha.pending.reroll_refused", {
+                account: context.account,
+                poolId,
+                pendingPoolId: error.pendingPoolId,
               });
               return;
             }

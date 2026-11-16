@@ -921,6 +921,22 @@ export class InsufficientGachaCurrencyError extends Error {
   }
 }
 
+/**
+ * A judgeType-2 pool keeps one unpaid result until the player saves it with
+ * GetLastGacha. A second roll would replace that result for free, so it is refused.
+ */
+export class PendingGachaExistsError extends Error {
+  constructor(
+    readonly poolId: number,
+    readonly pendingPoolId: number,
+  ) {
+    super(
+      `Gacha pool ${poolId} refused: a pending result for pool ${pendingPoolId} is not saved yet`,
+    );
+    this.name = "PendingGachaExistsError";
+  }
+}
+
 export class CharacterCardDecompositionError extends Error {
   constructor(
     readonly reason:
@@ -4957,6 +4973,10 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      // There is one pending slot per player. Overwriting it would re-roll for free
+      // (or lose another pool's unpaid result), so the player must save it first.
+      const existing = player.gacha.pending;
+      if (existing) throw new PendingGachaExistsError(poolId, existing.poolId);
       player.gacha.pending = {
         poolId,
         ten,
