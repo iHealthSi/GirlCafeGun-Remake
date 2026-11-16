@@ -3730,6 +3730,13 @@ export function createGatewayServer({
               sendBountyCallback({ nError: 6 });
               return;
             }
+            const passDifficulty =
+              player.taskValues[String(makeBountyPassTaskId(bountyCall.activityId))] ??
+              0;
+            if (bountyCall.difficulty > Math.min(6, passDifficulty + 1)) {
+              sendBountyCallback({ nError: 1 });
+              return;
+            }
             let keyItem: [number, number, number, number, number] | null = null;
             if (!isBountyOpen(bountyCall.activityId)) {
               keyItem = bountyKeyItem(level.eventType, bountyCall.keyType);
