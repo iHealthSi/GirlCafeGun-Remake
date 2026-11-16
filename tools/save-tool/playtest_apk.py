@@ -94,12 +94,16 @@ def build(a):
 
     with zipfile.ZipFile(a.apk) as src:
         manifest, proof = debuggable_manifest(src.read(MANIFEST))
-        if proof['valueBefore']:
-            sys.exit('this APK is already debuggable: nothing to do')
-        unsigned, aligned = a.out.with_suffix('.unsigned.apk'), a.out.with_suffix('.aligned.apk')
-        a.out.parent.mkdir(parents=True, exist_ok=True)
-        dropped = []
-        with zipfile.ZipFile(unsigned, 'w', allowZip64=False) as dst:
+    if proof['valueBefore']:
+        sys.exit('this APK is already debuggable: nothing to do')
+    unsigned, aligned = a.out.with_suffix('.unsigned.apk'), a.out.with_suffix('.aligned.apk')
+    idsig = Path(str(a.out) + '.idsig')
+    a.out.parent.mkdir(parents=True, exist_ok=True)
+    # unsigned and aligned are full-size APKs: they go also when a step fails (a wrong keystore password).
+    # An output that apksigner began but that did not pass verify goes too, so that nobody installs it.
+    dropped, signing_started, verified = [], False, False
+    try:
+        with zipfile.ZipFile(a.apk) as src, zipfile.ZipFile(unsigned, 'w', allowZip64=False) as dst:
             for info in src.infolist():
                 if signature_file(info.filename):
                     dropped.append(info.filename)
@@ -108,16 +112,21 @@ def build(a):
                 row.compress_type, row.external_attr, row.create_system = info.compress_type, info.external_attr, info.create_system
                 dst.writestr(row, manifest if info.filename == MANIFEST else src.read(info),
                              compress_type=info.compress_type, compresslevel=6)
-    run([zipalign, '-f', '-p', '4', unsigned, aligned])
-    sign = [java, '-jar', apksigner, 'sign', '--ks', a.ks, '--ks-pass', a.ks_pass, '--out', a.out]
-    if a.ks_key_alias:
-        sign += ['--ks-key-alias', a.ks_key_alias]
-    if a.ks_type:
-        sign += ['--ks-type', a.ks_type]
-    run(sign + [aligned])
-    certs = run([java, '-jar', apksigner, 'verify', '--print-certs', a.out])
-    unsigned.unlink(); aligned.unlink()
-    Path(str(a.out) + '.idsig').unlink(missing_ok=True)
+        run([zipalign, '-f', '-p', '4', unsigned, aligned])
+        sign = [java, '-jar', apksigner, 'sign', '--ks', a.ks, '--ks-pass', a.ks_pass, '--out', a.out]
+        if a.ks_key_alias:
+            sign += ['--ks-key-alias', a.ks_key_alias]
+        if a.ks_type:
+            sign += ['--ks-type', a.ks_type]
+        signing_started = True
+        run(sign + [aligned])
+        certs = run([java, '-jar', apksigner, 'verify', '--print-certs', a.out])
+        verified = True
+    finally:
+        for temp in (unsigned, aligned, idsig):
+            temp.unlink(missing_ok=True)
+        if signing_started and not verified:
+            a.out.unlink(missing_ok=True)
     with zipfile.ZipFile(a.apk) as src, zipfile.ZipFile(a.out) as dst:
         before = {i.filename: i.CRC for i in src.infolist() if not signature_file(i.filename)}
         after = {i.filename: i.CRC for i in dst.infolist() if not i.filename.startswith('META-INF/')}
