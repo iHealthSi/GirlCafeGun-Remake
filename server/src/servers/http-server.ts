@@ -69,10 +69,16 @@ export function createHttpServer({
   }
 
   return createServer((request, response) => {
-    const url = new URL(
-      request.url ?? "/",
-      `http://${request.headers.host ?? config.http.host}`,
-    );
+    let url: URL;
+    try {
+      url = new URL(
+        request.url ?? "/",
+        `http://${request.headers.host ?? config.http.host}`,
+      );
+    } catch {
+      sendJson(response, 400, { error: "bad_request" });
+      return;
+    }
     logger.info("http.request", {
       remote: request.socket.remoteAddress,
       method: request.method,

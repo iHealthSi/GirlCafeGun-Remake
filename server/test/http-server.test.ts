@@ -1,6 +1,7 @@
 import { once } from "node:events";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
+import { connect } from "node:net";
 import path from "node:path";
 import { expect, it } from "vitest";
 
@@ -188,4 +189,17 @@ it("starts without the page folder, and with a notice file that is not valid", a
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+it("answers 400 for a request whose Host header is not a valid URL", async () => {
+  await withServer({}, async (base) => {
+    const port = Number(new URL(base).port);
+    const chunks: Buffer[] = [];
+    const socket = connect(port, "127.0.0.1");
+    socket.on("data", (chunk: Buffer) => chunks.push(chunk));
+    socket.write("GET / HTTP/1.1\r\nHost: a b\r\nConnection: close\r\n\r\n");
+    await once(socket, "close");
+    const firstLine = Buffer.concat(chunks).toString("utf8").split("\r\n")[0];
+    expect(firstLine).toBe("HTTP/1.1 400 Bad Request");
+  });
 });
