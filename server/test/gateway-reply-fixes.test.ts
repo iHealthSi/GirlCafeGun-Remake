@@ -41,7 +41,8 @@ const logger: Logger = {
 };
 const LUA_COMMAND_CARD_LEVEL_UP_COMMON = 5;
 const LUA_COMMAND_SHOP_BUY_GOODS = 13;
-const WINDOW_MS = 600;
+// Long enough for a loaded test run; the reply comes within a few milliseconds when it comes at all.
+const WINDOW_MS = 2_000;
 
 type TestStore = JsonStore<ReturnType<typeof makeInitialState>>;
 
