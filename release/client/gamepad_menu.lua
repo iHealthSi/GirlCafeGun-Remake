@@ -954,7 +954,10 @@ function M.Tick()
 
 	if hudOwns() then
 		M.owner = 'fight'
-		if st.shown or st.cursorOn then hideFrame(); showCursor(false); st.shown = false end
+		if st.shown or st.cursorOn then hideFrame(); showCursor(false) end
+		-- start from scratch when the HUD gives the pad back: no cursor, and the first pad input only
+		-- shows the frame, so A still held from firing does not press the window that opens
+		st.shown, st.cursorOn, st.dirHeld, st.prev, st.pending = false, false, nil, {}, nil
 		st.focus, st.pressed = nil, nil
 		return
 	end
@@ -1090,8 +1093,8 @@ end
 
 -- Called by UI.Open. Start once, and again when the timer has stopped (for example after the timers were
 -- cleared). A page or popup that opens takes the focus a moment later, when its controls are in place.
-function M.Ensure(sClass)
-	if M.off then return end
+-- UI.Open calls it for every window, so an error is caught here and never stops the window opening.
+local function ensure(sClass)
 	if type(sClass) == 'string' and not SIDE_WINDOWS[sClass] then st.dirty = now() + 0.15 end
 	if M.timer and now() - (st.lastTick or 0) < 1 then return end
 	if M.timer then pcall(Game.Timer.Delete, M.timer); M.timer = nil end
@@ -1106,8 +1109,16 @@ function M.Ensure(sClass)
 	end
 end
 
+function M.Ensure(sClass)
+	if M.off then return end
+	local ok, err = pcall(ensure, sClass)
+	if not ok then pcall(logOnce, 'ensure: ' .. tostring(err)) end
+end
+
+-- After Stop the layer owns nothing, so the fight layer is never muted by a layer that no longer runs.
 function M.Stop()
 	M.off = true
+	M.owner = nil
 	if M.timer then pcall(Game.Timer.Delete, M.timer); M.timer = nil end
 	pcall(hideFrame)
 	pcall(showCursor, false)

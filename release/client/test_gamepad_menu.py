@@ -221,7 +221,7 @@ U3D = {
       if n then return pad.axes[n] or 0 end
       error("Input Axis " .. name .. " is not setup.")
     end,
-    GetMouseButton = function() return touches > 0 end,
+    GetMouseButton = function() if touchFails then error('touch') end; return touches > 0 end,
   },
   Object = {
     FindObjectsOfType = function(ty)
@@ -242,7 +242,8 @@ U3D = {
                    PointerEventData = function() return {} end },
 }
 setmetatable(U3D.Input, { __index = function(t, k) if k == 'touchCount' then return touches end end })
-setmetatable(U3D.Time, { __index = function(t, k) if k == 'realtimeSinceStartup' then return clock end end })
+setmetatable(U3D.Time, { __index = function(t, k)
+  if k == 'realtimeSinceStartup' then if clockFails then error('clock') end; return clock end end })
 CS = { System = { Collections = { Generic = { List = function() return newList end } } },
        Game = { EventTriggerListener = T.ETL }, UnityEngine = { EventSystems = {} } }
 
@@ -487,6 +488,9 @@ def scenario(chunk, report):
     check(lua, 'press(0)', '', 'cursor A on nothing', report)
     check(lua, 'press(11)', '', 'cursor off', report)
     assert not ev('GamepadMenu._state.cursorOn') and ev('frameShown()')
+    # the cursor is on when a fight starts (it is turned off below, when the HUD takes the pad)
+    check(lua, 'press(11)', '', 'cursor on before a fight', report)
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 960, 540')
 
     # fight: while a HUD button can be tapped, the menu layer stays idle and owns nothing
     lua.execute('''
@@ -508,6 +512,18 @@ def scenario(chunk, report):
     assert ev('GamepadMenu.owner') == 'menu'
     check(lua, 'press(0); press(0)', 'down BtnContinue|up BtnContinue|click BtnContinue', 'pause menu', report)
 
+    # the fight ends with A (fire) still held: the result window under the old cursor is not tapped
+    lua.execute('pw.active = false; openWindows.UI_MissionPause = false; frame(0.3)')
+    assert ev('GamepadMenu.owner') == 'fight' and not ev('GamepadMenu._state.cursorOn')
+    check(lua, 'pad.buttons[0] = true; frame()', '', 'A held in fight', report)
+    check(lua, '''hud.active = false; openWindows.UI_Fight = false
+      res = window('UI_Result', 40); el(res, 'BtnNext', 860, 490, 1060, 590)
+      frame(0.3)''', '', 'HUD closes, A still held', report)
+    assert ev('GamepadMenu.owner') == 'menu' and not ev('GamepadMenu._state.cursorOn')
+    check(lua, 'pad.buttons[0] = false; frame()', '', 'A released', report)
+    check(lua, 'press(0)', 'down BtnNext|up BtnNext|click BtnNext', 'next A presses the result', report)
+    lua.execute('res.active = false; frame(0.3)')
+
     # a failing C# call is logged once and the layer keeps running
     lua.execute('''
       pw.active = false; openWindows.UI_MissionPause = false; hud.active = false; openWindows.UI_Fight = false
@@ -520,6 +536,19 @@ def scenario(chunk, report):
     assert sum('boom' in p for p in printed) == 1, printed
     check(lua, 'stick(1, 0); press(0)', 'down B2|up B2|click B2', 'after an error', report)
     assert lua.eval('UI.Globals()') == (1, 2, 3, 4, 5, 6, 7)
+
+    # an error in the start call never breaks UI.Open: the window still opens
+    lua.execute('clockFails = true; UI.Open("UI_Late"); clockFails = false')
+    assert ev('opened[#opened]') == 'UI_Late'
+    assert sum(p.startswith('[pad] menu: ensure: ') for p in printed) == 1, printed
+    if report: report('ok UI.Open survives a failing start call')
+
+    # many errors in a row turn the layer off, and it then gives the pad back to the fight layer
+    assert ev('GamepadMenu.owner') == 'menu'
+    lua.execute('touchFails = true; for i = 1, 125 do frame() end; touchFails = false')
+    assert '[pad] menu: turned off after repeated errors' in printed and ev('next(timers)') is None, printed
+    assert ev('GamepadMenu.owner') is None and ev('GamepadMenu.off')
+    if report: report('ok turned off after 120 errors, owner released')
     return len([p for p in printed if p.startswith('[pad] menu: focus')])
 
 
@@ -591,7 +620,8 @@ def run(script=None, report=None):
             'anchorRequiredExactlyOnce': True, 'patchIdempotent': True, 'realtimeTimer': True,
             'popupBlocksMenuBelow': True, 'scrollListReachesClippedItems': True, 'tabsAndBack': True,
             'storyAdvanceSkipChoices': True, 'optionalCursor': True, 'idleWhileFightHudOwnsPad': True,
-            'errorLoggedOnceAndRecovered': True, 'debugFocusLines': focus_logs, 'patchedLuaSyntaxPassed': True}
+            'errorLoggedOnceAndRecovered': True, 'cursorOffAndPressSwallowedAfterFight': True,
+            'uiOpenSurvivesStartError': True, 'stopReleasesPad': True, 'debugFocusLines': focus_logs, 'patchedLuaSyntaxPassed': True}
 
 
 def run_bundle(source):
