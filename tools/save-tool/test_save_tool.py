@@ -152,13 +152,19 @@ def test_failed_sign():
     import argparse, shutil, subprocess, zipfile
     from unittest import mock
 
+    sign_ok = False
+
     def fake_run(args, **kw):
         args = [str(x) for x in args]
         if Path(args[0]).name.startswith('zipalign'):
             shutil.copyfile(args[-2], args[-1])
         elif 'sign' in args:
-            Path(args[args.index('--out') + 1]).write_bytes(b'PK half written')
-            return subprocess.CompletedProcess(args, 1, '', 'keystore password was incorrect')
+            out = Path(args[args.index('--out') + 1])
+            if not sign_ok:
+                out.write_bytes(b'PK half written')
+                return subprocess.CompletedProcess(args, 1, '', 'keystore password was incorrect')
+            shutil.copyfile(args[-1], out)
+            Path(str(out) + '.idsig').write_bytes(b'idsig')
         return subprocess.CompletedProcess(args, 0, '', '')
 
     with tempfile.TemporaryDirectory() as tmp:
@@ -177,9 +183,21 @@ def test_failed_sign():
                                ks_key_alias=None, ks_type=None, java='java')
         with mock.patch.object(playtest_apk.subprocess, 'run', fake_run):
             assert 'keystore password was incorrect' in str(stops(lambda: playtest_apk.build(a)))
-        left = sorted(p.name for p in out.parent.iterdir())
-        assert left == [], left
-    print('ok playtest build: a failed sign leaves no unsigned, aligned or half-signed APK')
+            left = sorted(p.name for p in out.parent.iterdir())
+            assert left == [], left
+            # an earlier build in --out stays as it was when the next sign fails
+            out.write_bytes(b'earlier good build')
+            assert 'keystore password was incorrect' in str(stops(lambda: playtest_apk.build(a)))
+            left = sorted(p.name for p in out.parent.iterdir())
+            assert left == ['playtest.apk'] and out.read_bytes() == b'earlier good build', left
+            # a good sign replaces it and leaves nothing else
+            sign_ok = True
+            assert stops(lambda: playtest_apk.build(a)) is None
+            left = sorted(p.name for p in out.parent.iterdir())
+            assert left == ['playtest.apk'], left
+            with zipfile.ZipFile(out) as z:
+                assert 'META-INF/CERT.RSA' not in z.namelist()
+    print('ok playtest build: a failed sign leaves no temporary or half-signed APK and keeps an earlier output')
 
 
 if __name__ == '__main__':
