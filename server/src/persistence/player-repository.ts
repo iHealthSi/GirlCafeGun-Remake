@@ -67,6 +67,7 @@ import {
 } from "../game-data/weapon-decomposition-data.js";
 import { INITIAL_COFFEE_TASK_VALUES, type CafeCoffee } from "../game-data/cafe-data.js";
 import { CafeCatalog } from "../game-data/cafe-catalog.js";
+import { reconcileDefaultCafeFurniture } from "../game-data/cafe-default-furniture.js";
 import { CafePetCatalog } from "../game-data/cafe-pet-catalog.js";
 import {
   CafePetRuntime,
@@ -401,6 +402,8 @@ export interface CafeState {
   roomGirlsList?: { girlId: number; modelId: number }[][];
   coffees: CafeCoffee[];
   furniture?: CafeFurnitureState[];
+  /** Set once the starting café (NCafeDefautItems) was considered for this profile. */
+  defaultFurnitureSeeded?: boolean;
   level?: number;
 }
 
@@ -2570,6 +2573,15 @@ export class PlayerRepository {
     this.#welcomeGifts = welcomeGifts;
   }
 
+  #seedDefaultCafe(player: Player): void {
+    const added = reconcileDefaultCafeFurniture(player, CafeCatalog.loadDefault());
+    if (added > 0)
+      this.#logger.info("cafe.default_furniture.seeded", {
+        account: player.account,
+        items: added,
+      });
+  }
+
   /** Pet time advances on requests; unchanged polling never writes the save. */
   async handleCafePetRequest(
     account: string,
@@ -3475,6 +3487,7 @@ export class PlayerRepository {
         reconcileChapterStarTaskValues(player);
         reconcileMaximumFightPower(player);
         this.#activities.reconcile(player);
+        this.#seedDefaultCafe(player);
         if (player.cafe.pets)
           new CafePetRuntime(
             player,
@@ -3528,6 +3541,7 @@ export class PlayerRepository {
       reconcileMaximumFightPower(player);
       this.#activities.reconcile(player);
       reconcileHeadpatCharges(player.taskValues, now);
+      this.#seedDefaultCafe(player);
       state.players[safeAccount] = player;
       if (this.#welcomeGifts)
         reconcileWelcomeMail((player.mail ??= makeMailbox()), now, true);

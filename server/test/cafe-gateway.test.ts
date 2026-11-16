@@ -110,7 +110,7 @@ function request(
     socket.write(makePacket(command, serial, payload));
   });
 }
-async function fixture() {
+async function fixture(options: { fresh?: boolean } = {}) {
   await mkdir(scratchRoot, { recursive: true });
   const directory = await mkdtemp(path.join(scratchRoot, "tcp-test-"));
   const filePath = path.join(directory, "state.json");
@@ -131,6 +131,7 @@ async function fixture() {
   });
   await players.getOrCreate(account);
   await store.update((state) => {
+    if (options.fresh) return;
     const player = state.players[account]!;
     player.cafe.level = 30;
     player.money.find((money) => money.id === 2)!.count = 10_000;
@@ -456,6 +457,86 @@ describe("cafe actual TCP persistence", () => {
           ),
       ).toBe(false);
       expect(wallet()).toBe(earned);
+    } finally {
+      if (f) await f.cleanup();
+      clock.mockRestore();
+    }
+  }, 20_000);
+
+  it("sends a new player's default seats in the house reply and a seated guest pays coffee coin", async () => {
+    let time = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => time);
+    let f: Awaited<ReturnType<typeof fixture>> | undefined;
+    try {
+      f = await fixture({ fresh: true });
+      const house = await f.native(
+        COMMAND.GET_HOUSEINFO_REQ,
+        Buffer.alloc(0),
+        COMMAND.GET_HOUSEINFO_RSP,
+      );
+      expect(house.at(-1)!.returnCode).toBe(0);
+      const cache = decodeFields(firstBytes(decodeFields(house.at(-1)!.payload), 2)!);
+      const items = cache
+        .filter((field) => field.fieldNumber === 2 && Buffer.isBuffer(field.value))
+        .map((field) => decodeFields(field.value as Buffer));
+      expect(items).toHaveLength(13);
+      const seatItems = items.filter(
+        (fields) => firstNumber(fields, 1) === 101 && firstNumber(fields, 8) === 1,
+      );
+      expect(seatItems.map((fields) => firstNumber(fields, 2))).toEqual([
+        10_003, 10_004, 10_005, 10_006,
+      ]);
+      for (const fields of seatItems) {
+        expect(firstNumber(fields, 3)).toBe(2);
+        expect(firstNumber(fields, 4)).toBe(1);
+        const pose = decodeFields(firstBytes(fields, 5)!);
+        expect(firstNumber(pose, 1)).toBe(101);
+        expect(firstNumber(pose, 2)).toBe(2);
+      }
+      const rooms = cache
+        .filter((field) => field.fieldNumber === 4 && Buffer.isBuffer(field.value))
+        .map((field) => decodeFields(field.value as Buffer));
+      expect(rooms.map((fields) => firstNumber(fields, 1))).toEqual([1, 2, 6]);
+      // roomData.furnitureIds (field 5), one varint per member.
+      expect(
+        rooms[0]!
+          .filter((field) => field.fieldNumber === 5)
+          .map((field) => Number(field.value)),
+      ).toEqual(Array.from({ length: 9 }, (_, index) => 10_000 + index));
+
+      // Coffee costs gold (5 each); a new player earns gold in the story first.
+      await f.store.update((state) => {
+        state.players[account]!.money.find((money) => money.id === 2)!.count = 100;
+      });
+      // NCafe.FixNoSeatProblem registers objId * 10 + biz point for each seat.
+      await f.call(114, {
+        seatlist: [100_030, 100_040, 100_050, 100_060].map((position) => ({
+          position,
+        })),
+      });
+      expect(
+        luaValue(await f.call(119, { coffeetype: 1, count: 12 }), 119).nError,
+      ).toBeUndefined();
+      time += 11_000;
+      expect(
+        (luaValue(await f.call(115), 115).customerqueue as unknown[]).length,
+      ).toBeGreaterThan(0);
+      const seated = luaValue(await f.call(117), 117);
+      const guest = seated.newguest as { position: number; customeridx: number };
+      expect([100_030, 100_040, 100_050, 100_060]).toContain(guest.position);
+      const coffeeCoin = () =>
+        f!.players.get(account)!.money.find((money) => money.id === 7)?.count ?? 0;
+      expect(coffeeCoin()).toBe(0);
+      time += 241_000;
+      const settled = luaValue(
+        await f.call(116, { customeridx: guest.customeridx }),
+        116,
+      );
+      expect(settled.error).toBe(0);
+      const base = settled.earn_base as number[],
+        extra = settled.earn_ex as number[];
+      expect(base[1]).toBeGreaterThan(0);
+      expect(coffeeCoin()).toBe(base[1]! + extra[1]!);
     } finally {
       if (f) await f.cleanup();
       clock.mockRestore();
