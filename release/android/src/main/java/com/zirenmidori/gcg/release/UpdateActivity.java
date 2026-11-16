@@ -54,7 +54,9 @@ public final class UpdateActivity extends Activity {
         try{
             File folder=ReleaseIO.dir(new File(ReleaseStore.external(this),"updates"));File[] files=folder.listFiles(f->f.isFile()&&f.getName().endsWith(".gcgupdate"));
             if(files==null||files.length==0){show("Place a .gcgupdate file in "+folder.getAbsolutePath()+", or choose it from Downloads.");return;}
-            Arrays.sort(files,Comparator.comparing(File::getName));String[] names=new String[files.length];for(int i=0;i<files.length;i++)names[i]=files[i].getName();
+            // Newest first: snapshot the times so a file copied in during the sort cannot break the comparator.
+            Map<File,Long> modified=new HashMap<>();for(File f:files)modified.put(f,f.lastModified());
+            Arrays.sort(files,Comparator.comparing((File f)->modified.get(f)).thenComparing(File::getName).reversed());String[] names=new String[files.length];for(int i=0;i<files.length;i++)names[i]=files[i].getName();
             new AlertDialog.Builder(this).setTitle("Choose update").setItems(names,(d,i)->prepare(files[i])).setNegativeButton("Cancel",null).show();
         }catch(IOException e){show(e.getMessage());}
     }
