@@ -1,7 +1,10 @@
 import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { rename as renameCallback } from "node:fs";
+import * as fsp from "node:fs/promises";
+import type { FileHandle } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Logger } from "../src/logger.js";
 import {
@@ -15,6 +18,17 @@ import {
   PlayerRepository,
 } from "../src/persistence/player-repository.js";
 import { mkdtemp } from "./helpers/temp.js";
+
+// The save write and the backup write must be flushed to disk before they
+// are renamed into place, so mock the module and record the handle calls.
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    open: vi.fn(actual.open),
+    rename: vi.fn(actual.rename),
+  };
+});
 
 const logger: Logger = {
   debug() {},
@@ -112,6 +126,75 @@ describe("save backups", () => {
       "notes.txt",
       "state-20261115.json",
     ]);
+  });
+});
+
+describe("save writes", () => {
+  it("syncs the save and the daily backup to disk before renaming them", async () => {
+    const { filePath, backupDirectory } = await workspace();
+    const store = openStore(filePath, backupDirectory);
+    await store.initialize(START);
+
+    const events: string[] = [];
+    const openMock = vi.mocked(fsp).open;
+    openMock.mockImplementation((target) => {
+      const file = String(target);
+      events.push(`open:${file}`);
+      return Promise.resolve({
+        writeFile: (body: string) => {
+          events.push(`write:${file}`);
+          return fsp.writeFile(file, body);
+        },
+        sync: () => {
+          events.push(`sync:${file}`);
+          return Promise.resolve();
+        },
+        close: () => {
+          events.push(`close:${file}`);
+          return Promise.resolve();
+        },
+      } as unknown as FileHandle);
+    });
+    const renameMock = vi.mocked(fsp).rename;
+    renameMock.mockImplementation((from, to) => {
+      events.push(`rename:${String(from)}->${String(to)}`);
+      return new Promise<void>((resolve, reject) => {
+        renameCallback(from, to, (error) => {
+          if (error) reject(error);
+          else resolve();
+        });
+      });
+    });
+
+    try {
+      await store.update((state) => {
+        state.nextRoleId = 42;
+      });
+      await openStore(filePath, backupDirectory).initialize(START + DAY);
+    } finally {
+      openMock.mockRestore();
+      renameMock.mockRestore();
+    }
+
+    const backupTarget = path.join(backupDirectory, "state-20261115.json");
+    const pairs: Array<[string, string]> = [
+      [`${filePath}.${process.pid}.tmp`, filePath],
+      [`${backupTarget}.${process.pid}.tmp`, backupTarget],
+    ];
+    for (const [temp, final] of pairs) {
+      const sync = events.indexOf(`sync:${temp}`);
+      const close = events.indexOf(`close:${temp}`);
+      const renamed = events.indexOf(`rename:${temp}->${final}`);
+      expect(sync).toBeGreaterThanOrEqual(0);
+      expect(close).toBeGreaterThanOrEqual(0);
+      expect(renamed).toBeGreaterThanOrEqual(0);
+      expect(sync).toBeLessThan(renamed);
+      expect(close).toBeLessThan(renamed);
+    }
+    expect(JSON.parse(await readFile(filePath, "utf8")).nextRoleId).toBe(42);
+    expect(await readFile(backupTarget, "utf8")).toBe(
+      await readFile(filePath, "utf8"),
+    );
   });
 });
 

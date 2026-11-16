@@ -1,11 +1,11 @@
 import {
   copyFile,
   mkdir,
+  open,
   readdir,
   readFile,
   rename,
   rm,
-  writeFile,
 } from "node:fs/promises";
 import path from "node:path";
 
@@ -90,6 +90,23 @@ export function rankBackups(names: readonly string[], today: string): string[] {
   return [...past.reverse(), ...future];
 }
 
+/**
+ * Writes the body and forces it to disk before closing, so a power loss
+ * cannot leave a zero-length file where a save was renamed.
+ */
+export async function writeFileDurably(
+  filePath: string,
+  body: string,
+): Promise<void> {
+  const handle = await open(filePath, "w");
+  try {
+    await handle.writeFile(body, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
 export class JsonStore<T extends PersistedDocument> {
   readonly #filePath: string;
   readonly #initialState: T;
@@ -166,7 +183,7 @@ export class JsonStore<T extends PersistedDocument> {
   async #persist(state: T): Promise<void> {
     const tempPath = `${this.#filePath}.${process.pid}.tmp`;
     const body = `${JSON.stringify(state, null, 2)}\n`;
-    await writeFile(tempPath, body, "utf8");
+    await writeFileDurably(tempPath, body);
     await rename(tempPath, this.#filePath);
   }
 
@@ -230,7 +247,7 @@ export class JsonStore<T extends PersistedDocument> {
       const existing = await listBackups(backups.directory);
       if (!existing.includes(path.basename(target))) {
         const tempPath = `${target}.${process.pid}.tmp`;
-        await writeFile(tempPath, body, "utf8");
+        await writeFileDurably(tempPath, body);
         await rename(tempPath, target);
         existing.push(path.basename(target));
         this.#logger.info("persistence.backup_created", { file: target });
