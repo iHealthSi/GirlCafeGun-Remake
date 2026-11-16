@@ -75,6 +75,7 @@ import {
   type CafePetRuntimeHooks,
 } from "../game-data/cafe-pets.js";
 import {
+  CAFE_FURNITURE_SHOP_ID,
   CafeFurnitureCommerce,
   materializeCafeFurniture as materializeOwnedCafeFurniture,
 } from "../game-data/cafe-furniture-commerce.js";
@@ -89,6 +90,7 @@ import {
 import {
   CafeRuntime,
   CafeOperationError,
+  cafeComfort,
   type CafeBusinessState,
   type CafeNotification,
   type CafeRuntimeHooks,
@@ -2987,6 +2989,7 @@ export class PlayerRepository {
         throw new HouseOperationError("house_not_owned");
       const integer = (value: number) =>
         Number.isSafeInteger(value) && value >= 0 && value <= 0xffff_ffff;
+      const comfortBefore = cafeComfort(player, catalog);
       const furniture = (player.cafe.furniture ??= []);
       const rooms = (player.cafe.rooms ??= [1, 2, 6].map((roomId) => ({
         roomId,
@@ -3161,6 +3164,13 @@ export class PlayerRepository {
           .filter((item) => item.roomId === room.roomId)
           .map((item) => item.objId)
           .sort((a, b) => a - b);
+      const comfort = cafeComfort(player, catalog);
+      if (comfort !== comfortBefore)
+        this.#activities.dispatch(
+          player,
+          [{ type: "cafe.comfort_changed", comfort }],
+          now,
+        );
       const snapshot = structuredClone(player);
       result = {
         ...promiseResult(player, undefined),
@@ -3218,6 +3228,8 @@ export class PlayerRepository {
       if (!player) throw new HouseOperationError("player_not_found");
       const items = new Set<number>(),
         money = new Set<number>();
+      const beforeTasks = JSON.stringify(player.taskValues);
+      let furnitureBought = 0;
       const commerce = new CafeFurnitureCommerce(player, catalog, now, {
         chargeMoney: (id, count) => {
           if (count > 0) deductShopMoney(player, id, count, money);
@@ -3225,15 +3237,24 @@ export class PlayerRepository {
         consumeItem: (gdpl, count) => promiseConsume(player, gdpl, count, items),
         grant: (awards) => grantAwards(player, awards, items, money),
         updatedGirl() {},
+        furnitureBought: (count) => {
+          furnitureBought += count;
+        },
       });
       const purchase = commerce.buyPredefinedTheme(templateThemeId, templateIds);
+      if (furnitureBought > 0)
+        this.#activities.dispatch(
+          player,
+          [{ type: "cafe.furniture_bought", count: furnitureBought }],
+          now,
+        );
       result = {
         ...promiseResult(player, purchase.theme, items, money),
         theme: structuredClone(purchase.theme),
         updatedFurniture: structuredClone(commerce.updatedFurniture),
         updatedThemes: structuredClone(commerce.updatedThemes),
         notifications: [],
-        taskValuesChanged: false,
+        taskValuesChanged: beforeTasks !== JSON.stringify(player.taskValues),
       };
     });
     return result!;
@@ -3292,7 +3313,9 @@ export class PlayerRepository {
         girls = new Set<number>();
       const beforeTasks = JSON.stringify(player.taskValues);
       const cafeLevelBefore = player.cafe.level ?? 1;
-      let coffeesSold = 0;
+      const comfortBefore = cafeComfort(player, catalog);
+      let coffeesSold = 0,
+        furnitureBought = 0;
       const automaticFurniture: number[] = [];
       const hooks: CafeRuntimeHooks = {
         chargeMoney: (id, count) => {
@@ -3314,6 +3337,9 @@ export class PlayerRepository {
         },
         updatedGirl: (id) => {
           girls.add(id);
+        },
+        furnitureBought: (count) => {
+          furnitureBought += count;
         },
         coffeeSold: (_id, count) => {
           coffeesSold += count;
@@ -3409,6 +3435,11 @@ export class PlayerRepository {
       const cafeLevel = player.cafe.level ?? 1;
       if (cafeLevel !== cafeLevelBefore)
         cafeEvents.push({ type: "cafe.level_changed", level: cafeLevel });
+      if (furnitureBought > 0)
+        cafeEvents.push({ type: "cafe.furniture_bought", count: furnitureBought });
+      const comfort = cafeComfort(player, catalog);
+      if (comfort !== comfortBefore)
+        cafeEvents.push({ type: "cafe.comfort_changed", comfort });
       if (cafeEvents.length > 0) this.#activities.dispatch(player, cafeEvents, now);
       const result = promiseResult(player, response, items, money, girls);
       return {
@@ -5030,6 +5061,7 @@ export class PlayerRepository {
     updatedMoney: MoneyState[];
     updatedFurniture: CafeFurnitureState[];
     price: number;
+    taskValuesChanged: boolean;
   }> {
     const tab = catalog.getTab(shopId);
     if (!tab) throw new ShopError("unknown_shop");
@@ -5041,12 +5073,14 @@ export class PlayerRepository {
     let player: Player | undefined;
     let result: ShopGoodsListResult | undefined;
     let price = 0;
+    let taskValuesChanged = false;
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedFurniture: CafeFurnitureState[] = [];
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      const beforeTasks = JSON.stringify(player.taskValues);
       const nowSeconds = Math.floor(now / 1_000);
       if (!isShopOpen(tab, nowSeconds)) throw new ShopError("shop_closed");
       if (!isGoodsInWindow(config, nowSeconds)) throw new ShopError("unknown_goods");
@@ -5154,6 +5188,13 @@ export class PlayerRepository {
       counters.total += buyNum;
       counters.shelf += buyNum;
       if (shelfEntry) shelfEntry.bought += buyNum;
+      if (shopId === CAFE_FURNITURE_SHOP_ID && config.genre === 11)
+        this.#activities.dispatch(
+          player,
+          [{ type: "cafe.furniture_bought", count: config.goodsNum * buyNum }],
+          now,
+        );
+      taskValuesChanged = beforeTasks !== JSON.stringify(player.taskValues);
       result = buildShopGoodsList(player, catalog, shopId, now);
     });
     if (!player || !result) {
@@ -5173,6 +5214,7 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedFurniture: structuredClone(updatedFurniture),
       price,
+      taskValuesChanged,
     };
   }
 

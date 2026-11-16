@@ -3382,14 +3382,20 @@ export function createGatewayServer({
             return;
           }
           try {
-            const { result, updatedItems, updatedMoney, updatedFurniture, price } =
-              await players.buyShopGoods(
-                context.account,
-                shopCatalog,
-                shopId,
-                goodsId,
-                buyNum,
-              );
+            const {
+              result,
+              updatedItems,
+              updatedMoney,
+              updatedFurniture,
+              price,
+              taskValuesChanged,
+            } = await players.buyShopGoods(
+              context.account,
+              shopCatalog,
+              shopId,
+              goodsId,
+              buyNum,
+            );
             if (updatedItems.length > 0) {
               send(
                 COMMAND.ITEM_UPDATE_NTF,
@@ -3406,6 +3412,13 @@ export function createGatewayServer({
                 COMMAND.ADD_FURNITURE_RSP,
                 0,
                 makeAddFurnitureResponse(context.player.roleId, updatedFurniture),
+              );
+            // A furniture buy moves the type 137 event page achievements.
+            if (taskValuesChanged && context.player)
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(context.player.taskValues),
               );
             send(
               COMMAND.NTF_S2C_CALL,
