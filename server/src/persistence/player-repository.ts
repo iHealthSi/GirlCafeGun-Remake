@@ -4727,6 +4727,7 @@ export class PlayerRepository {
       player.taskValues[taskId] = 1;
       energy = slot.energy;
       claimed = true;
+      reason = null;
     });
     if (!player) throw new Error(`Failed to claim energy activity: ${account}`);
     const snapshot = structuredClone(player);
