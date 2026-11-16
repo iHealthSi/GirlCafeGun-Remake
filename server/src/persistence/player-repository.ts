@@ -4952,11 +4952,30 @@ export class PlayerRepository {
     poolId: number,
     ten: boolean,
     roll: GachaRollResult,
+    /**
+     * The item that unlocks the pool. A roll does not use it up (re-rolls are
+     * free until the result is saved), but without it the pool is closed: the
+     * client hides it (GachaCommon.lua GetCurPools, JudgeType 2 checks nTen),
+     * and the item is spent when the result is saved.
+     */
+    requiredItem: Gdpln | null = null,
   ): Promise<Player> {
     let player: Player | undefined;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      if (requiredItem) {
+        const [genre, detail, particular, templateLevel, count] = requiredItem;
+        const held = player.inventory.some(
+          (item) =>
+            item.genre === genre &&
+            item.detail === detail &&
+            item.particular === particular &&
+            item.templateLevel === templateLevel &&
+            item.count >= count,
+        );
+        if (!held) throw new InsufficientGachaCurrencyError(poolId);
+      }
       player.gacha.pending = {
         poolId,
         ten,

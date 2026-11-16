@@ -2023,6 +2023,7 @@ export function createGatewayServer({
                 poolId,
                 ten,
                 roll,
+                pool.costTen,
               );
               send(
                 COMMAND.NTF_S2C_CALL,
