@@ -1,6 +1,6 @@
 """Dead online links: offline_links.lua at the end of Lib.lua, and five scripts call it or stop early.
 
-Ported from the GirlCafeGun-Offline phone build (MIT, GCG2-Offline contributors). The client opens pages and
+Written for the GirlCafeGun-Offline phone build (MIT, GCG2-Offline contributors). The client opens pages and
 SDK windows of the publisher that are gone. What the player sees with this patch:
   EvaluateGuide   The "rate the game" window never opens. Its two buttons open a store page that is gone and
                   the publisher's help desk. CheckEvaluateTip returns false at once, which is what it returns
