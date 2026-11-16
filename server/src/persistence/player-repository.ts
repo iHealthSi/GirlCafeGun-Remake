@@ -907,6 +907,13 @@ export class InsufficientGoldError extends Error {
   }
 }
 
+export class CardLevelCapError extends Error {
+  constructor(readonly guid: number) {
+    super(`Card is already at its level cap: ${guid}`);
+    this.name = "CardLevelCapError";
+  }
+}
+
 export class InsufficientGachaCurrencyError extends Error {
   constructor(readonly poolId: number) {
     super(`Insufficient currency for gacha pool ${poolId}`);
@@ -5778,7 +5785,7 @@ export class PlayerRepository {
       if (!enhancedCard) throw new Error(`Unknown character card: ${guid}`);
 
       if (enhancedCard.enhanceLevel >= CARD_MAXIMUM_ENHANCE_LEVEL) {
-        throw new Error(`Card is already at its level cap: ${guid}`);
+        throw new CardLevelCapError(guid);
       }
 
       for (const material of materials) {

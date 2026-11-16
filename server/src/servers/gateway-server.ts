@@ -100,6 +100,7 @@ import {
   BountySettlementError,
   CafeOperationError,
   InsufficientGoldError,
+  CardLevelCapError,
   InsufficientVigourError,
   InsufficientGachaCurrencyError,
   EightDaySignUpError,
@@ -2563,10 +2564,12 @@ export function createGatewayServer({
             );
           } catch (error) {
             if (error instanceof InsufficientGachaCurrencyError) {
+              // UI_Gacha.lua ShowLastGacha handles only error.gacha.nolast and then
+              // reads tbAwards; the Lottery handler (OnServerResponse) shows the error.
               send(
                 COMMAND.NTF_S2C_CALL,
                 0,
-                makeServerLuaCall("GetLastGacha", {
+                makeServerLuaCall("Lottery", {
                   err: "error.gacha.cash",
                 }),
               );
@@ -3176,6 +3179,22 @@ export function createGatewayServer({
               request.materials,
             );
           } catch (error) {
+            if (error instanceof CardLevelCapError) {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("LuaCall", {
+                  sCmd: LUA_COMMAND_CARD_LEVEL_UP_COMMON,
+                  tbParam: { errorKey: "Error.1" },
+                }),
+              );
+              logger.warn("card.enhance.level_cap", {
+                peer,
+                account: context.account,
+                guid: request.guid,
+              });
+              return;
+            }
             if (!(error instanceof InsufficientGoldError)) throw error;
             send(
               COMMAND.NTF_S2C_CALL,
@@ -3467,6 +3486,14 @@ export function createGatewayServer({
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
             }
             context.player = players.get(context.account);
+            if (context.player) {
+              // Daily mission 108 (buy in the shop) advanced inside the purchase.
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(context.player.taskValues),
+              );
+            }
             if (updatedFurniture.length && context.player)
               send(
                 COMMAND.ADD_FURNITURE_RSP,
