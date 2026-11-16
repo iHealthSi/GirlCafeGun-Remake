@@ -87,6 +87,62 @@ assert(e.connect==1 and e.verified==1 and e.reachability==1)
             'invalidOrRemoteGatewaysNotBypassed':True,'stockOnlineRemoteBehaviorPreserved':True,
             'stockConnectMethodExecuted':True}
 
+FETCH_TIMEOUT_LUA='''
+local events={loading=0,hidden=0,message=0,timers={}}
+local silent=true
+local callbacks={}
+GameManager={}
+U3D={AndroidJavaClass=function() return {CallStatic=function() end} end}
+PlayerLogic={ReSetLocalData=function() end}
+Game={LuaUtils={IsUpdating=function() return false end},
+ MessageBox={Simple=function(s) events.message=events.message+1;events.text=s end},
+ Timer={Add=function(seconds,fn) events.timers[#events.timers+1]={seconds=seconds,fn=fn};return #events.timers end},
+ ServerList={ChangeBaseUrl=function(_,fn) callbacks[#callbacks+1]=fn; if not silent then fn(nil) end end}}
+Json={Decode=function() return response end}
+UI={IsOpen=function(name) return name=='UI_Login' end}
+local function obj() local o={};function o:SetActive() end;return {gameObject=o} end
+tbClass={OnInit=function() end,OnClose=function() end,serverObj=obj(),
+ ShowLoading=function() events.loading=events.loading+1 end,HideLoading=function() events.hidden=events.hidden+1 end,
+ ClearAuthInfo=function() end,Connect=function() events.connect=(events.connect or 0)+1 end,
+ ApplyServerListSuccess=function(self) self.isApplyServerListSuccess=true end}
+local bLoginWait=false
+'''
+FETCH_TIMEOUT_CHECKS='''
+-- The server-list request never answers: the watchdog must clear the flag and the spinner.
+tbClass:OnButtonClickUseAccount()
+assert(#callbacks==1 and tbClass._releaseFetching and events.loading==1)
+-- While the request is open a second press does not start another one.
+tbClass:OnButtonClickUseAccount()
+assert(#callbacks==1)
+assert(#events.timers==1 and events.timers[1].seconds>0 and events.timers[1].seconds<=30)
+events.timers[1].fn()
+assert(not tbClass._releaseFetching and events.hidden==1 and events.message==1)
+assert(events.text=='The local server is starting. Please try again in a moment.')
+-- The Start button asks again.
+tbClass:OnButtonClickUseAccount()
+assert(#callbacks==2 and tbClass._releaseFetching)
+-- A late answer to the timed-out request changes nothing.
+response={serverlist={{ip='127.0.0.1',port={31400}}}}
+callbacks[1]('late')
+assert(not tbClass.isApplyServerListSuccess and tbClass._releaseFetching)
+-- The current request answers: the old watchdog of that request is now a no-op.
+callbacks[2]('ok')
+assert(tbClass.isApplyServerListSuccess and not tbClass._releaseFetching)
+local messages=events.message
+events.timers[2].fn()
+assert(events.message==messages and tbClass.isApplyServerListSuccess)
+-- A callback with no data (the stock failure path) still clears the flag without the watchdog.
+silent=false
+tbClass:ApplyServerList()
+assert(not tbClass._releaseFetching and events.message==messages+1)
+'''
+
+def check_fetch_timeout():
+    """The login must recover when Game.ServerList.ChangeBaseUrl never calls back."""
+    lua=LuaRuntime()
+    lua.execute(FETCH_TIMEOUT_LUA+Path(__file__).with_name('release_login.lua').read_text(encoding='utf8')+FETCH_TIMEOUT_CHECKS)
+    return {'silentServerListTimesOut':True,'lateAnswerIgnored':True,'startButtonRetries':True}
+
 def run():
     lua=LuaRuntime()
     lua.execute('''
@@ -110,6 +166,7 @@ GameManager={}
 PlayerLogic={ReSetLocalData=function() end}
 Game={LuaUtils={IsUpdating=function() return false end},
  MessageBox={Simple=function() events.message=events.message+1 end},
+ Timer={Add=function() return 1 end},
  ServerList={ChangeBaseUrl=function(address,fn)
   assert(address=='http://127.0.0.1:28080'); fn('server response') end}}
 Json={Decode=function() return response end}
@@ -138,6 +195,6 @@ tbClass:ApplyServerList();assert(not tbClass.isApplyServerListSuccess and events
 response={serverlist={{ip='127.0.0.1',port={28080}}}}
 tbClass:ApplyServerList();assert(not tbClass.isApplyServerListSuccess and events.message==2)
 ''')
-    return {'privateAccountBridgeVoidOnly':True,'legacyIdentityNeverRead':True,'httpEndpointPinned':28080,'tcpGameplayGatewayPinned':31400,'remoteOrWrongGatewayRejected':True,'manualUpdateInvokedFromLoginButton':True,'offlineConnection':check_connection()}
+    return {'privateAccountBridgeVoidOnly':True,'legacyIdentityNeverRead':True,'httpEndpointPinned':28080,'tcpGameplayGatewayPinned':31400,'remoteOrWrongGatewayRejected':True,'manualUpdateInvokedFromLoginButton':True,'serverListTimeout':check_fetch_timeout(),'offlineConnection':check_connection()}
 
 if __name__=='__main__':print(run())

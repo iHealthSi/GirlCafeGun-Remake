@@ -1,5 +1,9 @@
 -- Release login: one private Android account and one local endpoint.
 local RELEASE_ENDPOINT = 'http://127.0.0.1:28080'
+-- The stock login expects the server-list callback even on failure. If it never comes, give up after this
+-- many seconds so the loading spinner goes away and the Start button can ask again.
+local RELEASE_FETCH_TIMEOUT = 15
+local RELEASE_STARTING = 'The local server is starting. Please try again in a moment.'
 local function ReleaseLocalGateway(server)
     if type(server) ~= 'table' or server.ip ~= '127.0.0.1'
         or type(server.port) ~= 'table' or #server.port == 0 then return false end
@@ -87,6 +91,14 @@ function tbClass:ApplyServerList()
     self:ShowLoading()
     self._releaseRequest = (self._releaseRequest or 0) + 1
     local request = self._releaseRequest
+    pcall(Game.Timer.Add, RELEASE_FETCH_TIMEOUT, function()
+        if request ~= self._releaseRequest or not self._releaseFetching then return end
+        self._releaseRequest = self._releaseRequest + 1
+        self._releaseFetching = false
+        if not UI.IsOpen('UI_Login') then return end
+        self:HideLoading()
+        Game.MessageBox.Simple(RELEASE_STARTING)
+    end)
     Game.ServerList.ChangeBaseUrl(RELEASE_ENDPOINT, function(data)
         if request ~= self._releaseRequest then return end
         self._releaseFetching = false
@@ -104,6 +116,6 @@ function tbClass:ApplyServerList()
             if valid then self:ApplyServerListSuccess(); self.nFailTimesApplyServerList = 0; return end
         end
         self.lServers, self.pSelected = {}, nil
-        Game.MessageBox.Simple('The local server is starting. Please try again in a moment.')
+        Game.MessageBox.Simple(RELEASE_STARTING)
     end, true)
 end
