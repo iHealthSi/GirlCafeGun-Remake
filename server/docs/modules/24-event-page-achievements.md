@@ -151,7 +151,9 @@ main card, as the C# build does (`EventMissionProgress.cs:139`).
 
 Type 75 is the comfort that `cafeComfort` computes and that the cafe responses
 send to the client as `comfort`: the `AddScore` sum of the furniture placed in
-the cafe room, and in the rest room when the cafe level opens it. The handler
+the cafe room, and in the rest room when the cafe level opens it. The client
+stores that field (`NCafeNet.lua:65`, `SetCafeComfort(tbParam.comfort)`) and the
+comfort panel shows it (`UI_CafeComfort.lua:112`, `GetCafeComfort`). The handler
 reads it with the cafe catalog (`playerAchievementSources`), once per run and
 only when a type 75 row asks. The C# build stores a comfort with another formula
 (`HouseComfort`: owned items ranked by score, with category limits); Remake keeps
@@ -194,8 +196,9 @@ Events that only trigger the projection: `player.level_changed` (fight and
 bounty experience), `card.progressed` (card enhance, Fantasy Oath card reward),
 `girl.affection_changed` (headpat, gift, training end, phone moments and
 letters), `cafe.level_changed`, `formation.updated` (team change) and
-`cafe.comfort_changed` (a house layout save, `UPDATE_HOUSE_REQ`, or a cafe
-command that changes the comfort). Each of these paths sends `TASK_VALUE_RSP`
+`cafe.comfort_changed` (a house layout save, `UPDATE_HOUSE_REQ`, that changes
+the comfort; a cafe level that opens the rest room moves it through
+`cafe.level_changed`). Each of these paths sends `TASK_VALUE_RSP`
 when an achievement moved, so the page updates without a new login. The single
 furniture buy (command 13) sends it since type 137; a layout save always sends
 it.
@@ -218,7 +221,8 @@ Login days are the existing eight-day counter: one per operational day
   their achievements in the same transaction; a counter keeps the claim mark.
 - `test/cafe-persistence.test.ts`: one sold coffee counts once (achievement 61);
   a layout save that raises the comfort moves 67 and 98, and taking furniture
-  out does not lower them; a login credits the comfort of a cafe built before;
+  out does not lower them; a login and a claim credit the comfort of a cafe
+  built before;
   the batch buy, the single buy and a predefined theme count their pieces (64, 66) and report the task change.
 - `test/cafe-gateway.test.ts`: over TCP, commands 13 and 14 and a layout save
   send `TASK_VALUE_RSP` with the new values of 64 and 67 before their answer.

@@ -3413,7 +3413,8 @@ export function createGatewayServer({
                 0,
                 makeAddFurnitureResponse(context.player.roleId, updatedFurniture),
               );
-            // A furniture buy moves the type 137 event page achievements.
+            // A furniture buy moves the type 137 event page achievements; an
+            // award can also write a task value (head frame, skin).
             if (taskValuesChanged && context.player)
               send(
                 COMMAND.TASK_VALUE_RSP,
