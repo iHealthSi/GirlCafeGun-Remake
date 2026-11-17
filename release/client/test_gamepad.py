@@ -40,7 +40,7 @@ U3D = {
   KeyCode = { __CastFrom = function(n) return n end },
   Vector2 = function(x, y) return { x = x, y = y } end,
   Vector3 = function(x, y, z) return { x = x, y = y, z = z } end,
-  Quaternion = { LookRotation = function(v) log(string.format("face %.2f %.2f", v.x, v.z)); return { fwd = v } end },
+  Quaternion = { LookRotation = function(v) return { fwd = v } end },
   Input = {
     GetKey = function(k) return pad.buttons[k - 330] == true end,
     GetAxisRaw = function(name)
@@ -105,6 +105,13 @@ UI = { IsOpen = function(n)
 key, move, skill, pause, axis, st, try, P = 1, 2, 3, 4, 5, 6, 7, 8
 function frame() clock = clock + 0.01; for _, fn in pairs(timers) do fn() end end
 function frames(n) for i = 1, n do frame() end end
+-- each girl's fire direction (written by direct aim) and facing, as unit x,z
+local function unit(d) if not d then return "-" end; local m = math.sqrt(d.x * d.x + d.z * d.z)
+  return string.format("%.2f,%.2f", d.x / m, d.z / m) end
+function aims() local t = {}; for i = 0, team.members.Count - 1 do t[#t + 1] = unit(team.members[i].playerController.cacheFireDir) end
+  return table.concat(t, " ") end
+function faces() local t = {}; for i = 0, team.members.Count - 1 do local r = team.members[i].playerController.transform.rotation
+  t[#t + 1] = unit(r and r.fwd) end; return table.concat(t, " ") end
 function take() local c = calls; calls = {}; return table.concat(c, "|") end
 function timerCount() local n = 0; for _ in pairs(timers) do n = n + 1 end; return n end
 function errorCount() local n, most = 0, 0
@@ -124,17 +131,21 @@ RAW_STEPS = [
     ("pad.buttons[0] = false; pad.buttons[5] = true", "fire 0.00 0.00"),  # RB fires; no enemy: game aims
     ("", ""),
     ("pad.buttons[5] = false", "firestop"),
-    ("pad.axes[3] = 0.9", "fire 0.00 0.00"),             # right trigger (3rd axis)
-    ("pad.axes[3] = 0", "firestop"),
-    ("pad.axes[4] = 0.5; pad.axes[5] = 0.8", ""),        # aim stick alone aims, it does not fire
-    ("pad.axes[3] = 0.9", "fire 0.53 -0.85"),            # trigger fires along it (4th/5th axis, Y inverted, unit)
-    ("pad.axes[4] = 0; pad.axes[5] = 0; pad.axes[3] = 0", "firestop"),
+    ("pad.axes[12] = 0.9", "fire 0.00 0.00"),            # right trigger (12th axis, GAS on Android)
+    ("pad.axes[12] = 0", "firestop"),
+    ("pad.axes[3] = 0.5; pad.axes[4] = 0.8", ""),        # aim stick (3rd/4th axis) alone aims, it does not fire
+    ("pad.axes[12] = 0.9", "fire 0.53 -0.85"),           # trigger fires along it (Y down = positive, unit)
+    ("pad.axes[3] = 0; pad.axes[4] = 0; pad.axes[12] = 0", "firestop"),
     ("pad.buttons[2] = true", "skill 0"),
     ("", ""),                                             # edge only
     ("pad.buttons[2] = false; pad.buttons[3] = true; pad.buttons[4] = true", "skill 3|skill 1"),
     ("pad.buttons[3] = false; pad.buttons[4] = false; pad.buttons[11] = true", "auto"),
-    ("pad.buttons[11] = false; pad.axes[6] = -1", "move -1.00 0.00"),   # d-pad hat
+    ("pad.buttons[11] = false; pad.axes[5] = -1", "move -1.00 0.00"),   # d-pad hat (5th/6th axis)
+    ("pad.axes[5] = 0; pad.axes[6] = 1", "move 0.00 -1.00"),            # hat down = positive
     ("pad.axes[6] = 0", "move 0.00 0.00"),
+    ("pad.axes[13] = 1", "skill 3"),                                     # left trigger dashes too
+    ("", ""),
+    ("pad.axes[13] = 0", ""),
     ("clock = clock + 1; pad.buttons[5] = true", "fire 0.00 0.00"),   # the aim stick's hold is over
     ("pad.buttons[10] = true", "open UI_MissionPause|firestop"),         # pause stops fire
     ("pad.buttons[10] = false; pad.buttons[2] = true", ""),            # X pressed in the pause menu
@@ -160,13 +171,14 @@ STOCK_STEPS = [
     ("pad.h = 0", "move 0.00 0.00"),
     ("pad.buttons[5] = true", "fire 0.00 0.00"),          # buttons need no axis entry
     ("pad.buttons[5] = false", "firestop"),
-    ("pad.axes[4] = 0.5; pad.axes[5] = 0.8", ""),         # RightHorizontal/RightVertical: aim only
-    ("pad.axes[3] = 1", "fire 0.53 -0.85"),               # HandleFire, along the aim (same sign as raw)
-    ("pad.axes[4] = 0; pad.axes[5] = 0; pad.axes[3] = 0", "firestop"),
-    ("clock = clock + 1; pad.axes[3] = 1", "fire 0.00 0.00"),   # no aim input, no enemy: the game aims
-    ("pad.axes[3] = 0", "firestop"),
-    ("pad.axes[6] = -1; pad.axes[7] = 1", ""),            # hat axes have no stock name: ignored, no error
-    ("pad.axes[6] = 0; pad.axes[7] = 0; pad.buttons[4] = true", "skill 3"),
+    ("pad.axes[3] = 0.5; pad.axes[4] = 0.8", ""),         # HandleFire / RightHorizontal read the 3rd/4th axis: aim
+    ("pad.buttons[5] = true", "fire 0.53 -0.85"),
+    ("pad.axes[3] = 0; pad.axes[4] = 0; pad.buttons[5] = false", "firestop"),
+    ("pad.axes[12] = 1", ""),                             # no stock name for the 12th axis: RT needs raw entries
+    ("pad.axes[12] = 0; pad.axes[5] = -1", "move -1.00 0.00"),  # 5th axis: stock RightVertical, sign undone
+    ("pad.axes[5] = 0", "move 0.00 0.00"),
+    ("pad.axes[6] = 1", ""),                              # 6th axis has no stock name: ignored, no error
+    ("pad.axes[6] = 0; pad.buttons[4] = true", "skill 3"),
     ("pad.buttons[4] = false; pad.buttons[2] = true", "skill 0"),
     ("pad.buttons[2] = false", ""),
 ]
@@ -251,7 +263,7 @@ def check_restart(chunk, start, stop, report):
 
 
 def check_aim_dash(chunk, start, stop, report):
-    """Aim stick, auto aim, lock-on, and the dash rules, in a fight with three girls and enemies."""
+    """Direct aim (360 degrees, assist, auto, lock-on) and the dash rules, with three girls and enemies."""
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(MOCK)
     printed = []
@@ -260,58 +272,84 @@ def check_aim_dash(chunk, start, stop, report):
     lua.execute(chunk)
     lua.execute("girls({0, 1}, {-1, 0}, {0, 0}); E1 = enemy(10, 0); foes(E1)\n" + start + '\ntake()')
     n = [0]
+    ev = lua.eval
 
-    def step(setup, want, frames=1, note=''):
+    def step(setup, want, frames=1, note='', aims=None, faces=None):
         lua.execute(setup + '\nframes(%d)' % frames)
-        got = lua.eval('take()')
+        got = ev('take()')
         assert got == want, (n[0], setup, got, want)
-        if report: report('ok aim  step %2d  %-62s -> %s  %s' % (n[0], setup, got, note))
+        if aims is not None: assert ev('aims()') == aims, (n[0], 'aims', ev('aims()'), aims)
+        if faces is not None: assert ev('faces()') == faces, (n[0], 'faces', ev('faces()'), faces)
+        if report: report('ok aim  step %2d  %-58s -> %s  %s' % (n[0], setup, got[:60], note))
         n[0] += 1
 
-    step("pad.axes[3] = 1", "fire 1.00 0.00", note='auto aim: nearest enemy')
-    step("E1.CurrPostion = { x = 0, y = 0, z = 10 }", "fire 0.00 1.00", 12, 'it moved: re-aim while firing')
-    step("", "", 30, 'steady: no repeated OnFight')
-    step("pad.axes[5] = 1", "fire 0.00 -1.00", note='aim stick turns the fire at once')
-    step("pad.axes[4] = 0.1", "", 5, 'small turn (< reaimAngle): no re-aim')
-    step("pad.axes[4] = 0; pad.axes[5] = 0", "", 20, 'stick let go: aim held')
-    step("", "fire 0.00 1.00", 30, 'hold over: back to auto aim')
-    step("E2 = enemy(-3, 0); foes(E1, E2); pad.buttons[0] = true", "fire -1.00 0.00", note='A: lock nearest')
+    # auto aim: OnFight once, then every girl fires along her own line to the nearest enemy
+    step("pad.axes[12] = 1", "fire 1.00 0.00", 2, 'auto aim: nearest enemy',
+         aims="1.00,-0.10 1.00,0.00 1.00,0.00", faces="1.00,-0.10 1.00,0.00 1.00,0.00")
+    assert '[pad] private fields on' in printed and '[pad] first fire: enemies=1 girls=3' in printed
+    step("E1.CurrPostion = { x = 0, y = 0, z = 10 }", "", 12, 'enemy moved: no new OnFight, girls follow',
+         aims="0.00,1.00 0.10,1.00 0.00,1.00")
+    step("", "", 30, 'steady: no OnFight at all (a charge weapon keeps its charge)')
+    # 360 degrees: 16 stick angles, no enemy near: every girl fires exactly along the stick
+    lua.execute('foes(); frames(12); take()')
+    import math
+    for k in range(16):
+        a = 2 * math.pi * k / 16
+        x, y = math.cos(a), math.sin(a)
+        lua.execute('pad.axes[3] = %r; pad.axes[4] = %r; frames(5)' % (x, -y))
+        want = '%.2f,%.2f' % (x, y)
+        want = ' '.join([want.replace('-0.00', '0.00')] * 3)
+        clean = lambda v: v.replace('-0.00', '0.00')
+        assert clean(ev('aims()')) == want and clean(ev('faces()')) == want, (k, ev('aims()'), want)
+    assert ev('take()') == ''
+    if report: report('ok aim  360: 16 stick angles, each girl fires along the stick, no extra OnFight')
+    # assist: an enemy within 8 degrees of the stick takes the aim; 20 degrees off does not
+    step("E2 = enemy(10, 1); foes(E2); pad.axes[3] = 1; pad.axes[4] = 0", "", 12, 'assist: enemy 6 deg off',
+         aims="1.00,0.00 1.00,0.09 1.00,0.10")
+    step("pad.axes[3] = 0.94; pad.axes[4] = 0.34", "", 12, 'enemy 26 deg off: pure stick',
+         aims="0.94,-0.34 0.94,-0.34 0.94,-0.34")
+    # stick let go: held for aimHold, then auto aim again
+    step("pad.axes[3] = 0; pad.axes[4] = 0", "", 15, 'stick let go: aim held', aims="0.94,-0.34 0.94,-0.34 0.94,-0.34")
+    step("", "", 20, 'hold over: auto aim', aims="1.00,0.00 1.00,0.09 1.00,0.10")
+    # lock-on: A locks the nearest, A again the next, the lock is sticky, relock on death
+    step("E3 = enemy(-3, 0); foes(E2, E3); pad.buttons[0] = true", "", 5, 'A: lock nearest',
+         aims="-0.95,-0.32 -1.00,0.00 -1.00,0.00")
     assert printed[-1] == '[pad] lock 1/2', printed[-1]
-    step("pad.buttons[0] = false", "", 15)
-    step("pad.buttons[0] = true", "fire 0.00 1.00", note='A again: next enemy')
+    step("pad.buttons[0] = false", "", 5)
+    step("pad.buttons[0] = true", "", 5, 'A again: next enemy', aims="1.00,0.00 1.00,0.09 1.00,0.10")
     assert printed[-1] == '[pad] lock 2/2', printed[-1]
-    step("pad.buttons[0] = false; E2.CurrPostion = { x = -1, y = 0, z = 0 }", "", 30, 'lock is sticky')
-    step("E1.IsAlive = false", "fire -1.00 0.00", 12, 'locked enemy died: relock')
-    step("pad.axes[4] = 1", "fire 1.00 0.00", 6, 'aim stick ends the lock (within reaimGap)')
+    step("pad.buttons[0] = false; E3.CurrPostion = { x = -1, y = 0, z = 0 }", "", 20, 'lock is sticky',
+         aims="1.00,0.00 1.00,0.09 1.00,0.10")
+    # E3 sits on girl 1 now (-1, 0): she keeps her last direction; the others turn to E3
+    step("E2.IsAlive = false", "", 12, 'locked enemy died: relock to E3')
+    assert ev('aims()').split()[2] == '-1.00,0.00', ev('aims()')
+    step("pad.axes[3] = 1", "", 3, 'aim stick ends the lock')
     assert sum(p == '[pad] lock off' for p in printed) == 1
-    # Alex's case: walk up while firing, turn to walk down, dash: the dash goes down.
-    step("pad.axes[4] = 0; clock = clock + 1; pad.v = 1", "move 0.00 1.00|fire -1.00 0.00")
+    # Alex's case: walk up while firing, turn to walk down, dash: the girls face down and dash down
+    lua.execute('pad.axes[3] = 0; clock = clock + 1; foes(); frames(12); take()')
+    step("pad.v = 1", "move 0.00 1.00")
     step("pad.v = -1; pad.buttons[4] = true; skillMoving = true",
-         "move 0.00 -1.00|firestop|face 0.00 -1.00|face 0.00 -1.00|face 0.00 -1.00|skill 3 0.00 -1.00",
-         note='dash: fire off, girls face the stick, dash dir = stick')
+         "move 0.00 -1.00|firestop|skill 3 0.00 -1.00", note='dash: fire off, girls face the stick, dash dir = stick',
+         faces="0.00,-1.00 0.00,-1.00 0.00,-1.00")
     step("", "move 0.00 -1.00", note='no fire during the dash')
-    step("", "|".join(["move 0.00 -1.00"] * 30), 30, 'dash still running')
-    step("skillMoving = false", "move 0.00 -1.00|fire -1.00 0.00", note='dash over: fire is back')
+    lua.execute("g0 = team.members[0].playerController; g0.transform.rotation = { fwd = { x = 1, y = 0, z = 0 } }; g0.isFireRotate = true")
+    step("", "|".join(["move 0.00 -1.00"] * 30), 30, 'dash still running; the game turned a girl: undone',
+         faces="0.00,-1.00 0.00,-1.00 0.00,-1.00")
+    assert ev("g0.isFireRotate == false and g0.attackRotateToDirection.fwd.z == -1")
+    step("skillMoving = false", "move 0.00 -1.00|fire 0.00 0.00", note='dash over: fire is back (no enemy: game aims)')
     # no move stick: the girls dash away from the team center (one on the center: fixed spread)
-    step("pad.v = 0; pad.axes[3] = 0; pad.buttons[4] = false", "move 0.00 0.00|firestop")
-    step("pad.buttons[4] = true",
-         "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3", note='scatter')
-    # dash first, fire a moment later: fire waits for the dash; the game's turns are undone every tick
+    step("pad.v = 0; pad.axes[12] = 0; pad.buttons[4] = false", "move 0.00 0.00|firestop")
+    step("pad.buttons[4] = true", "skill 3", note='scatter', faces="0.00,1.00 -1.00,0.00 -0.50,-0.87")
+    # dash first, fire a moment later: fire waits for the dash
     step("pad.buttons[4] = false", "", 70)
-    step("skillMoving = true; pad.buttons[4] = true",
-         "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3", note='scatter dash')
-    step("pad.axes[3] = 1", "", 10, 'fire pressed during the dash: held off')
-    lua.execute("g0 = team.members[0].playerController; g0.transform.rotation = 'game'; g0.isFireRotate = true; frame()")
-    assert lua.eval("type(g0.transform.rotation) == 'table' and g0.isFireRotate == false"
-                    " and g0.attackRotateToDirection == g0.moveRotateToDirection"), 'turn not re-applied'
-    assert lua.eval("privateOpened == CS.SchoolPlayerController") and '[pad] private fields on' in printed
-    step("skillMoving = false", "fire -1.00 0.00", 5, 'dash over (after dashMin): fire starts, auto aim')
-    step("pad.axes[3] = 0", "firestop")
+    step("skillMoving = true; pad.axes[13] = 1", "skill 3", note='left trigger: scatter dash')
+    step("pad.axes[12] = 1", "", 10, 'fire pressed during the dash: held off')
+    step("skillMoving = false", "fire 0.00 0.00", 5, 'dash over (after dashMin): fire starts')
+    step("pad.axes[12] = 0; pad.axes[13] = 0", "firestop")
     # cooldown: the press waits up to dashBuffer
-    step("pad.buttons[4] = false; team.TeamMoveSkill.IsCDTime = true", "")
+    step("team.TeamMoveSkill.IsCDTime = true", "")
     step("pad.buttons[4] = true", "", 10, 'pressed in cooldown: buffered')
-    step("team.TeamMoveSkill.IsCDTime = false", "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3",
-         note='cooldown over within the buffer: dash')
+    step("team.TeamMoveSkill.IsCDTime = false", "skill 3", note='cooldown over within the buffer: dash')
     step("pad.buttons[4] = false; team.TeamMoveSkill.IsCDTime = true", "")
     step("pad.buttons[4] = true", "skill 3", 30, 'buffer runs out: plain call, the game decides')
     step("team.TeamMoveSkill.IsCDTime = false", "", 5, 'no second dash')
@@ -320,22 +358,40 @@ def check_aim_dash(chunk, start, stop, report):
     step("pad.buttons[4] = true", "move 1.00 0.00|skill 3 1.00 0.00", note='no turn, dash with dir')
     step("pad.buttons[4] = false; failDir = true", "move 1.00 0.00")
     step("pad.buttons[4] = true", "move 1.00 0.00|skill 3", note='dir refused: plain dash')
-    step("pad.buttons[4] = false", "move 1.00 0.00")
-    step("pad.buttons[4] = true", "move 1.00 0.00|skill 3", note='later dashes: plain')
     dis = sorted(p for p in printed if 'disabled' in p)
     assert [d.split()[1] for d in dis] == ['dashdir', 'dashturn'], dis
-    assert any(p.startswith('[pad] caps members=3 enemies=1 screenDir=1.00,0.00 roundTrip=1.00,0.00 cd=false')
+    assert any(p.startswith('[pad] caps members=3 enemies=1 screenDir=1.00,0.00 roundTrip=1.00,0.00 cd=false autoAim=true assist=8')
                for p in printed), printed
-    assert sum(p.startswith('[pad] first fire: enemies=') for p in printed) == 1 and '[pad] first fire: enemies=1' in printed
-    # pause forgets the lock and the held aim; a failing enemy list falls back to the game's aim
-    lua.execute("pad.h = 0; pad.buttons[4] = false; frames(2); take()")
-    lua.execute("pad.buttons[0] = true; frame(); paused = true; frame(); paused = false; frame(); take()")
-    step("pad.buttons[0] = false; Game.DamageCompentList = nil; clock = clock + 1; pad.axes[3] = 1",
-         "fire 0.00 0.00", note='enemy list missing: the game aims')
+    # a failing enemy list falls back to the game's aim
+    lua.execute("pad.h = 0; pad.buttons[4] = false; failTurn = false; frames(2); take()")
+    step("Game.DamageCompentList = nil; clock = clock + 1; pad.axes[12] = 1", "fire 0.00 0.00", 2,
+         'enemy list missing: the game aims')
     assert any('target disabled' in p for p in printed)
     lua.execute(stop)
-    assert lua.eval('timerCount()') == 0
+    assert ev('timerCount()') == 0
     return n[0]
+
+
+def check_fallback(chunk, start, stop, report):
+    """No private access (xlua refuses): the layer re-aims with OnFight, at most every reaimGap."""
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute(MOCK)
+    printed = []
+    lua.globals().print = lambda *a: printed.append(' '.join(str(x) for x in a))
+    lua.globals().rawAxes = True
+    lua.execute(chunk)
+    lua.execute("xlua = nil; girls({0, 1}, {-1, 0}); E1 = enemy(10, 0); foes(E1)\n" + start + '\ntake()')
+    lua.execute('pad.axes[12] = 1; frames(2)')
+    assert lua.eval('take()') == 'fire 1.00 0.00' and any(p.startswith('[pad] private fields off') for p in printed)
+    lua.execute('E1.CurrPostion = { x = 0, y = 0, z = 10 }; frames(5)')
+    assert lua.eval('take()') == ''                       # within reaimGap of the first call
+    lua.execute('frames(20)')
+    assert lua.eval('take()') == 'fire 0.00 1.00'
+    lua.execute('pad.axes[3] = 0; pad.axes[4] = 1; frames(25)')
+    assert lua.eval('take()') == 'fire 0.00 -1.00'
+    assert lua.eval('aims()') == '- -'                     # nothing written without private access
+    lua.execute(stop)
+    if report: report('ok fallback: no private access, OnFight re-aims every reaimGap')
 
 
 def run(script=None, report=None):
@@ -363,12 +419,15 @@ def run(script=None, report=None):
 
     lua, printed = play(chunk, start, stop, False, STOCK_STEPS, report)
     assert lua.eval('take()') == ''
-    # Each absent axis name raised once (two hat axes, three roles, one debug probe) and was then skipped.
-    assert lua.eval('errorCount()') == (28, 1), lua.eval('errorCount()')
+    # Each absent axis name raised once (raw names, axes without a stock name) and was then skipped.
+    assert lua.eval('errorCount()')[1] == 1, lua.eval('errorCount()')
     assert not any('disabled' in p for p in printed), printed
     check_restart(chunk, start, stop, report)
     aim_steps = check_aim_dash(chunk, start, stop, report)
-    return {'aimDashSteps': aim_steps, 'dashFollowsMoveStick': True, 'reaimWhileFiring': True,
+    check_fallback(chunk, start, stop, report)
+    return {'aimDashSteps': aim_steps, 'aim360SixteenAngles': True, 'directAimNoExtraOnFight': True,
+            'assistCone': True, 'fallbackWithoutPrivateAccess': True,
+            'dashFollowsMoveStick': True, 'reaimWhileFiring': True,
             'lockOnCyclesAndRelocks': True, 'scatterWithoutStick': True, 'dashBuffered': True,'controllerLayerExecutedInMockRuntime': True, 'syntheticHudSource': synthetic,
             'rawAxisSteps': len(RAW_STEPS), 'stockAxisSteps': len(STOCK_STEPS),
             'eachAnchorRequiredExactlyOnce': True, 'patchIdempotent': True,
