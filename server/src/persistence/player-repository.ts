@@ -1843,13 +1843,11 @@ function yenPackPeriod(pack: YenPack, now: number): string | null {
  * passed. The client checks the count before it sends a purchase
  * (IBLogic:DoBuyBox), so the reset cannot wait for one.
  */
-function reconcileYenPackLimits(
-  player: Player,
-  now: number,
-  catalog = YenPackCatalog.loadDefault(),
-): void {
+function reconcileYenPackLimits(player: Player, now: number): void {
   const periods = player.ibShop?.yenPeriods;
-  if (!periods) return;
+  // No ¥ purchase yet: do not load the pack tables at login.
+  if (!periods || Object.keys(periods).length === 0) return;
+  const catalog = YenPackCatalog.loadDefault();
   for (const [id, stored] of Object.entries(periods)) {
     const pack = catalog.pack(Number(id));
     if (!pack) continue;
