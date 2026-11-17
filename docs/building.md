@@ -42,6 +42,15 @@ The data overlay must use indexes reconciled to the actual packaged resource
 sizes and CRCs, including translated and custom bundles. A client-only overlay
 without this reconciliation is not the final distribution overlay.
 
+The client overlay builder also takes `--combat-source-zip` for the owned full
+source resource ZIP and `--combat-donor-obb` for the owned EN 1.0.9 base OBB.
+`patch_combat_labels.py` pins the five input members by hash. The resulting
+`at/mat.u` and `ui_tx/ui_fight.u` replacements are data files recorded in
+`externalFiles`; include them when assembling the full data set or a delta.
+The builder updates their sizes and CRCs in both APK and external resource
+indexes. English narrative punctuation is normalized after selector language
+entries are added, preserving the translation keys and control markup.
+
 Generate and host the complete data packs, set their actual HTTPS direct URLs in
 the full manifest, then sign its exact bytes with `release/tools/release_crypto.py`.
 Do not publish a bootstrap manifest with placeholder URLs. The build command is:
