@@ -29,6 +29,13 @@ matching binary/JSON index sizes and CRCs. The full data set reuses 30 unchanged
 0.1.2 packs and publishes four changed packs under 0.1.4. The 0.1.2 pack prefix
 is still required and must not be deleted.
 
+Public-host checks verified the entire APK, all four signed update packages,
+full manifest/signature and download-page metadata against their local SHA-256
+hashes. All four changed packs passed complete hash readback; all 34 required
+pack routes returned their signed sizes. APK ranges across the storage-part
+boundary matched, private part URLs returned 404, and older installer links
+redirected to 0.1.4.
+
 LDPlayer 9.5.15.1 investigation and compatibility changes remain paused at the
 maintainer's request. No emulator fix or completed phone playtest is claimed.
 

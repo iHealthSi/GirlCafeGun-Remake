@@ -41,7 +41,7 @@ remain shared within their category. Every **100 rotation draws** earns a
 Legendary selector for that category in **Warehouse**. Partial progress carries
 across rotations; an unopened selector always keeps its original choices.
 Normal random rates and pity remain unchanged. See
-[collection policy and odds](server/docs/recruitment-policy.md).
+[collection policy and odds](../server/docs/recruitment-policy.md).
 
 This repository contains source code, build/update tools and documentation.
 The game APK, artwork, audio, video, native game binaries and data packs are not included here.
@@ -67,10 +67,10 @@ Do not copy another player's app-private data or saves into the release.
 
 ## Install updates
 
-Update files can be found in the community Discord under `#update`, or you can
-**create updates yourself** using the included tools. An update is a `.gcgupdate`
-file containing changed resources and, when necessary, an app delta or server
-update. Use a package made for your currently installed base release.
+Update files can be installed, or you can **create
+updates yourself** using the included tools. An update is a `.gcgupdate` file
+containing changed resources and, when necessary, an app delta or server update.
+Use a package made for your currently installed base release.
 
 Open **Update** on the login screen. Choose one:
 
@@ -87,6 +87,36 @@ ask you to allow this app to request installation. Never uninstall the game to
 apply an update: uninstalling can remove the local profile. Updates preserve the
 profile, verify their publisher and content, and recover interrupted resource
 transactions before the game starts.
+
+### Updating to 0.1.4
+
+Use the signed `.gcgupdate` package matching your installed data release. The
+login updater can discover its matching package with **Check online**. The
+current updater selects direct packages for installed 0.1.0 through 0.1.3 data.
+
+If you still use the original 0.1.0 app, either import its existing 0.1.0-to-0.1.1
+bridge first, or install the full 0.1.4 APK over the app and then use **Update →
+Check online** to apply its matching data. Keep the app installed and preserve
+its data throughout. Installing an APK alone does not replace resources already
+cached in `files/`.
+
+Older full installers are retired to save hosting space. Previously shared APK
+and download-page addresses redirect to the current release; old data packs and
+signed update packages remain available because current installations still
+reuse them.
+
+### Updating from 0.1.0 to 0.1.1
+
+Import `GCG-Offline-0.1.0-to-0.1.1.gcgupdate` through the login **Update** screen.
+It contains the offline-login repair, the matching resource changes and an APK
+delta with the new download and update addresses. It reuses the installed data
+and preserves the local player; the complete initial download is not needed.
+
+If you install the full 0.1.1 APK over 0.1.0 manually, also import that paired
+update to bring the existing resources to 0.1.1. Installing the APK alone does
+not replace resources already stored in the game's `files/` directory. Keep the
+app installed throughout; do not clear its data. A fresh 0.1.1 installation uses
+the matching automatic download or the complete 0.1.1 manual data set instead.
 
 ## Create an update
 
