@@ -126,6 +126,8 @@ function el(parent, name, x0, y0, x1, y1, kind)
   if kind ~= 'image' then
     local c = { gameObject = o, transform = o.transform, interactable = true, isActiveAndEnabled = true, types = {} }
     function c.IsInteractable(self) return self.interactable end
+    function c.OnPointerEnter(self, d) self.inside = true end    -- a finger enters before it presses
+    function c.OnPointerExit(self, d) self.inside = false end
     if kind == 'trigger' then c.types[T.ETL] = true; o.comps[T.ETL] = c
     else
       c.types[T.Selectable] = true
@@ -251,6 +253,7 @@ timers = {}
 cartoon = { OnTouch = function() log('advance') end }
 storyPlaying = false
 Game = {
+  LuaUtils = { LoadSprite = function(path) return { path = path } end },
   Utils = {
     IsDestroyed = function(o) return o == nil or o.destroyed == true or (o.gameObject and o.gameObject.destroyed == true) end,
     ExecutePointerDownEvents = function(o) log('down ' .. o.name) end,
@@ -282,10 +285,13 @@ function press(n) pad.buttons[n] = true; frame(); pad.buttons[n] = false; frame(
 -- the d-pad (hat axes 5/6, down = positive) steps the focus; the left stick (pad.h / pad.v) is the pointer
 function dpad(x, y) pad.axes[5], pad.axes[6] = x, -y; frame(); pad.axes[5], pad.axes[6] = 0, 0; frame() end
 function focusName() local f = GamepadMenu._state.focus; return f and f.go.name or 'none' end
+-- the focus marker: the pointer's hand on the focused control (or the old frame, focusFrame = true)
 function frameShown()
   local o = GamepadMenu.overlay
-  return o ~= nil and o.bars[1].go.active == true
+  return o ~= nil and ((o.hand ~= nil and o.hand.go.active == true) or o.bars[1].go.active == true)
 end
+function sprite() local o = GamepadMenu.overlay
+  if o.hand.go.active then return 'hand' elseif o.arrow.go.active then return 'arrow' end; return 'none' end
 '''
 
 SCENE = r'''
@@ -539,10 +545,23 @@ def scenario(chunk, report):
     over = travel(1.0, 1510, 150)
     assert over < full * 0.7, (over, full)   # first frame at full speed, then half
     lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150; frame(0.06)')
-    check(lua, 'press(0)', 'down Far|up Far|click Far', 'pointer A presses the hover', report)
+    assert ev('sprite()') == 'hand' and ev('far.sel.inside') and not ev('GamepadMenu.overlay.bars[1].go.active')
+    size = ev('GamepadMenu.overlay.hand.rt._sizeDelta.x')
+    lua.execute('pad.buttons[0] = true; frame(0.01); frame(0.01)')
+    assert ev('GamepadMenu.overlay.hand.rt._sizeDelta.x') < size * 0.9, 'no press look on the pointer'
+    check(lua, 'pad.buttons[0] = false; frame(0.01)', 'down Far|up Far|click Far', 'pointer A presses the hover', report)
+    assert ev('far.sel.inside')                              # the pointer still rests on it
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 300, 900; frame(0.06); frame(0.06)')
+    assert ev('sprite()') == 'arrow' and not ev('far.sel.inside')   # off the control: the arrow, pointer left it
+    if report: report('ok pointer: hand over a control, arrow elsewhere, smaller while A is held, enter / exit')
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150; frame(0.06)')
     # the d-pad puts the focus back, on the control under the pointer
     lua.execute('pad.axes[5] = 1; frame(); pad.axes[5] = 0; frame()')
     assert not ev('GamepadMenu._state.cursorOn') and ev('focusName()') == 'Far' and ev('frameShown()'), ev('focusName()')
+    # focus steps: the hand glides onto the focused control (no frame)
+    lua.execute('for i = 1, 10 do frame(0.05) end')
+    assert abs(ev('GamepadMenu._state.cx') - 1600) < 2 and abs(ev('GamepadMenu._state.cy') - 150) < 2
+    assert not ev('GamepadMenu.overlay.bars[1].go.active')
     if report: report('ok pointer: d-pad returns to focus on the hovered control')
     # the cursor is on when a fight starts (it is turned off below, when the HUD takes the pad)
     check(lua, 'press(11)', '', 'cursor on before a fight', report)

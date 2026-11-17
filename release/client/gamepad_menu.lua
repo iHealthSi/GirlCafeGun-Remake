@@ -43,6 +43,8 @@ M.cfg = M.cfg or {
 	cursorCurve = 2.2,     -- pointer speed = full speed * tilt ^ curve (small tilts move it precisely)
 	cursorDead  = 0.15,    -- pointer: stick dead zone (radial)
 	cursorSlow  = 0.5,     -- pointer: speed share over a control it can press (easier to stop on it)
+	cursorSize  = 0.075,   -- pointer sprite size, share of the screen height
+	focusFrame  = false,   -- true: the old pulsing frame marks the focus instead of the pointer
 	hoverEvery  = 0.05,    -- s: how often the control under the pointer is looked up
 	bigArea     = 0.45,    -- a target that covers this share of the screen is a backdrop
 	frame       = { 1.0, 0.80, 0.25 },  -- focus frame colour
@@ -670,8 +672,21 @@ local function nudge(c, d)
 end
 
 -- ---------- actions ----------
+-- A finger sends pointer-enter before pointer-down; a Selectable shows its pressed look only when the
+-- pointer is inside it. Down / up / click come from the client's own helpers (as before).
+local function pointerInside(go, inside)
+	local sel = go and go:GetComponent(typeof(UGUI.Selectable))
+	if not sel then return end
+	local es = eventSystem()
+	if not es then return end
+	if not ped or pedSystem ~= es then ped = ES.PointerEventData(es); pedSystem = es end
+	ped.position = V2(st.cx, st.cy)
+	pcall(function() if inside then sel:OnPointerEnter(ped) else sel:OnPointerExit(ped) end end)
+end
+
 local function pressDown(go)
 	st.pressed = go
+	pointerInside(go, true)
 	Game.Utils.ExecutePointerDownEvents(go)
 end
 
@@ -681,6 +696,8 @@ local function pressUp(click)
 	if not alive(go) then return end
 	Game.Utils.ExecutePointerUpEvents(go)
 	if click then Game.Utils.ExecuteClickEvents(go) end
+	-- the pointer still rests on it: it stays "entered", as under a mouse
+	if not (st.cursorOn and st.hover and st.hover.go == go) then pointerInside(go, false) end
 end
 
 local function move(d)
@@ -821,7 +838,12 @@ local function scrollBy(rx, ry, dt)
 	shiftContent(sr, sr.horizontal and rx * vr.width * k or 0, sr.vertical and ry * vr.height * k or 0)
 end
 
--- ---------- overlay: focus frame and cursor ----------
+-- ---------- overlay: pointer (and the optional focus frame) ----------
+-- sprite path in the client (UI_Guide atlas) and the tip point as a share of the sprite (121 x 118 px)
+local CURSOR_SPRITES = {
+	{ key = 'arrow', path = 'UI/UI_Guide/common_guide_hand.png', tip = { 0.25, 0.75 } },
+	{ key = 'hand', path = 'UI/UI_Guide/common_guide_hand2.png', tip = { 0.13, 0.87 } },
+}
 local function makeImage(parent, name, color)
 	local go = U3D.GameObject(name)
 	-- hidden until placed: a new Image is a 100 x 100 white square at the bottom-left anchor
@@ -849,6 +871,19 @@ local function overlay()
 	o.cursor[1] = makeImage(root.transform, 'CursorShadow', U3D.Color(0, 0, 0, 0.6))
 	o.cursor[2] = makeImage(root.transform, 'CursorH', U3D.Color(1, 1, 1, 1))
 	o.cursor[3] = makeImage(root.transform, 'CursorV', U3D.Color(1, 1, 1, 1))
+	-- the tutorial's own pointer sprites: the arrow, and the hand over a control that can be pressed.
+	-- Without them (a client that lacks the atlas) the white cross above stays the pointer.
+	for _, s in ipairs(CURSOR_SPRITES) do
+		local ok, sp = pcall(function() return Game.LuaUtils.LoadSprite(s.path) end)
+		if ok and sp then
+			local item = makeImage(root.transform, 'Cursor_' .. s.key, U3D.Color(1, 1, 1, 1))
+			item.img.sprite = sp
+			item.img.preserveAspect = true
+			item.rt.pivot = V2(s.tip[1], s.tip[2])   -- the tip of the arrow / finger sits on the pointer
+			o[s.key] = item
+		end
+	end
+	if not (o.arrow and o.hand) then o.arrow, o.hand = nil, nil; logOnce('cursor sprites missing: using the cross') end
 	M.overlay = o
 	return o
 end
@@ -887,9 +922,21 @@ local function hideFrame()
 	for i = 1, 4 do o.bars[i].go:SetActive(false) end
 end
 
-local function showCursor(on)
+-- the pointer at (st.cx, st.cy): the hand over a control that can be pressed (and in focus steps), else
+-- the arrow; a little smaller while A is held, like a finger pressing
+local function showCursor(on, hand)
 	local o = on and overlay() or M.overlay
 	if not (o and alive(o.root)) then return end
+	if o.arrow then
+		for i = 1, 3 do o.cursor[i].go:SetActive(false) end
+		o.arrow.go:SetActive(on and not hand)
+		o.hand.go:SetActive(on and hand == true)
+		if not on then return end
+		local item = hand and o.hand or o.arrow
+		local s = math.max(36, U3D.Screen.height * M.cfg.cursorSize) * (st.pressed and 0.82 or 1)
+		place(item, st.cx, st.cy, s, s)
+		return
+	end
 	for i = 1, 3 do o.cursor[i].go:SetActive(on) end
 	if not on then return end
 	local s = math.max(14, U3D.Screen.height * 0.035)
@@ -897,6 +944,25 @@ local function showCursor(on)
 	place(o.cursor[1], st.cx - s * 0.5 - 2, st.cy - s * 0.5 - 2, s + 4, s + 4)
 	place(o.cursor[2], st.cx - s * 0.5, st.cy - t * 0.5, s, t)
 	place(o.cursor[3], st.cx - t * 0.5, st.cy - s * 0.5, t, s)
+end
+
+-- focus steps show the pointer (the hand) gliding to the focused control; focusFrame = true brings back the
+-- old frame instead
+local function showFocus(r, dt)
+	if M.cfg.focusFrame then showFrame(r); return end
+	local tx, ty = G.center(r)
+	if not st.pointerShown then
+		st.cx, st.cy = tx, ty
+	else
+		local k = math.min(1, (dt or 0.05) * 18)
+		st.cx, st.cy = st.cx + (tx - st.cx) * k, st.cy + (ty - st.cy) * k
+	end
+	st.pointerShown = true
+	showCursor(true, true)
+end
+local function hideFocus()
+	hideFrame()
+	if not st.cursorOn then showCursor(false); st.pointerShown = false end
 end
 
 -- ---------- input ----------
@@ -987,25 +1053,34 @@ end
 -- keepPlace: start where the pointer was, else on the focused control, else mid-screen
 local function pointerOn(keepPlace)
 	local sw, sh = U3D.Screen.width, U3D.Screen.height
-	if st.focus and st.focus.r and st.shown then st.cx, st.cy = G.center(st.focus.r)
-	elseif not (keepPlace and st.cx > 0 and st.cy > 0) then st.cx, st.cy = sw * 0.5, sh * 0.5 end
+	-- in focus steps the pointer already sits on the focused control: it goes on from there
+	if not st.pointerShown then
+		if st.focus and st.focus.r and st.shown then st.cx, st.cy = G.center(st.focus.r)
+		elseif not (keepPlace and st.cx > 0 and st.cy > 0) then st.cx, st.cy = sw * 0.5, sh * 0.5 end
+	end
 	st.cursorOn, st.hover, st.hoverAt = true, nil, 0
 	hideFrame()
 end
 -- back to focus steps: the control under the pointer takes the focus
 local function pointerOff()
 	st.cursorOn = false
-	showCursor(false)
+	if st.hover then pointerInside(st.hover.go, false) end
 	if st.hover and st.hover.r then setFocus(st.hover) end
 	st.hover = nil
 	st.shown = true
 	if not focusValid() then refresh(false) end
 end
--- the control under the pointer; the full control scan runs at most twice a second
+-- the control under the pointer; the full control scan runs at most twice a second. Like a mouse, the
+-- pointer enters and leaves it (the control's own hover look, if it has one).
 local function hoverUpdate(t)
 	if t >= (st.collectAt or 0) + 0.5 then collect(); st.collectAt = t end
 	local c = owner(rayHit(st.cx, st.cy), st.all or st.byId)
 	if c and not c.r then c.r = screenRect(c.rt) end
+	local old = st.hover
+	if (old and old.go) ~= (c and c.go) then
+		if old and old.go ~= st.pressed then pointerInside(old.go, false) end
+		if c then pointerInside(c.go, true) end
+	end
 	st.hover = c
 end
 
@@ -1021,7 +1096,7 @@ function M.Tick()
 			-- start from scratch when the HUD gives the pad back: no cursor, and the first pad input only
 			-- shows the frame, so A still held from firing does not press the window that opens
 			st.shown, st.cursorOn, st.dirHeld, st.prev, st.pending = false, false, nil, {}, nil
-			st.focus, st.pressed, st.hover = nil, nil, nil
+			st.focus, st.pressed, st.hover, st.pointerShown = nil, nil, nil, false
 		end
 		M.owner = 'fight'
 		return
@@ -1031,8 +1106,8 @@ function M.Tick()
 
 	-- touch hides the frame; the next pad input brings it back
 	if U3D.Input.touchCount > 0 or U3D.Input.GetMouseButton(0) then
-		if st.shown then hideFrame(); st.shown = false end
-		if st.cursorOn then showCursor(false); st.cursorOn = false end
+		if st.shown or st.cursorOn or st.pointerShown then hideFrame(); showCursor(false) end
+		st.shown, st.cursorOn, st.pointerShown = false, false, false
 		return
 	end
 	if not st.shown and not st.cursorOn then
@@ -1079,12 +1154,13 @@ function M.Tick()
 			st.cx = math.max(0, math.min(U3D.Screen.width, st.cx + x / m * v))
 			st.cy = math.max(0, math.min(U3D.Screen.height, st.cy + y / m * v))
 		end
-		showCursor(true)
 		if t >= st.hoverAt then
 			st.hoverAt = t + M.cfg.hoverEvery
 			hoverUpdate(t)
 		end
-		if st.hover and st.hover.r then showFrame(st.hover.r) else hideFrame() end
+		st.pointerShown = true
+		showCursor(true, st.hover ~= nil)   -- arrow, or the hand over a control it can press
+		hideFrame()
 		if p == 'down' then
 			collect(); st.collectAt = t
 			local c = owner(rayHit(st.cx, st.cy), st.all)
@@ -1138,7 +1214,7 @@ function M.Tick()
 			pressUp(true)
 		end
 
-		if st.focus and st.focus.r and st.shown then showFrame(st.focus.r) else hideFrame() end
+		if st.focus and st.focus.r and st.shown then showFocus(st.focus.r, dt) else hideFocus() end
 	end
 
 	local b = edge('back', M.cfg.back)

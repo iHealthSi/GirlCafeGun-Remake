@@ -89,8 +89,8 @@ Menus, popups and story scenes (`M.cfg` in `gamepad_menu.lua`):
 
 | Control | Action |
 | --- | --- |
-| Left stick | Pointer, like a mouse: speed curve, slower over a control it can press, a frame marks that control |
-| D-pad | Move the focus (hold to repeat); the control under the pointer takes the focus |
+| Left stick | Pointer, like a mouse: speed curve, slower over a control it can press |
+| D-pad | Move the focus (hold to repeat): the pointer glides onto the focused control |
 | A | Press the control under the pointer, or the focused one (hold for long-press buttons) |
 | B | Back: the window's close, back or cancel button, else a full-screen "tap to close" backdrop |
 | LB / RB | Previous / next tab of the top tab bar (a ToggleGroup), else a left / right arrow button |
@@ -167,7 +167,11 @@ with a team the layer logs which calls answer, for one phone run to check:
 (`roundTrip`: stick (1, 0) to world and back; anything else means lock-on and
 auto aim point the wrong way). Enemies spawn later, so the first fire of a
 fight logs `[pad] first fire: enemies=N`. Lock changes log `[pad] lock i/n` and
-`[pad] lock off`.
+`[pad] lock off`. For the first `aimTrace` (20) seconds of aim-stick use in a
+fight, five lines a second show `[pad] trace raw=x,y stick=deg fire=bool
+world=deg g1=yaw/dirdeg/rotbool ...`: the raw stick, the written world
+direction (Unity yaw: 0 = +z, 90 = +x) and, per girl, her real facing, her fire
+direction and `isFireRotate`.
 
 Practices applied: radial dead zones; aim hold after the stick is let go; a
 small aim-assist cone; one button that locks and retargets, with a sticky lock;
@@ -179,10 +183,17 @@ buffered.
 The left stick moves a pointer, as a mouse would (the way Steam Input's
 "joystick mouse" works): speed = `cursorSpeed` (1.5 screen heights per second)
 times the tilt past `cursorDead` raised to `cursorCurve` (2.2), so a small tilt
-places it precisely and a full tilt crosses the screen fast. Over a control it
-can press, the pointer slows to `cursorSlow` (half) and a frame marks that
-control. A presses the control under the pointer with the same pointer events
-as a finger. The right stick scrolls the list under the pointer. The d-pad
+places it precisely and a full tilt crosses the screen fast. The pointer is the
+tutorial's own sprites (`UI/UI_Guide/common_guide_hand.png`, the arrow, and
+`common_guide_hand2.png`, the pointing hand), loaded with
+`Game.LuaUtils.LoadSprite`; without them a white cross stays the pointer. Over a
+control it can press, the pointer becomes the hand and slows to `cursorSlow`
+(half). No frame is drawn (`focusFrame = true` brings the old pulsing frame
+back); in focus steps the hand glides onto the focused control. A press sends
+what a finger sends: pointer-enter (a Selectable shows its pressed look only
+when the pointer is inside it), then pointer-down, up and click; the hand
+shrinks a little while A is held. Like a mouse, the pointer enters and leaves
+the controls it passes. The right stick scrolls the list under the pointer. The d-pad
 switches back to focus steps, starting on the control under the pointer; the
 left stick brings the pointer back. Select switches the left stick between the
 pointer and focus steps (`stickPointer`). When the fight HUD takes the pad, the
