@@ -142,6 +142,10 @@ local function autoFight()
 	if ui then ui:OnClickBtnAuto() end
 end
 
+-- ---------- state ----------
+local st = { moving = false, firing = false, prev = {}, dbg = {}, faced = {},
+             fx = 0, fy = 0, ax = 0, ay = 0, sx = 0, sy = 0, sentAt = 0, aimNext = 0 }
+
 -- ---------- the team and its enemies (world x/z plane) ----------
 local function localTeam()
 	return Game.Fight.GetLocalTeam()
@@ -181,12 +185,30 @@ local function dashing()
 	local ok, v = pcall(function() return localTeam():IsSkillMoving() end)
 	return ok and v == true
 end
+-- The fire loop (ConfigPrepareFire) clears the private isFireRotate only at its next step, so for a
+-- moment the game keeps turning a girl to her fire direction. With xLua's private access the layer
+-- clears it at once and points attackRotateToDirection the dash way too; without it the per-tick
+-- turn below still wins. Asked once per session.
+local private
+local function turn(f)
+	f.tr.rotation = f.q
+	f.pc.moveRotateToDirection = f.q
+	if private then
+		local ok, err = pcall(function() f.pc.attackRotateToDirection = f.q; f.pc.isFireRotate = false end)
+		if not ok then private = false; print("[pad] private fields off: " .. tostring(err)) end
+	end
+end
 -- turn every living girl: fn(dx, dz, i) gets her offset from the team center and returns a world
 -- direction, or nil to leave her. moveRotateToDirection keeps the turn while the move stick rests.
+-- The turns are kept in st.faced and applied again on every tick of the dash.
 local function faceTeam(fn)
+	if private == nil then
+		private = pcall(function() xlua.private_accessible(CS.SchoolPlayerController) end)
+		print("[pad] private fields " .. (private and "on" or "off"))
+	end
 	local team = localTeam()
 	local cx, cz = teamCenter(team)
-	local ms = team.members
+	local ms, faced = team.members, {}
 	for i = 0, ms.Count - 1 do
 		local pc = ms[i].playerController
 		if pc and not pc.IsDead then
@@ -194,18 +216,19 @@ local function faceTeam(fn)
 			local p = tr.position
 			local wx, wz = fn(p.x - cx, p.z - cz, i)
 			if wx and wx * wx + wz * wz > 1e-6 then
-				local q = U3D.Quaternion.LookRotation(U3D.Vector3(wx, 0, wz))
-				tr.rotation = q
-				pc.moveRotateToDirection = q
+				local f = { pc = pc, tr = tr, q = U3D.Quaternion.LookRotation(U3D.Vector3(wx, 0, wz)) }
+				faced[#faced + 1] = f
+				turn(f)
 			end
 		end
 	end
+	st.faced = faced
+end
+local function refaceTeam()
+	for _, f in ipairs(st.faced) do turn(f) end
 end
 
--- ---------- state ----------
-local st = { moving = false, firing = false, prev = {}, dbg = {},
-             fx = 0, fy = 0, ax = 0, ay = 0, sx = 0, sy = 0, sentAt = 0, aimNext = 0 }
-
+-- ---------- input state ----------
 local function pressed(name, list)
 	local now = anyKey(list)
 	local was = st.prev[name]
@@ -278,12 +301,13 @@ local function aimAt(t, cfg)
 end
 
 -- ---------- dash ----------
+-- every dash holds fire off for its length, also when fire is pressed after the dash button
 local function dash(cfg, t, mx, my)
 	if st.firing then
 		try("fire", fireStop)
 		st.firing = false
-		st.dashAt, st.dashUntil = t, t + cfg.dashPause
 	end
+	st.dashAt, st.dashUntil, st.faced = t, t + cfg.dashPause, {}
 	if mx then
 		if cfg.dashTurn then
 			try("dashturn", function()
@@ -335,7 +359,17 @@ local function caps()
 	print("[pad] caps members=" .. probe(function() return team.members.Count end)
 		.. " enemies=" .. probe(function() local cx, cz = teamCenter(team); return #enemies(cx, cz) end)
 		.. " screenDir=" .. probe(function() local x, y = screenDir(1, 0); return string.format("%.2f,%.2f", x, y) end)
+		-- stick (1, 0) -> world -> stick must give (1, 0) again, else lock-on aims the wrong way
+		.. " roundTrip=" .. probe(function()
+			local w = fightCamera():GetRealDirection(U3D.Vector2(1, 0))
+			local x, y = screenDir(w.x, w.z); return string.format("%.2f,%.2f", x, y) end)
 		.. " cd=" .. probe(function() return team.TeamMoveSkill.IsCDTime end))
+end
+-- the first fire of a fight: enemies have spawned by now
+local function fireCaps()
+	P.fireCapsDone = true
+	local ok, n = pcall(function() local cx, cz = teamCenter(localTeam()); return #enemies(cx, cz) end)
+	print("[pad] first fire: enemies=" .. (ok and tostring(n) or "no (" .. tostring(n) .. ")"))
 end
 
 function P.Tick()
@@ -386,20 +420,31 @@ function P.Tick()
 	-- dash (a press during its cooldown waits up to dashBuffer)
 	if pressed("dodge", cfg.dodge) then st.dashBuf = t + cfg.dashBuffer end
 	if st.dashBuf then
-		if t > st.dashBuf then st.dashBuf = nil
-		elseif not cooling() then st.dashBuf = nil; dash(cfg, t, mx, my) end
+		if not cooling() then
+			st.dashBuf = nil
+			dash(cfg, t, mx, my)
+		elseif t > st.dashBuf then
+			-- still "cooling" after the buffer: leave the decision to the game, as before this layer had a buffer
+			st.dashBuf = nil
+			try("dodge", skill, 3, nil)
+		end
 	end
 
 	-- fire: buttons, right trigger (and the aim stick if stickFires); off for the length of a dash
 	local wantFire = anyKey(cfg.fire) or axis(cfg.rTrigger) > cfg.trigger or (cfg.stickFires and aimed)
 	if st.dashUntil then
-		if t >= st.dashUntil or (t - st.dashAt >= cfg.dashMin and not dashing()) then st.dashUntil = nil end
+		if t >= st.dashUntil or (t - st.dashAt >= cfg.dashMin and not dashing()) then
+			st.dashUntil, st.faced = nil, {}
+		else
+			try("reface", refaceTeam)   -- the game may turn the girls back (fire loop, skill cast)
+		end
 	end
 	if st.dashUntil then
 		-- fire was stopped for the dash; it starts again below once the dash is over
 	elseif wantFire then
 		local ax, ay = aimAt(t, cfg)
 		if not st.firing then
+			if not P.fireCapsDone then fireCaps() end
 			try("fire", fireStart, ax, ay)
 			st.firing, st.sx, st.sy, st.sentAt = true, ax, ay, t
 		elseif t - st.sentAt >= cfg.reaimGap and changed(ax, ay, st.sx, st.sy) then
@@ -446,7 +491,7 @@ function P.Start()
 		print("[pad] the old timer stopped: restarting")
 	end
 	P.Reset()
-	P.capsDone = false
+	P.capsDone, P.fireCapsDone = false, false
 	-- never break the fight HUD: a failure here only turns the controller off
 	-- real time: the pause menu sets the game's timer scale to 0, and Start must still close it
 	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, tick, true, false)
@@ -458,7 +503,7 @@ function P.Reset()
 	if st.moving then try("move", move, 0, 0) end
 	if st.firing then try("fire", fireStop) end
 	st.moving, st.firing = false, false
-	st.lock, st.freeAt, st.dashBuf, st.dashUntil = nil, nil, nil, nil
+	st.lock, st.freeAt, st.dashBuf, st.dashUntil, st.faced = nil, nil, nil, nil, {}
 	st.ax, st.ay, st.sx, st.sy, st.aimNext = 0, 0, 0, 0, 0
 end
 

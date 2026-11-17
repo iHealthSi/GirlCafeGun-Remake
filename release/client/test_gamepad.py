@@ -75,6 +75,8 @@ end
 function enemy(x, z) return { IsMonster = true, IsAlive = true, CanAutoAim = true, IsDestructible = false, CurrPostion = { x = x, y = 0, z = z } } end
 function foes(...) Game.DamageCompentList.Instance.ComList = list({ ... }) end
 skillMoving = false
+xlua = { private_accessible = function(t) privateOpened = t end }
+CS = { SchoolPlayerController = { name = "SchoolPlayerController" } }
 team = { center = { transform = { position = { x = 0, y = 0, z = 0 } } }, members = list({}),
          TeamMoveSkill = { IsCDTime = false }, IsSkillMoving = function(self) return skillMoving end }
 paused = false
@@ -294,14 +296,25 @@ def check_aim_dash(chunk, start, stop, report):
     step("pad.v = 0; pad.axes[3] = 0; pad.buttons[4] = false", "move 0.00 0.00|firestop")
     step("pad.buttons[4] = true",
          "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3", note='scatter')
+    # dash first, fire a moment later: fire waits for the dash; the game's turns are undone every tick
+    step("pad.buttons[4] = false", "", 70)
+    step("skillMoving = true; pad.buttons[4] = true",
+         "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3", note='scatter dash')
+    step("pad.axes[3] = 1", "", 10, 'fire pressed during the dash: held off')
+    lua.execute("g0 = team.members[0].playerController; g0.transform.rotation = 'game'; g0.isFireRotate = true; frame()")
+    assert lua.eval("type(g0.transform.rotation) == 'table' and g0.isFireRotate == false"
+                    " and g0.attackRotateToDirection == g0.moveRotateToDirection"), 'turn not re-applied'
+    assert lua.eval("privateOpened == CS.SchoolPlayerController") and '[pad] private fields on' in printed
+    step("skillMoving = false", "fire -1.00 0.00", 5, 'dash over (after dashMin): fire starts, auto aim')
+    step("pad.axes[3] = 0", "firestop")
     # cooldown: the press waits up to dashBuffer
     step("pad.buttons[4] = false; team.TeamMoveSkill.IsCDTime = true", "")
     step("pad.buttons[4] = true", "", 10, 'pressed in cooldown: buffered')
     step("team.TeamMoveSkill.IsCDTime = false", "face 0.00 1.00|face -1.00 0.00|face -0.50 -0.87|skill 3",
          note='cooldown over within the buffer: dash')
     step("pad.buttons[4] = false; team.TeamMoveSkill.IsCDTime = true", "")
-    step("pad.buttons[4] = true", "", 30, 'buffer runs out')
-    step("team.TeamMoveSkill.IsCDTime = false", "", 5, 'no late dash')
+    step("pad.buttons[4] = true", "skill 3", 30, 'buffer runs out: plain call, the game decides')
+    step("team.TeamMoveSkill.IsCDTime = false", "", 5, 'no second dash')
     # fallbacks: a failing turn or a refused direction still dashes
     step("pad.buttons[4] = false; failTurn = true; pad.h = 1", "move 1.00 0.00")
     step("pad.buttons[4] = true", "move 1.00 0.00|skill 3 1.00 0.00", note='no turn, dash with dir')
@@ -311,7 +324,9 @@ def check_aim_dash(chunk, start, stop, report):
     step("pad.buttons[4] = true", "move 1.00 0.00|skill 3", note='later dashes: plain')
     dis = sorted(p for p in printed if 'disabled' in p)
     assert [d.split()[1] for d in dis] == ['dashdir', 'dashturn'], dis
-    assert any(p.startswith('[pad] caps members=3 enemies=1 screenDir=1.00,0.00 cd=false') for p in printed), printed
+    assert any(p.startswith('[pad] caps members=3 enemies=1 screenDir=1.00,0.00 roundTrip=1.00,0.00 cd=false')
+               for p in printed), printed
+    assert sum(p.startswith('[pad] first fire: enemies=') for p in printed) == 1 and '[pad] first fire: enemies=1' in printed
     # pause forgets the lock and the held aim; a failing enemy list falls back to the game's aim
     lua.execute("pad.h = 0; pad.buttons[4] = false; frames(2); take()")
     lua.execute("pad.buttons[0] = true; frame(); paused = true; frame(); paused = false; frame(); take()")

@@ -136,16 +136,27 @@ What the layer does:
   direction. With the stick at rest, each girl faces away from the team center
   (a girl on the center gets a fixed 120-degree spread) and the dash runs
   outward. Fire comes back when `TeamFighting:IsSkillMoving()` says the dash is
-  over (at least `dashMin`, 0.15 s, at most `dashPause`, 0.6 s). A press during
-  the dash cooldown (`TeamMoveSkill.IsCDTime`) waits up to `dashBuffer` (0.25 s).
+  over (at least `dashMin`, 0.15 s, at most `dashPause`, 0.6 s); a fire press
+  during that time waits for it. The game's fire loop (`ConfigPrepareFire`)
+  clears its fire-facing flag `isFireRotate` only at its next step, and a skill
+  cast can turn a girl too, so the layer applies its turn again on every tick of
+  the dash. With xLua's `private_accessible` it also clears `isFireRotate` and
+  sets `attackRotateToDirection` (logged once: `[pad] private fields on|off`).
+- **Dash cooldown:** a press during the cooldown (`TeamMoveSkill.IsCDTime`)
+  waits up to `dashBuffer` (0.25 s). If the cooldown flag is still set then, the
+  layer sends the plain `OnUseSkillByIdx(3, nil)` and the game decides, as
+  before.
 - `stickFires = true` makes the right stick fire as well (classic twin-stick).
 
 Each new game call has its own guard: `target`, `aim`, `lock`, `dashturn`,
-`dashdir`, `scatter`. A failure turns off only that part and falls back to the
+`dashdir`, `scatter`, `reface`. A failure turns off only that part and falls back to the
 old behaviour (game aim, or a plain `OnUseSkillByIdx(3, nil)`). At the first tick
 with a team the layer logs which calls answer, for one phone run to check:
-`[pad] caps members=3 enemies=N screenDir=x,y cd=false`. Lock changes log
-`[pad] lock i/n` and `[pad] lock off`.
+`[pad] caps members=3 enemies=N screenDir=x,y roundTrip=1.00,0.00 cd=false`
+(`roundTrip`: stick (1, 0) to world and back; anything else means lock-on and
+auto aim point the wrong way). Enemies spawn later, so the first fire of a
+fight logs `[pad] first fire: enemies=N`. Lock changes log `[pad] lock i/n` and
+`[pad] lock off`.
 
 Practices applied: radial dead zones; a minimum angle before the aim moves
 (filters stick noise); aim hold after the stick is let go; one button that locks
@@ -220,12 +231,15 @@ skill when the HUD gets the pad back.
   client's own Lua reads (`team.members[i].playerController`,
   `Game.DamageCompentList.Instance`). The `caps` log line settles them on a phone.
 - No on-screen marker shows the locked enemy; the girls' fire shows it.
+- Each re-aim calls `OnFight` again, which restarts the charge timer of a
+  charge weapon (`SchoolWeaponBase.StartFireTime`, read by `UseAmmo`). A steady
+  aim sends no new call; a turning aim does, at most every 12 degrees.
 
 ## Validation
 
 `python release/client/test_gamepad.py` runs the fight layer in a mocked fight
 runtime (it needs only `lupa`): 37 steps with raw entries and 14 steps with stock
-axes only, a restart after a lost timer, a tick that fails on every frame, 33
+axes only, a restart after a lost timer, a tick that fails on every frame, 38
 aim, lock-on and dash steps with three girls and enemies (among them: walk up
 while firing, turn down, dash: the dash goes down), plus the placement in a synthetic `UI_Fight.lua`, a second patch pass
 that changes nothing, and a Lua syntax check.
