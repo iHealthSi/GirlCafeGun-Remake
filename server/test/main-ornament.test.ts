@@ -16,6 +16,14 @@ import {
   makeOrnamentTaskId,
   reconcileMainThemes,
 } from "../src/game-data/main-ornament-data.js";
+import {
+  changeProfileLook,
+  LUA_COMMAND_GET_VISITING_CARD_DATA,
+  LUA_COMMAND_SET_PLAYER_LIST_SKIN,
+  LUA_COMMAND_SET_VISITING_CARD,
+  PROFILE_LOOK_LOCKED_ERROR,
+  profileLookReply,
+} from "../src/game-data/profile-look-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
@@ -247,6 +255,22 @@ describe("main-screen theme gateway", () => {
       expect((await call(LUA_COMMAND_CHANGE_BACKGROUND, { id: 12 })).reply).toEqual({
         nError: 1,
       });
+      await store.update((state) => {
+        state.players[account]!.taskValues[String((77 << 16) | 15)] = 1_700_000_000;
+      });
+      expect((await call(LUA_COMMAND_SET_PLAYER_LIST_SKIN, 15)).reply).toEqual({
+        VisitingCardID: 0,
+        PlayerListSkinID: 15,
+        ChatBubbleID: 0,
+      });
+      expect((await call(LUA_COMMAND_SET_VISITING_CARD, 7)).reply).toEqual({
+        nError: PROFILE_LOOK_LOCKED_ERROR,
+      });
+      expect((await call(LUA_COMMAND_GET_VISITING_CARD_DATA, {})).reply).toEqual({
+        VisitingCardID: 0,
+        PlayerListSkinID: 15,
+        ChatBubbleID: 0,
+      });
     } finally {
       if (socket) {
         const closed = once(socket, "close");
@@ -258,5 +282,48 @@ describe("main-screen theme gateway", () => {
       await store.flush();
       await rm(directory, { recursive: true, force: true });
     }
+  });
+});
+
+describe("profile look", () => {
+  it("sets an owned card skin, list mark or chat bubble and keeps the others", () => {
+    const values: Record<string, number> = { [String((77 << 16) | 15)]: 123 };
+    const mark = changeProfileLook(
+      undefined,
+      values,
+      LUA_COMMAND_SET_PLAYER_LIST_SKIN,
+      {
+        sCmd: LUA_COMMAND_SET_PLAYER_LIST_SKIN,
+        tbParam: 15,
+      },
+    );
+    expect(mark).toEqual({
+      ok: true,
+      look: { visitingCardId: 0, playerListSkinId: 15, chatBubbleId: 0 },
+    });
+    const locked = changeProfileLook(
+      mark.ok ? mark.look : undefined,
+      values,
+      LUA_COMMAND_SET_VISITING_CARD,
+      7,
+    );
+    expect(locked).toEqual({ ok: false, reason: "not_owned:76/7" });
+    const off = changeProfileLook(
+      mark.ok ? mark.look : undefined,
+      values,
+      LUA_COMMAND_SET_PLAYER_LIST_SKIN,
+      0,
+    );
+    expect(off.ok && off.look.playerListSkinId).toBe(0);
+    expect(profileLookReply(mark.ok ? mark.look : undefined)).toEqual({
+      VisitingCardID: 0,
+      PlayerListSkinID: 15,
+      ChatBubbleID: 0,
+    });
+    expect(profileLookReply(undefined)).toEqual({
+      VisitingCardID: 0,
+      PlayerListSkinID: 0,
+      ChatBubbleID: 0,
+    });
   });
 });

@@ -7,6 +7,12 @@ import {
   LUA_COMMAND_CHANGE_BACKGROUND,
   LUA_COMMAND_CHANGE_DECORATE,
 } from "../game-data/main-ornament-data.js";
+import {
+  isProfileLookCommand,
+  LUA_COMMAND_GET_VISITING_CARD_DATA,
+  PROFILE_LOOK_LOCKED_ERROR,
+  profileLookReply,
+} from "../game-data/profile-look-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
 import { getMomentDefinition } from "../game-data/moments-data.js";
 import { dailyPullMailAwards, type MailAction } from "../game-data/mail-data.js";
@@ -3103,6 +3109,41 @@ export function createGatewayServer({
             );
             logger.warn("rune.rejected", { command: luaCommand, reason: error.reason });
           }
+          return;
+        }
+        if (
+          isProfileLookCommand(luaCommand) ||
+          luaCommand === LUA_COMMAND_GET_VISITING_CARD_DATA
+        ) {
+          let tbParam: Record<string, unknown>;
+          let reason: string | undefined;
+          if (isProfileLookCommand(luaCommand)) {
+            const { player, result } = await players.changeProfileLook(
+              context.account,
+              luaCommand,
+              call?.parameters,
+            );
+            context.player = player;
+            tbParam = result.ok
+              ? profileLookReply(result.look)
+              : { nError: PROFILE_LOOK_LOCKED_ERROR };
+            if (!result.ok) reason = result.reason;
+          } else {
+            tbParam = profileLookReply(players.get(context.account)?.profileLook);
+          }
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("LuaCall", { sCmd: luaCommand, tbParam }),
+          );
+          logger.info("lua.callback", {
+            peer,
+            account: context.account,
+            method: "LuaCall",
+            command: luaCommand,
+            feature: "profile_look",
+            ...(reason ? { reason } : { tbParam }),
+          });
           return;
         }
         if (

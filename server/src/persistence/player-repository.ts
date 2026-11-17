@@ -190,6 +190,11 @@ import {
   type OrnamentChange,
 } from "../game-data/main-ornament-data.js";
 import {
+  changeProfileLook,
+  type ProfileLookChange,
+  type ProfileLookState,
+} from "../game-data/profile-look-data.js";
+import {
   ACHIEVEMENT_TASK_GROUP,
   achievementProgress,
   ACTIVITY_ACHIEVEMENT_TASK_GROUP,
@@ -498,6 +503,8 @@ export interface Player {
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
   promise?: PromiseState;
+  /** Card skin, list mark and chat bubble (profile-look-data.ts). */
+  profileLook?: ProfileLookState;
 }
 
 export interface PersistedState {
@@ -4365,6 +4372,30 @@ export class PlayerRepository {
     });
     if (!player) throw new Error(`Failed to change main ornament: ${account}`);
     this.#logger.info("player.main_ornament", { account, kind, result });
+    return { player: structuredClone(player), result };
+  }
+
+  /** LuaCall 91/92/93: one part of the profile look. */
+  async changeProfileLook(
+    account: string,
+    command: Parameters<typeof changeProfileLook>[2],
+    parameters: unknown,
+  ): Promise<{ player: Player; result: ProfileLookChange }> {
+    let player: Player | undefined;
+    let result: ProfileLookChange = { ok: false, reason: "unknown_player" };
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      result = changeProfileLook(
+        player.profileLook,
+        player.taskValues,
+        command,
+        parameters,
+      );
+      if (result.ok) player.profileLook = result.look;
+    });
+    if (!player) throw new Error(`Failed to change profile look: ${account}`);
+    this.#logger.info("player.profile_look", { account, command, result });
     return { player: structuredClone(player), result };
   }
 
