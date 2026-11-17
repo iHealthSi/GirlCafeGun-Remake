@@ -253,9 +253,14 @@ timers = {}
 cartoon = { OnTouch = function() log('advance') end }
 storyPlaying = false
 Game = {
-  LuaUtils = { LoadSprite = function(path) spriteLoads = (spriteLoads or 0) + 1; return { path = path, texture = { name = 'atlas' } } end },
+  -- a Unity asset: Equals(nil) is true once it is destroyed (IsDestroyed below refuses anything but a GameObject)
+  LuaUtils = { LoadSprite = function(path) spriteLoads = (spriteLoads or 0) + 1
+    local function eq(self, o) return o == nil and self.destroyed == true end
+    return { path = path, Equals = eq, texture = { name = 'atlas', Equals = eq } } end },
   Utils = {
-    IsDestroyed = function(o) return o == nil or o.destroyed == true or (o.gameObject and o.gameObject.destroyed == true) end,
+    IsDestroyed = function(o)
+      if o ~= nil and o.path then error('IsDestroyed takes a GameObject') end   -- as the client: a Sprite fails
+      return o == nil or o.destroyed == true or (o.gameObject and o.gameObject.destroyed == true) end,
     ExecutePointerDownEvents = function(o) log('down ' .. o.name) end,
     ExecutePointerUpEvents = function(o) log('up ' .. o.name) end,
     ExecuteClickEvents = function(o)

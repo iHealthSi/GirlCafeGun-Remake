@@ -675,7 +675,8 @@ end
 -- A finger sends pointer-enter before pointer-down; a Selectable shows its pressed look only when the
 -- pointer is inside it. Down / up / click come from the client's own helpers (as before).
 local function pointerInside(go, inside)
-	local sel = go and go:GetComponent(typeof(UGUI.Selectable))
+	if not alive(go) then return end   -- its window closed meanwhile
+	local sel = go:GetComponent(typeof(UGUI.Selectable))
 	if not sel then return end
 	local es = eventSystem()
 	if not es then return end
@@ -923,10 +924,16 @@ end
 -- The game unloads the tutorial atlas with its scene, and an Image whose sprite is gone draws a plain
 -- square. So the sprites are checked before each draw and loaded again when they are gone; until both
 -- load, the white cross is the pointer. A failed load is tried again after a second.
+-- Game.Utils.IsDestroyed takes only a GameObject; a destroyed asset (Sprite, Texture) equals nil in Unity
+local function assetAlive(o)
+	if o == nil then return false end
+	local ok, gone = pcall(function() return o:Equals(nil) end)
+	return ok and not gone
+end
 local function spriteOk(sp)
-	if not alive(sp) then return false end
+	if not assetAlive(sp) then return false end
 	local ok, tex = pcall(function() return sp.texture end)   -- an unloaded atlas leaves no texture behind
-	return ok and alive(tex)
+	return ok and assetAlive(tex)
 end
 local function spritesReady(o)
 	local ready = true
