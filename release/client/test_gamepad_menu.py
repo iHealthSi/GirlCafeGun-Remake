@@ -253,7 +253,7 @@ timers = {}
 cartoon = { OnTouch = function() log('advance') end }
 storyPlaying = false
 Game = {
-  LuaUtils = { LoadSprite = function(path) return { path = path } end },
+  LuaUtils = { LoadSprite = function(path) spriteLoads = (spriteLoads or 0) + 1; return { path = path, texture = { name = 'atlas' } } end },
   Utils = {
     IsDestroyed = function(o) return o == nil or o.destroyed == true or (o.gameObject and o.gameObject.destroyed == true) end,
     ExecutePointerDownEvents = function(o) log('down ' .. o.name) end,
@@ -553,6 +553,15 @@ def scenario(chunk, report):
     assert ev('far.sel.inside')                              # the pointer still rests on it
     lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 300, 900; frame(0.06); frame(0.06)')
     assert ev('sprite()') == 'arrow' and not ev('far.sel.inside')   # off the control: the arrow, pointer left it
+    # the game unloads the atlas with its scene: the sprite is loaded again, never drawn as a blank square
+    loads = ev('spriteLoads')
+    lua.execute("GamepadMenu.overlay.arrow.img.sprite.texture.destroyed = true; frame(0.06)")
+    assert ev('spriteLoads') == loads + 1 and ev('sprite()') == 'arrow' and not ev('GamepadMenu.overlay.arrow.img.sprite.texture.destroyed')
+    lua.execute("realLoad = Game.LuaUtils.LoadSprite; Game.LuaUtils.LoadSprite = function() return nil end; GamepadMenu.overlay.arrow.img.sprite.destroyed = true; frame(0.06)")
+    assert ev('sprite()') == 'none' and ev('GamepadMenu.overlay.cursor[2].go.active')   # the white cross meanwhile
+    lua.execute("Game.LuaUtils.LoadSprite = realLoad; frame(0.06); clock = clock + 1.1; frame(0.06)")
+    assert ev('sprite()') == 'arrow' and not ev('GamepadMenu.overlay.cursor[2].go.active')
+    if report: report('ok pointer: sprites reloaded after the atlas is unloaded; the cross until they load')
     if report: report('ok pointer: hand over a control, arrow elsewhere, smaller while A is held, enter / exit')
     lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150; frame(0.06)')
     # the d-pad puts the focus back, on the control under the pointer

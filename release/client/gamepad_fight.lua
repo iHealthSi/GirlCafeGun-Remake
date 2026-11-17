@@ -54,6 +54,8 @@ P.cfg = P.cfg or {
 	dashBuffer  = 0.25,            -- s: a dash pressed during its cooldown fires when the cooldown ends
 	dashMin     = 0.15,            -- s: fire stays off at least this long after a dash ...
 	dashPause   = 0.6,             -- s: ... and at most this long (sooner when the game says the dash ended)
+	refireFor   = 1.0,             -- s after a fire start: check that the girls fire, else start again ...
+	refireGap   = 0.1,             -- s: ... this often (the game ignores a start while a girl is still dodging)
 	-- Joystick axis numbers (Unity "Nth axis"). Unity on Android: 1/2 left stick, 3/4 right stick (AXIS_Z /
 	-- AXIS_RZ), 5/6 d-pad (HAT), 12 right trigger (GAS), 13 left trigger (BRAKE). Other pads: turn on
 	-- debug (L3+R3) and read logcat. 0 = off.
@@ -374,6 +376,18 @@ local function aimAt(t, cfg, free)
 	return tg, wx, wz, sx, sy
 end
 
+-- true: every living girl is in fire mode (the game's private isTouchFire); false: one is not;
+-- nil: unknown (no private access, or the field cannot be read)
+local function girlsFiring()
+	if not private or #st.girls == 0 then return nil end
+	for _, g in ipairs(st.girls) do
+		local ok, v = pcall(function() return g.pc.isTouchFire end)
+		if not ok then return nil end
+		if v ~= true then return false end
+	end
+	return true
+end
+
 -- direct aim: every girl fires along her own line to the target, or along the stick direction
 local function applyAim(tg, wx, wz)
 	local tx, tz
@@ -579,6 +593,18 @@ function P.Tick()
 			end
 			try("fire", fireStart, sx, sy)
 			st.firing, st.sx, st.sy, st.sentAt, st.applyAt = true, sx, sy, t, 0
+			-- the game ignores a fire start while a girl is still in her dodge: check, and send it again
+			st.refireUntil, st.refireAt = t + cfg.refireFor, t + cfg.refireGap
+		elseif st.refireUntil and t >= st.refireAt then
+			st.refireAt = t + cfg.refireGap
+			local on = girlsFiring()
+			if on == true or t > st.refireUntil then
+				st.refireUntil = nil
+			elseif on == false or t - st.sentAt >= 0.25 then
+				-- not firing (or, without private access, unknown): start again along the current aim
+				try("fire", fireStart, sx, sy)
+				st.sx, st.sy, st.sentAt = sx, sy, t
+			end
 		end
 		local direct = openPrivate() and (tg or wx ~= 0 or wz ~= 0)
 		if direct and t >= st.applyAt then
@@ -643,7 +669,7 @@ function P.Reset()
 	if st.moving then try("move", move, 0, 0) end
 	if st.firing then try("fire", fireStop) end
 	st.moving, st.firing = false, false
-	st.lock, st.freeAt, st.dashBuf, st.dashUntil, st.faced = nil, nil, nil, nil, {}
+	st.lock, st.freeAt, st.dashBuf, st.dashUntil, st.faced, st.refireUntil = nil, nil, nil, nil, {}, nil
 	st.sx, st.sy, st.scanAt, st.applyAt = 0, 0, 0, 0
 	st.enemies, st.girls = {}, {}
 end

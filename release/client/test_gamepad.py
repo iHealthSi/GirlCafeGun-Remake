@@ -59,8 +59,11 @@ U3D = {
 }
 clock = 100
 local cam = {
-  OnFight = function(self, v) log(string.format("fire %.2f %.2f", v.x, v.y)) end,
-  OnFightStop = function(self) log("firestop") end,
+  -- the girls enter fire mode (private isTouchFire), unless they are still dodging (ignoreFire)
+  OnFight = function(self, v) log(string.format("fire %.2f %.2f", v.x, v.y))
+    if not ignoreFire then for i = 0, team.members.Count - 1 do team.members[i].playerController.isTouchFire = true end end end,
+  OnFightStop = function(self) log("firestop")
+    for i = 0, team.members.Count - 1 do team.members[i].playerController.isTouchFire = false end end,
   -- the mock camera looks straight down: screen x = world x, screen y = world z
   GetScreenDirection = function(self, v) return { x = v.x, y = v.z } end,
   GetRealDirection = function(self, v) if failTurn then error("no camera") end; return { x = v.x, y = 0, z = v.y } end,
@@ -344,7 +347,11 @@ def check_aim_dash(chunk, start, stop, report):
     step("pad.buttons[4] = false", "", 70)
     step("skillMoving = true; pad.axes[13] = 1", "skill 3", note='left trigger: scatter dash')
     step("pad.axes[12] = 1", "", 10, 'fire pressed during the dash: held off')
-    step("skillMoving = false", "fire 0.00 0.00", 5, 'dash over (after dashMin): fire starts')
+    # the dash ends, but the game ignores the first fire start (a girl still dodging): sent again until it holds
+    step("skillMoving = false; ignoreFire = true", "fire 0.00 0.00", 5, 'dash over (after dashMin): fire starts')
+    step("", "fire 0.00 0.00|fire 0.00 0.00", 20, 'not firing yet: started again every 0.1 s')
+    step("ignoreFire = false", "fire 0.00 0.00", 10, 'this one holds')
+    step("", "", 30, 'firing: no more starts')
     step("pad.axes[12] = 0; pad.axes[13] = 0", "firestop")
     # cooldown: the press waits up to dashBuffer
     step("team.TeamMoveSkill.IsCDTime = true", "")

@@ -874,16 +874,12 @@ local function overlay()
 	-- the tutorial's own pointer sprites: the arrow, and the hand over a control that can be pressed.
 	-- Without them (a client that lacks the atlas) the white cross above stays the pointer.
 	for _, s in ipairs(CURSOR_SPRITES) do
-		local ok, sp = pcall(function() return Game.LuaUtils.LoadSprite(s.path) end)
-		if ok and sp then
-			local item = makeImage(root.transform, 'Cursor_' .. s.key, U3D.Color(1, 1, 1, 1))
-			item.img.sprite = sp
-			item.img.preserveAspect = true
-			item.rt.pivot = V2(s.tip[1], s.tip[2])   -- the tip of the arrow / finger sits on the pointer
-			o[s.key] = item
-		end
+		local item = makeImage(root.transform, 'Cursor_' .. s.key, U3D.Color(1, 1, 1, 1))
+		item.img.preserveAspect = true
+		item.rt.pivot = V2(s.tip[1], s.tip[2])   -- the tip of the arrow / finger sits on the pointer
+		item.path = s.path
+		o[s.key] = item
 	end
-	if not (o.arrow and o.hand) then o.arrow, o.hand = nil, nil; logOnce('cursor sprites missing: using the cross') end
 	M.overlay = o
 	return o
 end
@@ -924,10 +920,40 @@ end
 
 -- the pointer at (st.cx, st.cy): the hand over a control that can be pressed (and in focus steps), else
 -- the arrow; a little smaller while A is held, like a finger pressing
+-- The game unloads the tutorial atlas with its scene, and an Image whose sprite is gone draws a plain
+-- square. So the sprites are checked before each draw and loaded again when they are gone; until both
+-- load, the white cross is the pointer. A failed load is tried again after a second.
+local function spriteOk(sp)
+	if not alive(sp) then return false end
+	local ok, tex = pcall(function() return sp.texture end)   -- an unloaded atlas leaves no texture behind
+	return ok and alive(tex)
+end
+local function spritesReady(o)
+	local ready = true
+	for _, key in ipairs({ 'arrow', 'hand' }) do
+		local item = o[key]
+		if not spriteOk(item.img.sprite) then
+			item.img.sprite = nil
+			if now() >= (item.retryAt or 0) then
+				local ok, sp = pcall(function() return Game.LuaUtils.LoadSprite(item.path) end)
+				if ok and spriteOk(sp) then
+					item.img.sprite = sp
+				else
+					item.retryAt = now() + 1
+					logOnce('cursor sprite missing: ' .. item.path)
+				end
+			end
+		end
+		if not spriteOk(item.img.sprite) then ready = false end
+	end
+	return ready
+end
+
 local function showCursor(on, hand)
 	local o = on and overlay() or M.overlay
 	if not (o and alive(o.root)) then return end
-	if o.arrow then
+	if not on then o.arrow.go:SetActive(false); o.hand.go:SetActive(false) end
+	if not on or spritesReady(o) then
 		for i = 1, 3 do o.cursor[i].go:SetActive(false) end
 		o.arrow.go:SetActive(on and not hand)
 		o.hand.go:SetActive(on and hand == true)
@@ -937,6 +963,7 @@ local function showCursor(on, hand)
 		place(item, st.cx, st.cy, s, s)
 		return
 	end
+	o.arrow.go:SetActive(false); o.hand.go:SetActive(false)
 	for i = 1, 3 do o.cursor[i].go:SetActive(on) end
 	if not on then return end
 	local s = math.max(14, U3D.Screen.height * 0.035)
