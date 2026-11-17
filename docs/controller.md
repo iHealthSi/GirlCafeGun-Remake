@@ -76,10 +76,11 @@ Shooting stages (`P.cfg` in `gamepad_fight.lua`):
 | --- | --- |
 | Left stick | Move |
 | D-pad | Move (see the limits) |
-| A, RB, right trigger | Fire while held |
-| Right stick | Aim and fire |
+| Right trigger, RB | Fire while held |
+| Right stick | Aim (free aim; fire with the trigger) |
+| A | Lock on the nearest enemy; press again for the next nearest |
 | X / Y / B | Skill 1 / 2 / 3 |
-| LB | Dodge |
+| LB | Dash: along the left stick, or with the stick at rest each girl away from the team center |
 | Start | Pause menu, open and close |
 | Select | Auto-fight on and off |
 | L3 + R3 | Debug log on and off |
@@ -101,6 +102,55 @@ Story scenes (`UI_Cartoon`): A advances the dialogue (`Cartoon:OnTouch`, the
 call a tap makes) while nothing has the focus. The d-pad puts the focus on Skip,
 the menu or the choices; B takes it away again, so A advances once more. When
 choices appear, the first one takes the focus.
+
+## Aim, lock-on and dash (shooting stages)
+
+What the client does (read from `libil2cpp.so` of the 0.1.3 client):
+`fightCamera:OnFight(v)` reaches `TeamFighting.SetAttackStart`, and each girl's
+`SchoolPlayerController.SetAttackStart` picks a target in a cone around `v`
+(the nearest one when `|v| < 0.5`) and keeps that direction and target until
+the next `OnFight`. While a girl fires, the game turns her to that direction.
+Offline, every `OnFight` call is applied at once. A dash (move skill) runs along
+each girl's facing (`MoveController.RunMove` moves along `transform.forward`).
+So without help, fire stays on the first direction, and a dash while firing
+goes the fire way, not the stick way.
+
+What the layer does:
+
+- **Aim follows the input while the fire button stays down.** The layer calls
+  `OnFight` again when the wanted direction turns by more than `reaimAngle`
+  (12 degrees), at most once per `reaimGap` (0.05 s). A steady aim sends no
+  further call: each call restarts a charge weapon's timer.
+- **Aim source, first match wins:** the right stick (radial dead zone
+  `aimDead`, 0.3; its last direction stays `aimHold`, 0.35 s, after the stick is
+  let go); a lock-on target; else, with `autoAim`, the nearest enemy, read every
+  `aimEvery` (0.1 s). With no enemy found, the layer sends a zero vector and the
+  game aims by itself, as before.
+- **Lock-on (A):** locks the enemy nearest to the team center. A again takes the
+  next one by distance (round robin). The lock stays on its enemy even when
+  another one comes closer. When it dies, the nearest enemy left is locked
+  (`relock`). The right stick ends the lock. Enemies are the living,
+  auto-aimable, non-destructible monsters of `Game.DamageCompentList`.
+- **Dash (LB):** a dash stops fire. With the left stick (or d-pad) held, every
+  girl faces the stick direction and `OnUseSkillByIdx(3, dir)` gets the stick
+  direction. With the stick at rest, each girl faces away from the team center
+  (a girl on the center gets a fixed 120-degree spread) and the dash runs
+  outward. Fire comes back when `TeamFighting:IsSkillMoving()` says the dash is
+  over (at least `dashMin`, 0.15 s, at most `dashPause`, 0.6 s). A press during
+  the dash cooldown (`TeamMoveSkill.IsCDTime`) waits up to `dashBuffer` (0.25 s).
+- `stickFires = true` makes the right stick fire as well (classic twin-stick).
+
+Each new game call has its own guard: `target`, `aim`, `lock`, `dashturn`,
+`dashdir`, `scatter`. A failure turns off only that part and falls back to the
+old behaviour (game aim, or a plain `OnUseSkillByIdx(3, nil)`). At the first tick
+with a team the layer logs which calls answer, for one phone run to check:
+`[pad] caps members=3 enemies=N screenDir=x,y cd=false`. Lock changes log
+`[pad] lock i/n` and `[pad] lock off`.
+
+Practices applied: radial dead zones; a minimum angle before the aim moves
+(filters stick noise); aim hold after the stick is let go; one button that locks
+and retargets, with a sticky lock; dash direction from the move stick; a dash
+pressed during its cooldown is buffered.
 
 ## Optional cursor
 
@@ -164,14 +214,20 @@ skill when the HUD gets the pad back.
   to 5, need the raw entries.
 - `HandleFire` has a very high sensitivity in the stock table, so the right
   trigger acts as a switch.
-- The right stick passes its direction to the game's fire call. Whether the game
-  aims with it or keeps auto-aim was not measured.
+- Aim, lock-on and dash are tested in the mock runtime only (state on
+  2026-11-17). The game calls they use outside the generated xLua wrappers
+  (`TeamMember`, `SchoolPlayerController`, `DamageCompentList`) are the ones the
+  client's own Lua reads (`team.members[i].playerController`,
+  `Game.DamageCompentList.Instance`). The `caps` log line settles them on a phone.
+- No on-screen marker shows the locked enemy; the girls' fire shows it.
 
 ## Validation
 
 `python release/client/test_gamepad.py` runs the fight layer in a mocked fight
-runtime (it needs only `lupa`): 35 steps with raw entries and 13 steps with stock
-axes only, a restart after a lost timer, a tick that fails on every frame, plus the placement in a synthetic `UI_Fight.lua`, a second patch pass
+runtime (it needs only `lupa`): 37 steps with raw entries and 14 steps with stock
+axes only, a restart after a lost timer, a tick that fails on every frame, 33
+aim, lock-on and dash steps with three girls and enemies (among them: walk up
+while firing, turn down, dash: the dash goes down), plus the placement in a synthetic `UI_Fight.lua`, a second patch pass
 that changes nothing, and a Lua syntax check.
 
 `python release/client/test_gamepad_menu.py` runs the menu layer in a mocked UI

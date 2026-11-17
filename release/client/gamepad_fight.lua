@@ -5,10 +5,19 @@
 -- makes the calls of the client's own developer keyboard handler (Game.Keyboard.UpdateInput, whose body
 -- is not reachable in release clients):
 --   move  -> Game.FightJoystick.SetMoveOffset(dir)          fire  -> fightCamera:OnFight(v) / OnFightStop()
---   skill -> Game.UI_FightProxy.OnUseSkillByIdx(0..2, nil)   dodge -> OnUseSkillByIdx(3, nil)
+--   skill -> Game.UI_FightProxy.OnUseSkillByIdx(0..2, nil)   dodge -> OnUseSkillByIdx(3, dir or nil)
 -- Touch keeps working: the pad sends "stop" only for an action that it started. Every C# call is
 -- guarded; a failure disables that one action and is logged once (logcat tag Unity, prefix [pad]).
 -- patch_gamepad.py places this file inside UI_Fight.lua, in a do-block, so no local leaks into it.
+--
+-- How the client aims (read from libil2cpp of the 0.1.3 client):
+--   OnFight(v) -> TeamFighting.SetAttackStart -> each girl's SchoolPlayerController.SetAttackStart, which
+--   picks a target in a cone around v (|v| < 0.5: the nearest one) and keeps that direction and target
+--   until the next OnFight. Offline every OnFight call is applied, so this layer re-aims while the fire
+--   button stays down: it calls OnFight again when the wanted direction turns by more than reaimAngle.
+--   A dash (move skill) runs along each girl's facing (MoveController.RunMove uses transform.forward),
+--   and while she fires the game turns her to the fire direction. So a dash stops fire, turns the girls
+--   to the move stick (or away from the team center), and fire comes back when the dash ends.
 GamepadFight = GamepadFight or {}
 local P = GamepadFight
 
@@ -16,22 +25,35 @@ local P = GamepadFight
 local BTN = { A = 0, B = 1, X = 2, Y = 3, LB = 4, RB = 5, L3 = 8, R3 = 9, START = 10, SELECT = 11 }
 
 P.cfg = P.cfg or {
-	dead      = 0.25,              -- stick dead zone
-	trigger   = 0.45,              -- trigger press threshold
-	fire      = { BTN.A, BTN.RB }, -- hold to fire (plus right trigger)
-	dodge     = { BTN.LB },        -- move skill (idx 3)
-	skill1    = { BTN.X },         -- skill idx 0
-	skill2    = { BTN.Y },         -- skill idx 1
-	skill3    = { BTN.B },         -- skill idx 2
-	pause     = { BTN.START },
-	auto      = { BTN.SELECT },    -- auto-fight toggle
-	twinStick = true,              -- right stick = aim + fire
+	dead       = 0.25,             -- move stick dead zone (radial)
+	aimDead    = 0.3,              -- aim stick dead zone (radial)
+	trigger    = 0.45,             -- trigger press threshold
+	fire       = { BTN.RB },       -- hold to fire (plus right trigger)
+	lock       = { BTN.A },        -- lock on the nearest enemy; press again: the next nearest one
+	dodge      = { BTN.LB },       -- move skill (idx 3)
+	skill1     = { BTN.X },        -- skill idx 0
+	skill2     = { BTN.Y },        -- skill idx 1
+	skill3     = { BTN.B },        -- skill idx 2
+	pause      = { BTN.START },
+	auto       = { BTN.SELECT },   -- auto-fight toggle
+	stickFires = false,            -- true: the aim stick fires as well (classic twin-stick)
+	autoAim    = true,             -- fire with no aim stick and no lock: aim at the nearest enemy, kept current
+	aimHold    = 0.35,             -- s: the last aim stick direction stays this long after the stick is let go
+	aimEvery   = 0.1,              -- s: how often lock and auto aim read enemy positions
+	reaimAngle = 12,               -- degrees: smaller turns do not re-aim (each OnFight restarts a charge)
+	reaimGap   = 0.05,             -- s: at most one re-aim per this time (stick latency stays low)
+	relock     = true,             -- the locked enemy dies: lock the nearest one left
+	dashTurn   = true,             -- dash with the move stick: face that way first
+	scatter    = true,             -- dash with the move stick at rest: each girl dashes away from the team center
+	dashBuffer = 0.25,             -- s: a dash pressed during its cooldown fires when the cooldown ends
+	dashMin    = 0.15,             -- s: fire stays off at least this long after a dash ...
+	dashPause  = 0.6,              -- s: ... and at most this long (sooner when the game says the dash ended)
 	-- Joystick axis numbers (Unity "Nth axis"), 0 = off. Controllers differ: turn on debug (L3+R3) and
 	-- read logcat to find yours. One axis per role.
-	rStickX   = 4, rStickY = 5,
-	rTrigger  = 3,
-	hatX      = 6, hatY = 7,       -- d-pad as hat axes (assumed layout)
-	debug     = false,             -- L3+R3 toggles: logs every button / axis change
+	rStickX    = 4, rStickY = 5,
+	rTrigger   = 3,
+	hatX       = 6, hatY = 7,      -- d-pad as hat axes (assumed layout)
+	debug      = false,            -- L3+R3 toggles: logs every button / axis change
 }
 
 local KC_JOY0 = 330   -- KeyCode.JoystickButton0
@@ -70,13 +92,26 @@ local function axis(n)
 end
 
 local broken = {}
+-- returns true when fn ran without an error
 local function try(name, fn, ...)
-	if broken[name] then return end
+	if broken[name] then return false end
 	local ok, err = pcall(fn, ...)
 	if not ok then
 		broken[name] = true
 		print("[pad] " .. name .. " disabled: " .. tostring(err))
 	end
+	return ok
+end
+
+local function now()
+	local ok, t = pcall(function() return U3D.Time.realtimeSinceStartup end)
+	return ok and t or 0
+end
+
+local function norm(x, y)
+	local m = math.sqrt(x * x + y * y)
+	if m < 1e-6 then return 0, 0 end
+	return x / m, y / m
 end
 
 -- ---------- game actions (same calls as Game.Keyboard.UpdateInput) ----------
@@ -93,8 +128,8 @@ end
 local function fireStop()
 	local cam = fightCamera(); if cam then cam:OnFightStop() end
 end
-local function skill(idx)
-	Game.UI_FightProxy.OnUseSkillByIdx(idx, nil)
+local function skill(idx, dir)
+	Game.UI_FightProxy.OnUseSkillByIdx(idx, dir)
 end
 local function pause()
 	if Game.Map.isOnline or Game.CartoonMgr.IsPlaying or Game.GameMode.IsEnd then return end
@@ -107,8 +142,69 @@ local function autoFight()
 	if ui then ui:OnClickBtnAuto() end
 end
 
+-- ---------- the team and its enemies (world x/z plane) ----------
+local function localTeam()
+	return Game.Fight.GetLocalTeam()
+end
+local function teamCenter(team)
+	local p = team.center.transform.position
+	return p.x, p.z
+end
+-- world direction on the ground -> unit direction in OnFight's (screen) space
+local function screenDir(dx, dz)
+	local v = fightCamera():GetScreenDirection(U3D.Vector3(dx, 0, dz))
+	return norm(v.x, v.y)
+end
+local function alive(c)
+	local ok, v = pcall(function() return c.IsAlive end)
+	return ok and v == true
+end
+-- living enemies that the game itself would auto-aim at, nearest to the team center first
+local function enemies(cx, cz)
+	local list, out = Game.DamageCompentList.Instance.ComList, {}
+	for i = 0, list.Count - 1 do
+		local c = list[i]
+		if c and c.IsMonster and c.IsAlive and c.CanAutoAim and not c.IsDestructible then
+			local p = c.CurrPostion
+			local dx, dz = p.x - cx, p.z - cz
+			out[#out + 1] = { c = c, dx = dx, dz = dz, d = dx * dx + dz * dz }
+		end
+	end
+	table.sort(out, function(a, b) return a.d < b.d end)
+	return out
+end
+local function cooling()
+	local ok, v = pcall(function() return localTeam().TeamMoveSkill.IsCDTime end)
+	return ok and v == true
+end
+local function dashing()
+	local ok, v = pcall(function() return localTeam():IsSkillMoving() end)
+	return ok and v == true
+end
+-- turn every living girl: fn(dx, dz, i) gets her offset from the team center and returns a world
+-- direction, or nil to leave her. moveRotateToDirection keeps the turn while the move stick rests.
+local function faceTeam(fn)
+	local team = localTeam()
+	local cx, cz = teamCenter(team)
+	local ms = team.members
+	for i = 0, ms.Count - 1 do
+		local pc = ms[i].playerController
+		if pc and not pc.IsDead then
+			local tr = pc.transform
+			local p = tr.position
+			local wx, wz = fn(p.x - cx, p.z - cz, i)
+			if wx and wx * wx + wz * wz > 1e-6 then
+				local q = U3D.Quaternion.LookRotation(U3D.Vector3(wx, 0, wz))
+				tr.rotation = q
+				pc.moveRotateToDirection = q
+			end
+		end
+	end
+end
+
 -- ---------- state ----------
-local st = { moving = false, firing = false, prev = {}, dbg = {} }
+local st = { moving = false, firing = false, prev = {}, dbg = {},
+             fx = 0, fy = 0, ax = 0, ay = 0, sx = 0, sy = 0, sentAt = 0, aimNext = 0 }
 
 local function pressed(name, list)
 	local now = anyKey(list)
@@ -118,10 +214,92 @@ local function pressed(name, list)
 end
 
 -- while the pause menu or another window has the pad, keep the button states current, so a button
--- that is still down when the HUD gets the pad back is not taken as a new press
-local EDGES = { dodge = 'dodge', s1 = 'skill1', s2 = 'skill2', s3 = 'skill3', auto = 'auto' }
+-- that is still down when the HUD gets the pad back is not taken as a new press (A confirms in menus)
+local EDGES = { dodge = 'dodge', s1 = 'skill1', s2 = 'skill2', s3 = 'skill3', auto = 'auto', lock = 'lock' }
 local function syncEdges(cfg)
 	for name, key in pairs(EDGES) do st.prev[name] = anyKey(cfg[key]) end
+end
+
+-- ---------- aim ----------
+-- 0, 0 means "no direction": the game aims at the nearest target itself
+local function changed(ax, ay, bx, by)
+	local az, bz = ax == 0 and ay == 0, bx == 0 and by == 0
+	if az or bz then return az ~= bz end
+	return ax * bx + ay * by < math.cos(math.rad(P.cfg.reaimAngle))
+end
+
+local function lockNext()
+	local cx, cz = teamCenter(localTeam())
+	local list = enemies(cx, cz)
+	if #list == 0 then
+		st.lock = nil
+		print("[pad] lock: no enemy")
+		return
+	end
+	local pick = 1
+	if st.lock then
+		for i, e in ipairs(list) do if e.c == st.lock then pick = i % #list + 1 end end
+	end
+	st.lock, st.freeAt, st.aimNext = list[pick].c, nil, 0
+	print(string.format("[pad] lock %d/%d", pick, #list))
+end
+
+local function evalTarget(cfg)
+	local cx, cz = teamCenter(localTeam())
+	local dx, dz
+	if st.lock and not alive(st.lock) then
+		st.lock = nil
+		if cfg.relock then
+			local e = enemies(cx, cz)[1]
+			if e then st.lock = e.c; dx, dz = e.dx, e.dz end
+		end
+	elseif st.lock then
+		local p = st.lock.CurrPostion
+		dx, dz = p.x - cx, p.z - cz
+	elseif cfg.autoAim then
+		local e = enemies(cx, cz)[1]
+		if e then dx, dz = e.dx, e.dz end
+	end
+	if dx and dx * dx + dz * dz > 0.01 then
+		st.ax, st.ay = screenDir(dx, dz)
+	else
+		st.ax, st.ay = 0, 0
+	end
+end
+
+local function aimAt(t, cfg)
+	if st.freeAt and t - st.freeAt <= cfg.aimHold then return st.fx, st.fy end
+	if not (st.lock or cfg.autoAim) then return 0, 0 end
+	if t >= st.aimNext then
+		st.aimNext = t + cfg.aimEvery
+		if not try("target", evalTarget, cfg) then st.ax, st.ay = 0, 0 end
+	end
+	return st.ax, st.ay
+end
+
+-- ---------- dash ----------
+local function dash(cfg, t, mx, my)
+	if st.firing then
+		try("fire", fireStop)
+		st.firing = false
+		st.dashAt, st.dashUntil = t, t + cfg.dashPause
+	end
+	if mx then
+		if cfg.dashTurn then
+			try("dashturn", function()
+				local w = fightCamera():GetRealDirection(U3D.Vector2(mx, my))
+				faceTeam(function() return w.x, w.z end)
+			end)
+		end
+		if try("dashdir", skill, 3, U3D.Vector2(mx, my)) then return end
+	elseif cfg.scatter then
+		try("scatter", faceTeam, function(dx, dz, i)
+			if dx * dx + dz * dz > 0.04 then return dx, dz end
+			local a = i * 2.0944        -- girl on the center: spread 120 degrees apart
+			return math.cos(a), math.sin(a)
+		end)
+	end
+	try("dodge", skill, 3, nil)
 end
 
 local function joystickNames()
@@ -148,6 +326,18 @@ local function debugDump()
 	end
 end
 
+-- once per fight, when the team exists: which game calls this client answers (read the log after a phone run)
+local function caps()
+	local team = localTeam()
+	if not team then return end
+	P.capsDone = true
+	local function probe(fn) local ok, v = pcall(fn); return ok and tostring(v) or "no" end
+	print("[pad] caps members=" .. probe(function() return team.members.Count end)
+		.. " enemies=" .. probe(function() local cx, cz = teamCenter(team); return #enemies(cx, cz) end)
+		.. " screenDir=" .. probe(function() local x, y = screenDir(1, 0); return string.format("%.2f,%.2f", x, y) end)
+		.. " cd=" .. probe(function() return team.TeamMoveSkill.IsCDTime end))
+end
+
 function P.Tick()
 	local cfg = P.cfg
 	-- L3 + R3: debug log on/off
@@ -165,48 +355,67 @@ function P.Tick()
 	if UI.IsOpen("UI_MissionPause") then P.Reset(); syncEdges(cfg); return end
 	-- a window covers the HUD (story, results, rewards): the menu layer (gamepad_menu.lua) has the pad
 	if GamepadMenu and GamepadMenu.owner == 'menu' and not GamepadMenu.off then P.Reset(); syncEdges(cfg); return end
+	if not P.capsDone then try("caps", caps) end
+	local t = now()
 
 	-- move: stock Horizontal/Vertical (left stick = joystick axes 1/2, and the arrow keys), else the hat
 	local x, y = U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
 	if x * x + y * y < cfg.dead * cfg.dead then
 		x, y = axis(cfg.hatX), -axis(cfg.hatY)
 	end
+	local mx, my
 	if x * x + y * y >= cfg.dead * cfg.dead then
-		local m = math.sqrt(x * x + y * y)
-		try("move", move, x / m, y / m)
+		mx, my = norm(x, y)
+		try("move", move, mx, my)
 		st.moving = true
 	elseif st.moving then
 		try("move", move, 0, 0)
 		st.moving = false
 	end
 
-	-- fire: buttons, right trigger, or right stick (twin-stick aim)
-	local ax, ay = 0, 0
-	local aimed = false
-	if cfg.twinStick then
-		local rx, ry = axis(cfg.rStickX), axis(cfg.rStickY)
-		if rx * rx + ry * ry >= cfg.dead * cfg.dead then ax, ay, aimed = rx, -ry, true end
+	-- aim stick: free aim; it also ends a lock
+	local rx, ry = axis(cfg.rStickX), axis(cfg.rStickY)
+	local aimed = rx * rx + ry * ry >= cfg.aimDead * cfg.aimDead
+	if aimed then
+		st.fx, st.fy = norm(rx, -ry)
+		st.freeAt = t
+		if st.lock then st.lock = nil; print("[pad] lock off") end
 	end
-	local wantFire = aimed or anyKey(cfg.fire) or axis(cfg.rTrigger) > cfg.trigger
-	if wantFire and not st.firing then
-		try("fire", fireStart, ax, ay)
-		st.firing = true
-	elseif not wantFire and st.firing then
+	if pressed("lock", cfg.lock) then try("lock", lockNext) end
+
+	-- dash (a press during its cooldown waits up to dashBuffer)
+	if pressed("dodge", cfg.dodge) then st.dashBuf = t + cfg.dashBuffer end
+	if st.dashBuf then
+		if t > st.dashBuf then st.dashBuf = nil
+		elseif not cooling() then st.dashBuf = nil; dash(cfg, t, mx, my) end
+	end
+
+	-- fire: buttons, right trigger (and the aim stick if stickFires); off for the length of a dash
+	local wantFire = anyKey(cfg.fire) or axis(cfg.rTrigger) > cfg.trigger or (cfg.stickFires and aimed)
+	if st.dashUntil then
+		if t >= st.dashUntil or (t - st.dashAt >= cfg.dashMin and not dashing()) then st.dashUntil = nil end
+	end
+	if st.dashUntil then
+		-- fire was stopped for the dash; it starts again below once the dash is over
+	elseif wantFire then
+		local ax, ay = aimAt(t, cfg)
+		if not st.firing then
+			try("fire", fireStart, ax, ay)
+			st.firing, st.sx, st.sy, st.sentAt = true, ax, ay, t
+		elseif t - st.sentAt >= cfg.reaimGap and changed(ax, ay, st.sx, st.sy) then
+			try("aim", fireStart, ax, ay)
+			st.sx, st.sy, st.sentAt = ax, ay, t
+		end
+	elseif st.firing then
 		try("fire", fireStop)
 		st.firing = false
 	end
 
 	-- skills (edge-triggered)
-	if pressed("dodge", cfg.dodge) then try("dodge", skill, 3) end
-	if pressed("s1", cfg.skill1) then try("skill", skill, 0) end
-	if pressed("s2", cfg.skill2) then try("skill", skill, 1) end
-	if pressed("s3", cfg.skill3) then try("skill", skill, 2) end
+	if pressed("s1", cfg.skill1) then try("skill", skill, 0, nil) end
+	if pressed("s2", cfg.skill2) then try("skill", skill, 1, nil) end
+	if pressed("s3", cfg.skill3) then try("skill", skill, 2, nil) end
 	if pressed("auto", cfg.auto) then try("auto", autoFight) end
-end
-
-local function now()
-	local ok, t = pcall(function() return U3D.Time.realtimeSinceStartup end)
-	return ok and t or 0
 end
 
 -- A failed tick (for example while the scene loads) is skipped and logged once. After this many
@@ -237,16 +446,20 @@ function P.Start()
 		print("[pad] the old timer stopped: restarting")
 	end
 	P.Reset()
+	P.capsDone = false
 	-- never break the fight HUD: a failure here only turns the controller off
 	-- real time: the pause menu sets the game's timer scale to 0, and Start must still close it
 	local ok, t = pcall(Game.Timer.Add, 0.01, 0.01, tick, true, false)
 	if ok then P.timer = t; P.lastTick = now(); print("[pad] started") else print("[pad] start failed: " .. tostring(t)) end
 end
 
+-- release what the pad holds and forget aim, lock and dash (pause menu, a window over the HUD, end of fight)
 function P.Reset()
 	if st.moving then try("move", move, 0, 0) end
 	if st.firing then try("fire", fireStop) end
 	st.moving, st.firing = false, false
+	st.lock, st.freeAt, st.dashBuf, st.dashUntil = nil, nil, nil, nil
+	st.ax, st.ay, st.sx, st.sy, st.aimNext = 0, 0, 0, 0, 0
 end
 
 function P.Stop()
