@@ -76,10 +76,11 @@ export function reconcileYenAllowanceMail(mailbox: MailboxState, now: number): v
     operationalDate: dailySignUpOperationalDate(now),
     receivedAt: Math.floor(now / 1000),
     read: false,
-    title: "Your Starting \u00a5",
+    // Full-width ￥ (U+FFE5): the game font has it, game text uses it.
+    title: "Your Starting ￥",
     sender: "Cafe Staff",
     content:
-      "Manager, here is \u00a51000 for the gift packs in the shop. " +
+      "Manager, here is ￥1000 for the gift packs in the shop. " +
       "Don't spend it all in one place!",
     attachments: [[...YEN_ALLOWANCE_AWARD]],
   });

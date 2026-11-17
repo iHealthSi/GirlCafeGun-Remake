@@ -132,7 +132,7 @@ describe("release welcome and custom ownership", () => {
       const reloaded = await reopen();
       p = await reloaded.getOrCreate(account);
       // Only the starting ¥ mail is left; the welcome mail does not come back.
-      expect(p.mail?.messages.map(({ title }) => title)).toEqual(["Your Starting ¥"]);
+      expect(p.mail?.messages.map(({ title }) => title)).toEqual(["Your Starting ￥"]);
       expect(p.inventory.filter((i) => i.genre === 1 && i.detail === 27)).toHaveLength(
         1,
       );
