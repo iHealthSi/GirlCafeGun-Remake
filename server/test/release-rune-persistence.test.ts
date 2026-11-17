@@ -14,6 +14,7 @@ import {
   runeProgressionCatalog,
 } from "../src/game-data/rune-progression-data.js";
 import { WELCOME_CAMPAIGN } from "../src/game-data/mail-data.js";
+import { YEN_ALLOWANCE_CAMPAIGN } from "../src/game-data/yen-shop-data.js";
 import { cardRarityOf } from "../src/game-data/custom-card-data.js";
 import { weaponPassiveSkills } from "../src/game-data/weapon-skill-data.js";
 import { makeItemUpdateNotification } from "../src/protocol/messages.js";
@@ -103,7 +104,10 @@ describe("release welcome and custom ownership", () => {
       let p = repository.get(account)!;
       expect(p.inventory.some((i) => i.detail === 27)).toBe(false);
       expect(p.girls.some((g) => g.girlId === 27)).toBe(false);
-      expect(p.mail?.deliveredCampaigns).toEqual([WELCOME_CAMPAIGN]);
+      expect(p.mail?.deliveredCampaigns).toEqual([
+        YEN_ALLOWANCE_CAMPAIGN,
+        WELCOME_CAMPAIGN,
+      ]);
       const id = p.mail!.messages[0]!.id;
       const result = await repository.updateMailbox(
         account,
@@ -127,7 +131,8 @@ describe("release welcome and custom ownership", () => {
       await expect(repository.changeGirlClothes(account, 7, 9103)).rejects.toThrow();
       const reloaded = await reopen();
       p = await reloaded.getOrCreate(account);
-      expect(p.mail?.messages).toHaveLength(0);
+      // Only the starting ¥ mail is left; the welcome mail does not come back.
+      expect(p.mail?.messages.map(({ title }) => title)).toEqual(["Your Starting ¥"]);
       expect(p.inventory.filter((i) => i.genre === 1 && i.detail === 27)).toHaveLength(
         1,
       );

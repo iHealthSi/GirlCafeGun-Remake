@@ -1,0 +1,346 @@
+INT	INT	STR	STR	STR	STR	INT	INT	STR	INT	INT	STR	INT	INT	INT	INT	INT	INT	INT	INT	INT	INT	STR	INT	INT	INT	INT	STR	STR	STR
+道具ID(taskid)	版本号（用于重复礼包上架）	IB礼包字符ID(IOS充值为准)	IB道具字符ID(安卓充值为准)	标签	名字备注	大类	类里排序	道具[g, d, p, l,n]，道具为auto	货币类型,-1货币-2钻石-3金币 >0对应代币表	消耗	单位	折扣标签	折扣时间	折扣时间	折扣后价格	购买等级	排序系数，越大越前	上架时间	下架时间	限购类型，0或不填为无限制，1日限制，2周限制,3月限制,4总计限购	限购次数	Tip描述	栏位底图(1有)	在商店是否隐藏	台服消耗	标签页(默认0周期礼包1外景礼包2 妆扮商店101102)	装扮商店锁定时间[开始时间,结束时间]	商店额外图标	商店额外图标(小规格 仅装扮商店)
+Id	Version	IdStrIos	IdStrAnd	FlagDesc		BigType	TypeIndex	GDPL	Currency	Cost	Unit	OffFlag	OffStartTime	OffEndTime	OffCost	Level	Sort	StartTime	EndTime	LimitType	LimitTimes	Desc	BgIcon	IsHide	CostTC	LabelIdx	LockTime	DiyIcon	SmallIcon
+1	0	com.bilibili.gcg2.giftpack001_6	com.bilibili.gcg2.giftpack001_6		新兵武器包			[14,3,1,2,1]	-1	6	CNY						60			4	1								
+2	0	com.bilibili.gcg2.giftpack002_98	com.bilibili.gcg2.giftpack002_98		新兵成长包			[14,3,1,8003,1]	-1	98	CNY						80	[201912130800]	[201912240400]	4	1		1						
+3	0	com.bilibili.gcg2.giftpack003_128	com.bilibili.gcg2.giftpack003_128		新兵报到包			[14,3,1,4,1]	-1	128	CNY						50			4	1								
+4	0	com.bilibili.gcg2.giftpack004_30	com.bilibili.gcg2.giftpack004_30		每周电力补充包			[14,3,3,101,1]	-1	30	CNY						40	[201912130800]	[201912240400]	2	1								
+5	0	com.bilibili.gcg2.giftpack005_60	com.bilibili.gcg2.giftpack005_60		每周队员加强包			[14,3,3,102,1]	-1	60	CNY						30	[201912130800]	[201912240400]	2	1								
+6	0	com.bilibili.gcg2.giftpack006_60	com.bilibili.gcg2.giftpack006_60		每周武器加强包			[14,3,3,103,1]	-1	60	CNY						20	[201912130800]	[201912240400]	2	1								
+7	0	com.bilibili.gcg2.giftpack007_108	com.bilibili.gcg2.giftpack007_108		月度武器补充			[14,3,4,101,1]	-1	108	CNY						9			3	1					1			
+8	0	com.bilibili.gcg2.giftpack008_168	com.bilibili.gcg2.giftpack008_168		月度队员补充			[14,3,4,102,1]	-1	168	CNY						10			3	1					1			
+9	0	com.bilibili.gcg2.giftpack009_168	com.bilibili.gcg2.giftpack009_168		白金补给精选包			[14,3,1,1,1]	-1	168	CNY						149			4	1								
+10	0				夏日外景搭建			[14,3,1,5,1]	-2	860		30	[201912061200]	[201912240400]	600		1	[201912061200]		4	1		1			2			
+11	4	com.bilibili.gcg2.giftpack011_88	com.bilibili.gcg2.giftpack011_88		咖啡币特许补充			[14,3,1,6,1]	-1	88	CNY						150	[202005290800]	[202006140400]	4	3								
+12					每日少女暖心礼包			[14,3,5,1,1]	-2	0							200			1	1					0			
+13	0	com.bilibili.gcg2.giftpack013_6	com.bilibili.gcg2.giftpack013_6		新兵紧急报到			[14,3,1,7,1]	-1	6	CNY						70	[201912130800]	[201912240400]	4	1								
+14	0	com.bilibili.gcg2.giftpack014_328	com.bilibili.gcg2.giftpack014_328		冬夜超编补给			[14,3,1,8,1]	-1	328	CNY						130	[201912130800]	[201912240400]	4	1								
+15	0	com.bilibili.gcg2.giftpack015_128	com.bilibili.gcg2.giftpack015_128		冬夜特殊补给			[14,3,1,9,1]	-1	128	CNY						120	[201912130800]	[201912240400]	4	3								
+16	0	com.bilibili.gcg2.giftpack016_30	com.bilibili.gcg2.giftpack016_30		冬夜新兵补给			[14,3,1,10,1]	-1	30	CNY						110	[201912130800]	[201912240400]	4	1								
+17	0	com.bilibili.gcg2.giftpack017_328	com.bilibili.gcg2.giftpack017_328		圣诞辉煌补给			[14,3,1,11,1]	-1	328	CNY						190	[201912230800]	[202001030400]	4	1								
+18	0	com.bilibili.gcg2.giftpack018_108	com.bilibili.gcg2.giftpack018_108		圣诞特别补给			[14,3,1,12,1]	-1	108	CNY						180	[201912230800]	[202001030400]	4	3								
+19	0	com.bilibili.gcg2.giftpack019_68	com.bilibili.gcg2.giftpack019_68		圣诞武器补给			[14,3,1,13,1]	-1	68	CNY						170	[201912230800]	[202001030400]	4	3								
+20	0				冬日外景搭建			[14,3,1,14,1]	-2	1500		30	[201912230800]	[202001030400]	1050		2	[201912230800]		4	1		1			2			
+21	7	com.bilibili.gcg2.giftpack021_128	com.bilibili.gcg2.giftpack021_128		约定的礼盒			[14,3,1,15,1]	-1	128	CNY						190	[202106210800]	[202107120400]	4	3								
+22	0	com.bilibili.gcg2.giftpack022_6	com.bilibili.gcg2.giftpack022_6		圣诞新人补给			[14,3,1,16,1]	-1	6	CNY						140	[201912230800]	[202001030400]	4	1								
+23	0	com.bilibili.gcg2.giftpack023_648	com.bilibili.gcg2.giftpack023_648		春节欢呼补给			[14,3,1,17,1]	-1	648	CNY						170	[202001170800]	[202002070400]	4	1								
+24	0	com.bilibili.gcg2.giftpack024_328	com.bilibili.gcg2.giftpack024_328		春节喜悦补给			[14,3,1,18,1]	-1	328	CNY						160	[202001170800]	[202002070400]	4	1								
+25	0	com.bilibili.gcg2.giftpack025_168	com.bilibili.gcg2.giftpack025_168		春节迎新补给			[14,3,1,19,1]	-1	168	CNY						180	[202001170800]	[202002070400]	4	1								
+26	0	com.bilibili.gcg2.giftpack026_108	com.bilibili.gcg2.giftpack026_108		春节特别补给			[14,3,1,20,1]	-1	108	CNY						150	[202001170800]	[202002070400]	4	3								
+27	1	com.bilibili.gcg2.giftpack027_68	com.bilibili.gcg2.giftpack027_68		春节武器补给			[14,3,1,21,1]	-1	68	CNY						140	[202102020800]	[202102240400]	4	3								
+28	1	com.bilibili.gcg2.giftpack028_6	com.bilibili.gcg2.giftpack028_6		春节福袋			[14,3,1,22,1]	-1	6	CNY						188	[202102020800]	[202102240400]	4	5								
+29	0	com.bilibili.gcg2.giftpack029_6	com.bilibili.gcg2.giftpack029_6		情人节新人补给			[14,3,1,23,1]	-1	6	CNY						190	[202002140800]	[202003020400]	4	5								
+30	0	com.bilibili.gcg2.giftpack030_128	com.bilibili.gcg2.giftpack030_128		情人节热情补给			[14,3,1,24,1]	-1	128	CNY						170	[202002140800]	[202003020400]	4	3								
+31	0	com.bilibili.gcg2.giftpack031_328	com.bilibili.gcg2.giftpack031_328		情人节甜蜜补给			[14,3,1,25,1]	-1	328	CNY						160	[202002140800]	[202003020400]	4	1								
+32	0	com.bilibili.gcg2.giftpack032_648	com.bilibili.gcg2.giftpack032_648		情人节豪华补给			[14,3,1,26,1]	-1	648	CNY						180	[202002140800]	[202003020400]	4	1								
+33	0	com.bilibili.gcg2.giftpack033_328	com.bilibili.gcg2.giftpack033_328		百日欢庆补给			[14,3,1,27,1]	-1	328	CNY						180	[202002280800]	[202003170400]	4	1								
+34	0	com.bilibili.gcg2.giftpack034_108	com.bilibili.gcg2.giftpack034_108		百日喜悦补给			[14,3,1,28,1]	-1	108	CNY						170	[202002280800]	[202003170400]	4	3								
+35	0	com.bilibili.gcg2.giftpack035_30	com.bilibili.gcg2.giftpack035_30		百日新兵补给			[14,3,1,29,1]	-1	30	CNY						190	[202002280800]	[202003170400]	4	1								
+36	0	com.bilibili.gcg2.giftpack036_88	com.bilibili.gcg2.giftpack036_88		咖啡币特殊补充（国服228临时冲突版）			[14,3,1,1006,1]	-1	88	CNY						140	[202003050401]	[202003170400]	4	3								
+37	0	com.bilibili.gcg2.giftpack037_648	com.bilibili.gcg2.giftpack037_648		春日闪耀补给			[14,3,1,32,1]	-1	648	CNY						170	[202003170800]	[202003300400]	4	1								
+38	0	com.bilibili.gcg2.giftpack038_328	com.bilibili.gcg2.giftpack038_328		春日光辉补给			[14,3,1,33,1]	-1	328	CNY						160	[202003170800]	[202003300400]	4	1								
+39	0	com.bilibili.gcg2.giftpack039_108	com.bilibili.gcg2.giftpack039_108		春日角色补给			[14,3,1,34,1]	-1	108	CNY						159	[202003170800]	[202003300400]	4	3								
+40	0	com.bilibili.gcg2.giftpack040_68	com.bilibili.gcg2.giftpack040_68		春日武器补给			[14,3,1,35,1]	-1	68	CNY						158	[202003170800]	[202003300400]	4	3								
+41	0	com.bilibili.gcg2.giftpack041_30	com.bilibili.gcg2.giftpack041_30		春日新兵补给			[14,3,1,36,1]	-1	30	CNY						180	[202003170800]	[202003300400]	4	1								
+42	0	com.bilibili.gcg2.giftpack042_6	com.bilibili.gcg2.giftpack042_6		春日花开福袋			[14,3,1,37,1]	-1	6	CNY						190	[202003170800]	[202003300400]	4	5								
+43	0	com.bilibili.gcg2.giftpack042_328	com.bilibili.gcg2.giftpack042_328		初夏欢呼补给			[14,3,1,38,1]	-1	328	CNY						180	[202003300800]	[202004140400]	4	1								
+44	0	com.bilibili.gcg2.giftpack043_108	com.bilibili.gcg2.giftpack043_108		初夏喜悦补给			[14,3,1,39,1]	-1	108	CNY						160	[202003300800]	[202004140400]	4	3								
+45	0	com.bilibili.gcg2.giftpack044_68	com.bilibili.gcg2.giftpack044_68		初夏迎新补给			[14,3,1,40,1]	-1	68	CNY						170	[202003300800]	[202004140400]	4	1								
+46	0	com.bilibili.gcg2.giftpack045_6	com.bilibili.gcg2.giftpack045_6		夏日阳光福袋			[14,3,1,41,1]	-1	6	CNY						190	[202003300800]	[202004140400]	4	5								
+47	0	com.bilibili.gcg2.giftpack047_648	com.bilibili.gcg2.giftpack047_648		佣兵辉煌补给			[14,3,1,42,1]	-1	648	CNY						180	[202004280800]	[202005140400]	4	1								
+48	0	com.bilibili.gcg2.giftpack048_328	com.bilibili.gcg2.giftpack048_328		佣兵荣耀补给			[14,3,1,43,1]	-1	328	CNY						160	[202004280800]	[202005140400]	4	1								
+49	0	com.bilibili.gcg2.giftpack049_108	com.bilibili.gcg2.giftpack049_108		佣兵角色补给			[14,3,1,44,1]	-1	108	CNY						159	[202004280800]	[202005140400]	4	3								
+50	0	com.bilibili.gcg2.giftpack050_68	com.bilibili.gcg2.giftpack050_68		佣兵武器补给			[14,3,1,45,1]	-1	68	CNY						158	[202004280800]	[202005140400]	4	3								
+51	0	com.bilibili.gcg2.giftpack051_6	com.bilibili.gcg2.giftpack051_6		佣兵百宝袋			[14,3,1,46,1]	-1	6	CNY						190	[202004280800]	[202005140400]	4	5								
+52	0	com.bilibili.gcg2.giftpack052_60	com.bilibili.gcg2.giftpack052_60		落樱外景搭建			[14,3,1,47,1]	-1	60	CNY						3	[202004280800]		4	1		1			2			
+53	0	com.bilibili.gcg2.giftpack053_328	com.bilibili.gcg2.giftpack053_328		紫藤盛开补给			[14,3,1,48,1]	-1	328	CNY						180	[202004151200]	[202004280400]	4	1								
+54	0	com.bilibili.gcg2.giftpack054_108	com.bilibili.gcg2.giftpack054_108		紫藤花蕾补给			[14,3,1,49,1]	-1	108	CNY						170	[202004151200]	[202004280400]	4	3								
+55	0	com.bilibili.gcg2.giftpack055_6	com.bilibili.gcg2.giftpack055_6		紫藤花福袋			[14,3,1,50,1]	-1	6	CNY						190	[202004151200]	[202004280400]	4	5								
+56	0	com.bilibili.gcg2.giftpack056_648	com.bilibili.gcg2.giftpack056_648		情热约会补给			[14,3,1,53,1]	-1	648	CNY						180	[202005140800]	[202005290400]	4	1								
+57	0	com.bilibili.gcg2.giftpack057_328	com.bilibili.gcg2.giftpack057_328		暧昧约会补给			[14,3,1,54,1]	-1	328	CNY						170	[202005140800]	[202005290400]	4	1								
+58	0	com.bilibili.gcg2.giftpack058_108	com.bilibili.gcg2.giftpack058_108		约会角色补给			[14,3,1,55,1]	-1	108	CNY						160	[202005140800]	[202005290400]	4	3								
+59	0	com.bilibili.gcg2.giftpack059_6	com.bilibili.gcg2.giftpack059_6		旖旎约会礼盒			[14,3,1,56,1]	-1	6	CNY						190	[202005140800]	[202005290400]	4	5								
+60	0	com.bilibili.gcg2.giftpack060_648	com.bilibili.gcg2.giftpack060_648		幻梦纯真补给			[14,3,1,57,1]	-1	648	CNY						180	[202005290800]	[202006140400]	4	1								
+61	0	com.bilibili.gcg2.giftpack061_328	com.bilibili.gcg2.giftpack061_328		水晶纯真补给			[14,3,1,58,1]	-1	328	CNY						170	[202005290800]	[202006140400]	4	1								
+62	0	com.bilibili.gcg2.giftpack062_108	com.bilibili.gcg2.giftpack062_108		纯真角色补给			[14,3,1,59,1]	-1	108	CNY						160	[202005290800]	[202006140400]	4	3								
+63	0	com.bilibili.gcg2.giftpack063_68	com.bilibili.gcg2.giftpack063_68		纯真武器补给			[14,3,1,60,1]	-1	68	CNY						159	[202005290800]	[202006140400]	4	3								
+64	0	com.bilibili.gcg2.giftpack064_6	com.bilibili.gcg2.giftpack064_6		纯净心灵礼盒			[14,3,1,61,1]	-1	6	CNY						190	[202005290800]	[202006140400]	4	5								
+65	0	com.bilibili.gcg2.giftpack065_328	com.bilibili.gcg2.giftpack065_328		清爽狂欢补给			[14,3,1,62,1]	-1	328	CNY						180	[202006141200]	[202006290400]	4	1								
+66	0	com.bilibili.gcg2.giftpack066_108	com.bilibili.gcg2.giftpack066_108		沁心香甜补给			[14,3,1,63,1]	-1	108	CNY						170	[202006141200]	[202006290400]	4	3								
+67	0	com.bilibili.gcg2.giftpack067_6	com.bilibili.gcg2.giftpack067_6		清凉一刻福袋			[14,3,1,64,1]	-1	6	CNY						190	[202006141200]	[202006290400]	4	5								
+68	0	com.bilibili.gcg2.giftpack068_648	com.bilibili.gcg2.giftpack068_648		情誓永恒补给			[14,3,1,65,1]	-1	648	CNY						180	[202006290800]	[202007130400]	4	1								
+69	0	com.bilibili.gcg2.giftpack069_328	com.bilibili.gcg2.giftpack069_328		一见倾心补给			[14,3,1,66,1]	-1	328	CNY						170	[202006290800]	[202007130400]	4	1								
+70	0	com.bilibili.gcg2.giftpack070_108	com.bilibili.gcg2.giftpack070_108		心动角色补给			[14,3,1,67,1]	-1	108	CNY						160	[202006290800]	[202007130400]	4	3								
+71	0	com.bilibili.gcg2.giftpack071_68	com.bilibili.gcg2.giftpack071_68		绵绵情意补给			[14,3,1,68,1]	-1	68	CNY						187	[202006290800]	[202007130400]	4	1								
+72	0	com.bilibili.gcg2.giftpack072_60	com.bilibili.gcg2.giftpack072_60		约会小憩补给			[14,3,1,69,1]	-1	60	CNY						188	[202006290800]	[202007130400]	4	1								
+73	0	com.bilibili.gcg2.giftpack073_30	com.bilibili.gcg2.giftpack073_30		甜蜜邀约补给			[14,3,1,70,1]	-1	30	CNY						189	[202006290800]	[202007130400]	4	1								
+74	0	com.bilibili.gcg2.giftpack074_6	com.bilibili.gcg2.giftpack074_6		脉脉含情福袋			[14,3,1,71,1]	-1	6	CNY						190	[202006290800]	[202007130400]	4	5								
+75	0	com.bilibili.gcg2.giftpack075_648	com.bilibili.gcg2.giftpack075_648		盛收满架补给			[14,3,1,72,1]	-1	648	CNY						180	[202007130800]	[202007240400]	4	1								
+76	0	com.bilibili.gcg2.giftpack076_328	com.bilibili.gcg2.giftpack076_328		浮瓜盼雁补给			[14,3,1,73,1]	-1	328	CNY						170	[202007130800]	[202007240400]	4	1								
+77	0	com.bilibili.gcg2.giftpack077_108	com.bilibili.gcg2.giftpack077_108		芳菲余香补给			[14,3,1,74,1]	-1	108	CNY						160	[202007130800]	[202007240400]	4	3								
+78	0	com.bilibili.gcg2.giftpack078_6	com.bilibili.gcg2.giftpack078_6		莺梅新雨福袋			[14,3,1,75,1]	-1	6	CNY						190	[202007130800]	[202007240400]	4	5								
+79	0	com.bilibili.gcg2.giftpack079_648	com.bilibili.gcg2.giftpack079_648		银河响彻补给			[14,3,1,76,1]	-1	648	CNY						170	[202007240800]	[202008250400]	4	1								
+80	0	com.bilibili.gcg2.giftpack080_328	com.bilibili.gcg2.giftpack080_328		同律心语补给			[14,3,1,77,1]	-1	328	CNY						160	[202007240800]	[202008090400]	4	1								
+81	0	com.bilibili.gcg2.giftpack081_198	com.bilibili.gcg2.giftpack081_198		绝世之音补给			[14,3,1,78,1]	-1	198	CNY						159	[202007240800]	[202008250400]	4	1								
+82	0	com.bilibili.gcg2.giftpack082_108	com.bilibili.gcg2.giftpack082_108		琴瑟和鸣补给			[14,3,1,79,1]	-1	108	CNY						158	[202007240800]	[202008090400]	4	3								
+83	0	com.bilibili.gcg2.giftpack083_68	com.bilibili.gcg2.giftpack083_68		致命演奏补给			[14,3,1,80,1]	-1	68	CNY						157	[202007240800]	[202008250400]	4	3								
+84	0	com.bilibili.gcg2.giftpack084_30	com.bilibili.gcg2.giftpack084_30		应援呼唤补给			[14,3,1,81,1]	-1	30	CNY						156	[202007240800]	[202008090400]	4	1								
+85	0	com.bilibili.gcg2.giftpack085_6	com.bilibili.gcg2.giftpack085_6		炫彩活力福袋			[14,3,1,82,1]	-1	6	CNY						180	[202007240800]	[202008090400]	4	5								
+86	0	com.bilibili.gcg2.giftpack086_88	com.bilibili.gcg2.giftpack086_88		喧闹舞台外景搭建			[14,3,1,83,1]	-1	88	CNY						4	[202007240800]		4	1		1			2		UI/UI_Shop/charge_music.png	
+87	0	com.bilibili.gcg2.giftpack087_30	com.bilibili.gcg2.giftpack087_30		馨香韵律特别补给			[14,3,1,84,1]	-1	30	CNY						150	[202007240800]	[202008250400]	4	5								
+88	0	com.bilibili.gcg2.giftpack088_18	com.bilibili.gcg2.giftpack088_18		每周电力保障包			[14,3,3,8001,1]	-1	18	CNY						40			2	1					1			
+89	0	com.bilibili.gcg2.giftpack089_30	com.bilibili.gcg2.giftpack089_30		每周突破组合包			[14,3,3,8002,1]	-1	30	CNY						30			2	1					1			
+90	0	com.bilibili.gcg2.giftpack090_30	com.bilibili.gcg2.giftpack090_30		武器强化保障包			[14,3,3,8003,1]	-1	30	CNY						20			2	1					1			
+91	0	com.bilibili.gcg2.giftpack091_6	com.bilibili.gcg2.giftpack091_6		紧急报到组合包			[14,3,1,8007,1]	-1	6	CNY						70			4	1					0			
+92	0	com.bilibili.gcg2.giftpack092_328	com.bilibili.gcg2.giftpack092_328		星间翱翔补给			[14,3,1,85,1]	-1	328	CNY						160	[202008090400]	[202008250400]	4	1								
+93	0	com.bilibili.gcg2.giftpack093_108	com.bilibili.gcg2.giftpack093_108		钻石星痕补给			[14,3,1,86,1]	-1	108	CNY						158	[202008090400]	[202008250400]	4	3								
+94	0	com.bilibili.gcg2.giftpack094_30	com.bilibili.gcg2.giftpack094_30		热力回声补给			[14,3,1,87,1]	-1	30	CNY						156	[202008090400]	[202008250400]	4	1								
+95	0	com.bilibili.gcg2.giftpack095_6	com.bilibili.gcg2.giftpack095_6		达纳烈焰福袋			[14,3,1,88,1]	-1	6	CNY						180	[202008090400]	[202008250400]	4	5								
+96	0	com.bilibili.gcg2.giftpack096_648	com.bilibili.gcg2.giftpack096_648		耀眼天河补给			[14,3,1,90,1]	-1	648	CNY						180	[202008280400]	[202009110400]	4	1								
+97	0	com.bilibili.gcg2.giftpack097_328	com.bilibili.gcg2.giftpack097_328		璀璨流光补给			[14,3,1,91,1]	-1	328	CNY						179	[202008280400]	[202009110400]	4	1								
+98	0	com.bilibili.gcg2.giftpack098_108	com.bilibili.gcg2.giftpack098_108		斑斓花火补给			[14,3,1,92,1]	-1	108	CNY						178	[202008280400]	[202009110400]	4	3								
+99	0	com.bilibili.gcg2.giftpack099_60	com.bilibili.gcg2.giftpack099_60		锦绣荧焰补给			[14,3,1,93,1]	-1	60	CNY						177	[202008280400]	[202009110400]	4	1								
+100	0	com.bilibili.gcg2.giftpack100_30	com.bilibili.gcg2.giftpack100_30		清朗云汉补给			[14,3,1,94,1]	-1	30	CNY						176	[202008280400]	[202009110400]	4	1								
+101	0	com.bilibili.gcg2.giftpack101_6	com.bilibili.gcg2.giftpack101_6		祈巧兰月福袋			[14,3,1,95,1]	-1	6	CNY						190	[202008280400]	[202009110400]	4	5								
+102	3	com.bilibili.gcg2.giftpack102_30	com.bilibili.gcg2.giftpack102_30		咖啡馆特别投资			[14,3,1,96,1]	-1	30	CNY						170	[202012240800]	[202101130400]	4	5								
+103	0	com.bilibili.gcg2.giftpack103_328	com.bilibili.gcg2.giftpack103_328		景星豪华补给			[14,3,1,103,1]	-1	328	CNY						190	[202009110800]	[202009250400]	4	1								
+104	2	com.bilibili.gcg2.giftpack104_198	com.bilibili.gcg2.giftpack104_198		武器精进补给			[14,3,1,104,1]	-1	198	CNY						179	[202012080800]	[202012240400]	4	2								
+105	0	com.bilibili.gcg2.giftpack105_108	com.bilibili.gcg2.giftpack105_108		景星角色补给			[14,3,1,105,1]	-1	108	CNY						160	[202009110800]	[202009250400]	4	3								
+106	0	com.bilibili.gcg2.giftpack106_68	com.bilibili.gcg2.giftpack106_68		景星武器补给			[14,3,1,106,1]	-1	68	CNY						159	[202009110800]	[202009250400]	4	3								
+107	0	com.bilibili.gcg2.giftpack107_30	com.bilibili.gcg2.giftpack107_30		景星新人补给			[14,3,1,107,1]	-1	30	CNY						169	[202009110800]	[202009250400]	4	1								
+108	0	com.bilibili.gcg2.giftpack108_6	com.bilibili.gcg2.giftpack108_6		景星福袋			[14,3,1,108,1]	-1	6	CNY						170	[202009110800]	[202009250400]	4	5								
+109	0	com.bilibili.gcg2.giftpack109_128	com.bilibili.gcg2.giftpack109_128		心恒永誓礼盒			[14,3,1,109,1]	-1	128	CNY						167	[202009110800]	[202009250400]	4	3								
+110	0	com.bilibili.gcg2.giftpack110_60	com.bilibili.gcg2.giftpack110_60		脉脉温情礼盒			[14,3,1,110,1]	-1	60	CNY						168	[202009110800]	[202009250400]	4	1								
+111	0	com.bilibili.gcg2.giftpack111_68	com.bilibili.gcg2.giftpack111_68		力量收获日			[14,6,1,1,1]	-1	68	CNY						190	[202009250800]	[202010150400]	4	1			1					
+112	0	com.bilibili.gcg2.giftpack112_648	com.bilibili.gcg2.giftpack112_648		中秋梦想补给			[14,3,1,111,1]	-1	648	CNY						189	[202009250800]	[202010150400]	4	1								
+113	0	com.bilibili.gcg2.giftpack113_328	com.bilibili.gcg2.giftpack113_328		中秋豪华补给			[14,3,1,112,1]	-1	328	CNY						188	[202009250800]	[202010150400]	4	1								
+114	0	com.bilibili.gcg2.giftpack114_108	com.bilibili.gcg2.giftpack114_108		中秋角色补给			[14,3,1,113,1]	-1	108	CNY						180	[202009250800]	[202010150400]	4	3								
+115	0	com.bilibili.gcg2.giftpack115_60	com.bilibili.gcg2.giftpack115_60		学园祭外景搭建			[14,3,1,114,1]	-1	60	CNY						170	[202009250800]		4	1		1			2			
+116	0	com.bilibili.gcg2.giftpack116_30	com.bilibili.gcg2.giftpack116_30		中秋新人补给			[14,3,1,115,1]	-1	30	CNY						179	[202009250800]	[202010150400]	4	1								
+117	0	com.bilibili.gcg2.giftpack117_6	com.bilibili.gcg2.giftpack117_6		中秋福袋			[14,3,1,116,1]	-1	6	CNY						190	[202009250800]	[202010150400]	4	5								
+118	0	com.bilibili.gcg2.giftpack118_328	com.bilibili.gcg2.giftpack118_328		黑星豪华补给			[14,3,1,120,1]	-1	328	CNY						190	[202010150800]	[202010300400]	4	1								
+119	1	com.bilibili.gcg2.giftpack119_45	com.bilibili.gcg2.giftpack119_45		携手同心礼盒			[14,3,1,121,1]	-1	45	CNY						170	[202012080800]	[202012240400]	4	2								
+120	0	com.bilibili.gcg2.giftpack120_108	com.bilibili.gcg2.giftpack120_108		黑星角色补给			[14,3,1,122,1]	-1	108	CNY						150	[202010150800]	[202010300400]	4	3								
+121	0	com.bilibili.gcg2.giftpack121_60	com.bilibili.gcg2.giftpack121_60		黑星特别补给			[14,3,1,123,1]	-1	60	CNY						170	[202010150800]	[202010300400]	4	1								
+122	0	com.bilibili.gcg2.giftpack122_30	com.bilibili.gcg2.giftpack122_30		黑星新人补给			[14,3,1,124,1]	-1	30	CNY						160	[202010150800]	[202010300400]	4	1								
+123	0	com.bilibili.gcg2.giftpack123_6	com.bilibili.gcg2.giftpack123_6		黑星福袋			[14,3,1,125,1]	-1	6	CNY						180	[202010150800]	[202010300400]	4	5								
+124	1	com.bilibili.gcg2.giftpack124_648	com.bilibili.gcg2.giftpack124_648		万圣节梦想补给			[14,3,1,126,1]	-1	648	CNY						189	[202111010800]	[202111190400]	4	1								
+125	1	com.bilibili.gcg2.giftpack125_328	com.bilibili.gcg2.giftpack125_328		万圣节豪华补给			[14,3,1,127,1]	-1	328	CNY						188	[202111010800]	[202111190400]	4	1								
+126	1	com.bilibili.gcg2.giftpack126_108	com.bilibili.gcg2.giftpack126_108		万圣节角色补给			[14,3,1,128,1]	-1	108	CNY						170	[202111010800]	[202111190400]	4	2								
+127	1	com.bilibili.gcg2.giftpack127_68	com.bilibili.gcg2.giftpack127_68		万圣节武器补给			[14,3,1,129,1]	-1	68	CNY						169	[202111010800]	[202111190400]	4	3								
+128	1	com.bilibili.gcg2.giftpack128_60	com.bilibili.gcg2.giftpack128_60		万圣节特别补给			[14,3,1,130,1]	-1	60	CNY						179	[202111010800]	[202111190400]	4	1								
+129	1	com.bilibili.gcg2.giftpack129_30	com.bilibili.gcg2.giftpack129_30		万圣节迎新补给			[14,3,1,131,1]	-1	30	CNY						180	[202111010800]	[202111190400]	4	1								
+130	1	com.bilibili.gcg2.giftpack130_6	com.bilibili.gcg2.giftpack130_6		万圣节糖果罐			[14,3,1,132,1]	-1	6	CNY						190	[202111010800]	[202111190400]	4	5								
+131	0	com.bilibili.gcg2.giftpack131_128	com.bilibili.gcg2.giftpack131_128		新人招募计划			[14,6,1,2,1]	-1	128	CNY						190	[202011190800]		4	1			1					
+132	0	com.bilibili.gcg2.giftpack132_68	com.bilibili.gcg2.giftpack132_68		回归礼包1			[14,3,1,133,1]	-1	68	CNY						190	[202011190800]		4	1			1					
+133	0	com.bilibili.gcg2.giftpack133_648	com.bilibili.gcg2.giftpack133_648		梦启绚丽补给			[14,3,1,134,1]	-1	648	CNY						189	[202011190800]	[202012080400]	4	1								
+134	0	com.bilibili.gcg2.giftpack134_328	com.bilibili.gcg2.giftpack134_328		梦启豪华补给			[14,3,1,135,1]	-1	328	CNY						188	[202011190800]	[202012080400]	4	1								
+135	0	com.bilibili.gcg2.giftpack135_108	com.bilibili.gcg2.giftpack135_108		梦启角色补给			[14,3,1,136,1]	-1	108	CNY						170	[202011190800]	[202012080400]	4	3								
+136	0	com.bilibili.gcg2.giftpack136_88	com.bilibili.gcg2.giftpack136_88		嘉年华外景搭建			[14,3,1,137,1]	-1	88	CNY						190	[202011190800]		4	1		1			2			
+137	0	com.bilibili.gcg2.giftpack137_60	com.bilibili.gcg2.giftpack137_60		梦启特别补给			[14,3,1,138,1]	-1	60	CNY						179	[202011190800]	[202012080400]	4	1								
+138	0	com.bilibili.gcg2.giftpack138_30	com.bilibili.gcg2.giftpack138_30		梦启迎新补给			[14,3,1,139,1]	-1	30	CNY						180	[202011190800]	[202012080400]	4	1								
+139	0	com.bilibili.gcg2.giftpack139_6	com.bilibili.gcg2.giftpack139_6		梦启礼盒			[14,3,1,140,1]	-1	6	CNY						190	[202011190800]	[202012080400]	4	5								
+140	0	com.bilibili.gcg2.giftpack140_648	com.bilibili.gcg2.giftpack140_648		星绽梦想补给			[14,3,1,141,1]	-1	648	CNY						189	[202012080800]	[202012240400]	4	1								
+141	0	com.bilibili.gcg2.giftpack141_328	com.bilibili.gcg2.giftpack141_328		星绽豪华补给			[14,3,1,142,1]	-1	328	CNY						188	[202012080800]	[202012240400]	4	1								
+142	0	com.bilibili.gcg2.giftpack142_108	com.bilibili.gcg2.giftpack142_108		星绽角色补给			[14,3,1,143,1]	-1	108	CNY						170	[202012080800]	[202012240400]	4	3								
+143	0	com.bilibili.gcg2.giftpack143_68	com.bilibili.gcg2.giftpack143_68		星绽武器补给			[14,3,1,144,1]	-1	68	CNY						169	[202012080800]	[202012240400]	4	3								
+144	0	com.bilibili.gcg2.giftpack144_60	com.bilibili.gcg2.giftpack144_60		星绽特别补给			[14,3,1,145,1]	-1	60	CNY						179	[202012080800]	[202012240400]	4	1								
+145	0	com.bilibili.gcg2.giftpack145_30	com.bilibili.gcg2.giftpack145_30		星绽迎新补给			[14,3,1,146,1]	-1	30	CNY						180	[202012080800]	[202012240400]	4	1								
+146	0	com.bilibili.gcg2.giftpack146_6	com.bilibili.gcg2.giftpack146_6		星绽礼盒			[14,3,1,147,1]	-1	6	CNY						190	[202012080800]	[202012240400]	4	5								
+147	1	com.bilibili.gcg2.giftpack147_648	com.bilibili.gcg2.giftpack147_648		圣诞梦想补给			[14,3,1,148,1]	-1	648	CNY						189	[202112230800]	[202201060400]	4	1								
+148	1	com.bilibili.gcg2.giftpack148_328	com.bilibili.gcg2.giftpack148_328		圣诞豪华补给			[14,3,1,149,1]	-1	328	CNY						188	[202112230800]	[202201060400]	4	1								
+149	1	com.bilibili.gcg2.giftpack149_108	com.bilibili.gcg2.giftpack149_108		圣诞角色补给			[14,3,1,150,1]	-1	108	CNY						170	[202112230800]	[202201060400]	4	3								
+150	1	com.bilibili.gcg2.giftpack150_30	com.bilibili.gcg2.giftpack150_30		圣诞迎新补给			[14,3,1,151,1]	-1	30	CNY						180	[202112230800]	[202201060400]	4	1								
+151	1	com.bilibili.gcg2.giftpack151_6	com.bilibili.gcg2.giftpack151_6		圣诞福袋			[14,3,1,152,1]	-1	6	CNY						190	[202112230800]	[202201060400]	4	5								
+152	0	com.bilibili.gcg2.giftpack152_648	com.bilibili.gcg2.giftpack152_648		清理者梦想补给			[14,3,1,153,1]	-1	648	CNY						189	[202101130800]	[202102020400]	4	1								
+153	0	com.bilibili.gcg2.giftpack153_328	com.bilibili.gcg2.giftpack153_328		清理者豪华补给			[14,3,1,154,1]	-1	328	CNY						188	[202101130800]	[202102020400]	4	1								
+154	0	com.bilibili.gcg2.giftpack154_108	com.bilibili.gcg2.giftpack154_108		清理者角色补给			[14,3,1,155,1]	-1	108	CNY						170	[202101130800]	[202102020400]	4	3								
+155	0	com.bilibili.gcg2.giftpack155_30	com.bilibili.gcg2.giftpack155_30		清理者新人补给			[14,3,1,156,1]	-1	30	CNY						180	[202101130800]	[202102020400]	4	1								
+156	0	com.bilibili.gcg2.giftpack156_6	com.bilibili.gcg2.giftpack156_6		清理者黑匣子			[14,3,1,157,1]	-1	6	CNY						190	[202101130800]	[202102020400]	4	5								
+157	0	com.bilibili.gcg2.giftpack157_648	com.bilibili.gcg2.giftpack157_648		新春梦想补给			[14,3,1,160,1]	-1	648	CNY						189	[202102020800]	[202102240400]	4	1								
+158	0	com.bilibili.gcg2.giftpack158_328	com.bilibili.gcg2.giftpack158_328		新春豪华补给			[14,3,1,161,1]	-1	328	CNY						188	[202102020800]	[202102240400]	4	1								
+159	0	com.bilibili.gcg2.giftpack159_198	com.bilibili.gcg2.giftpack159_198		新春特别补给			[14,3,1,162,1]	-1	198	CNY						187	[202102020800]	[202102240400]	4	1								
+160	0	com.bilibili.gcg2.giftpack160_108	com.bilibili.gcg2.giftpack160_108		新春角色补给			[14,3,1,163,1]	-1	108	CNY						187	[202102020800]	[202102240400]	4	3								
+161	0	com.bilibili.gcg2.giftpack161_30	com.bilibili.gcg2.giftpack161_30		新春新人补给			[14,3,1,164,1]	-1	30	CNY						190	[202102020800]	[202102240400]	4	1								
+162	2	com.bilibili.gcg2.giftpack162_60	com.bilibili.gcg2.giftpack162_60		承诺的礼盒			[14,3,1,166,1]	-1	60	CNY						195	[202106210800]	[202107120400]	4	2								
+163	0	com.bilibili.gcg2.giftpack163_30	com.bilibili.gcg2.giftpack163_30		誓约福袋			[14,3,1,165,1]	-1	30	CNY						186	[202102050000]	[202102240400]	4	5								
+164	0	com.bilibili.gcg2.giftpack1164_88	com.bilibili.gcg2.giftpack1164_88		新春外景搭建			[14,3,1,167,1]	-1	88	CNY						191	[202102020800]		4	1		1			2		UI/UI_Shop/charge_spring.png	
+165	0	com.bilibili.gcg2.giftpack165_648	com.bilibili.gcg2.giftpack165_648		初春梦想补给			[14,3,1,168,1]	-1	648	CNY						192	[202102240800]	[202103090400]	4	1								
+166	0	com.bilibili.gcg2.giftpack166_328	com.bilibili.gcg2.giftpack166_328		初春豪华补给			[14,3,1,169,1]	-1	328	CNY						193	[202102240800]	[202103090400]	4	1								
+167	0	com.bilibili.gcg2.giftpack167_198	com.bilibili.gcg2.giftpack167_198		初春武器精进			[14,3,1,170,1]	-1	198	CNY						190	[202102240800]	[202103090400]	4	2								
+168	0	com.bilibili.gcg2.giftpack168_108	com.bilibili.gcg2.giftpack168_108		初春角色补给			[14,3,1,171,1]	-1	108	CNY						194	[202102240800]	[202103090400]	4	3								
+169	0	com.bilibili.gcg2.giftpack169_68	com.bilibili.gcg2.giftpack169_68		初春武器补给			[14,3,1,172,1]	-1	68	CNY						193	[202102240800]	[202103090400]	4	3								
+170	0	com.bilibili.gcg2.giftpack170_30	com.bilibili.gcg2.giftpack170_30		初春新人补给			[14,3,1,173,1]	-1	30	CNY						191	[202102240800]	[202103090400]	4	1								
+171	0	com.bilibili.gcg2.giftpack171_6	com.bilibili.gcg2.giftpack171_6		初春福袋			[14,3,1,174,1]	-1	6	CNY						190	[202102240800]	[202103090400]	4	5								
+172	0	com.bilibili.gcg2.giftpack172_328	com.bilibili.gcg2.giftpack172_328		月度模块补充(常驻)			[14,3,1,175,1]	-1	328	CNY						195			3	1					1			
+173	0	com.bilibili.gcg2.giftpack173_168	com.bilibili.gcg2.giftpack173_168		月度模块突破(常驻)			[14,3,1,176,1]	-1	168	CNY						193			3	2					1			
+174	0	com.bilibili.gcg2.giftpack174_648	com.bilibili.gcg2.giftpack174_648		素情梦想补给			[14,3,1,177,1]	-1	648	CNY						199	[202103100800]	[202103310400]	4	1								
+175	0	com.bilibili.gcg2.giftpack175_328	com.bilibili.gcg2.giftpack175_328		素情豪华补给			[14,3,1,178,1]	-1	328	CNY						193	[202103100800]	[202103310400]	4	1								
+176	0	com.bilibili.gcg2.giftpack176_108	com.bilibili.gcg2.giftpack176_108		素情角色补给			[14,3,1,179,1]	-1	108	CNY						198	[202103100800]	[202103310400]	4	3								
+177	0	com.bilibili.gcg2.giftpack177_30	com.bilibili.gcg2.giftpack177_30		素情新人补给			[14,3,1,180,1]	-1	30	CNY						191	[202103100800]	[202103310400]	4	1								
+178	0	com.bilibili.gcg2.giftpack178_6	com.bilibili.gcg2.giftpack178_6		素情礼盒			[14,3,1,181,1]	-1	6	CNY						190	[202103100800]	[202103310400]	4	5								
+179	0	com.bilibili.gcg2.giftpack179_30	com.bilibili.gcg2.giftpack179_30		咖啡币储金			[14,3,1,182,1]	-1	30	CNY						195	[202103100800]	[202103310400]	4	5								
+180	1	com.bilibili.gcg2.giftpack180_30	com.bilibili.gcg2.giftpack180_30		晶币储金			[14,3,1,183,1]	-1	18	CNY						198			3	2					1			
+181	1	com.bilibili.gcg2.giftpack181_12	com.bilibili.gcg2.giftpack181_12		回报型晶币投资			[14,3,1,184,1]	-1	12	CNY						197			2	1					1			
+182	1	com.bilibili.gcg2.giftpack182_25	com.bilibili.gcg2.giftpack182_25		回报型零件投资			[14,3,1,185,1]	-1	25	CNY						198	[202105130800]	[202106010400]	4	1								
+183	0	com.bilibili.gcg2.giftpack183_648	com.bilibili.gcg2.giftpack183_648		初樱梦想补给			[14,3,1,186,1]	-1	648	CNY						199	[202103310800]	[202104230400]	4	1								
+184	0	com.bilibili.gcg2.giftpack184_328	com.bilibili.gcg2.giftpack184_328		初樱豪华补给			[14,3,1,187,1]	-1	328	CNY						198	[202103310800]	[202104230400]	4	1								
+185	0	com.bilibili.gcg2.giftpack185_108	com.bilibili.gcg2.giftpack185_108		初樱角色补给			[14,3,1,188,1]	-1	108	CNY						197	[202103310800]	[202104230400]	4	3								
+186	0	com.bilibili.gcg2.giftpack185_30	com.bilibili.gcg2.giftpack185_30		初樱新人补给			[14,3,1,189,1]	-1	30	CNY						196	[202103310800]	[202104230400]	4	1								
+187	0	com.bilibili.gcg2.giftpack187_6	com.bilibili.gcg2.giftpack187_6		初樱礼盒			[14,3,1,190,1]	-1	6	CNY						190	[202103310800]	[202104230400]	4	5								
+188	0	com.bilibili.gcg2.giftpack188_648	com.bilibili.gcg2.giftpack188_648		紫藤梦想补给			[14,3,1,192,1]	-1	648	CNY						199	[202104230800]	[202105130400]	4	1								
+189	0	com.bilibili.gcg2.giftpack189_328	com.bilibili.gcg2.giftpack189_328		紫藤豪华补给			[14,3,1,193,1]	-1	328	CNY						197	[202104230800]	[202105130400]	4	1								
+190	0	com.bilibili.gcg2.giftpack190_108	com.bilibili.gcg2.giftpack190_108		紫藤角色补给			[14,3,1,194,1]	-1	108	CNY						196	[202104230800]	[202105130400]	4	3								
+191	0	com.bilibili.gcg2.giftpack191_30	com.bilibili.gcg2.giftpack191_30		紫藤新人补给			[14,3,1,195,1]	-1	30	CNY						195	[202104230800]	[202105130400]	4	1								
+192	0	com.bilibili.gcg2.giftpack192_6	com.bilibili.gcg2.giftpack192_6		紫藤礼盒			[14,3,1,196,1]	-1	6	CNY						194	[202104230800]	[202105130400]	4	5								
+193	0	com.bilibili.gcg2.giftpack193_68	com.bilibili.gcg2.giftpack193_68		霜叶秋红礼包			[14,3,1,197,1]	-1	68	CNY						198	[202104230800]	[202105130400]	4	1		1						
+194	7	com.bilibili.gcg2.giftpack194_198	com.bilibili.gcg2.giftpack194_198		武器调修礼包			[14,3,1,198,1]	-1	198	CNY						192	[202201260800]	[202202230400]	4	1								
+195	0	com.bilibili.gcg2.giftpack195_648	com.bilibili.gcg2.giftpack195_648		孟夏梦想补给			[14,3,1,199,1]	-1	648	CNY						199	[202105130800]	[202106010400]	4	1								
+196	0	com.bilibili.gcg2.giftpack196_328	com.bilibili.gcg2.giftpack196_328		孟夏豪华补给			[14,3,1,200,1]	-1	328	CNY						197	[202105130800]	[202106010400]	4	1								
+197	0	com.bilibili.gcg2.giftpack197_108	com.bilibili.gcg2.giftpack197_108		孟夏角色补给			[14,3,1,201,1]	-1	108	CNY						196	[202105130800]	[202106010400]	4	3								
+198	0	com.bilibili.gcg2.giftpack198_30	com.bilibili.gcg2.giftpack198_30		孟夏新人补给			[14,3,1,202,1]	-1	30	CNY						195	[202105130800]	[202106010400]	4	1								
+199	0	com.bilibili.gcg2.giftpack199_6	com.bilibili.gcg2.giftpack199_6		孟夏福袋			[14,3,1,203,1]	-1	6	CNY						194	[202105130800]	[202106010400]	4	5								
+200	0	com.bilibili.gcg2.giftpack200_648	com.bilibili.gcg2.giftpack200_648		童梦梦想补给			[14,3,1,204,1]	-1	648	CNY						199	[202106010800]	[202106210400]	4	1								
+201	0	com.bilibili.gcg2.giftpack201_328	com.bilibili.gcg2.giftpack201_328		童梦豪华补给			[14,3,1,205,1]	-1	328	CNY						195	[202106010800]	[202106210400]	4	1								
+202	0	com.bilibili.gcg2.giftpack202_108	com.bilibili.gcg2.giftpack202_108		童梦角色补给			[14,3,1,206,1]	-1	108	CNY						198	[202106010800]	[202106210400]	4	3								
+203	0	com.bilibili.gcg2.giftpack203_68	com.bilibili.gcg2.giftpack203_68		童梦武器补给			[14,3,1,207,1]	-1	68	CNY						193	[202106010800]	[202106210400]	4	3								
+204	0	com.bilibili.gcg2.giftpack204_30	com.bilibili.gcg2.giftpack204_30		童梦新人补给			[14,3,1,208,1]	-1	30	CNY						196	[202106010800]	[202106210400]	4	1								
+205	0	com.bilibili.gcg2.giftpack205_6	com.bilibili.gcg2.giftpack205_6		童梦礼盒			[14,3,1,209,1]	-1	6	CNY						189	[202106010800]	[202106210400]	4	5								
+206	0	com.bilibili.gcg2.giftpack206_88	com.bilibili.gcg2.giftpack206_88		星宇外景搭建			[14,3,1,210,1]	-1	88	CNY						199	[202106010800]		4	1		1			2			
+207	0	com.bilibili.gcg2.giftpack207_648	com.bilibili.gcg2.giftpack207_648		棕榈惬意梦想补给			[14,3,1,211,1]	-1	648	CNY						199	[202106210800]	[202107120400]	4	1								
+208	0	com.bilibili.gcg2.giftpack208_328	com.bilibili.gcg2.giftpack208_328		棕榈惬意豪华补给			[14,3,1,212,1]	-1	328	CNY						196	[202106210800]	[202107120400]	4	1								
+209	0	com.bilibili.gcg2.giftpack209_108	com.bilibili.gcg2.giftpack209_108		棕榈惬意角色补给			[14,3,1,213,1]	-1	108	CNY						198	[202106210800]	[202107120400]	4	3								
+210	0	com.bilibili.gcg2.giftpack210_30	com.bilibili.gcg2.giftpack210_30		棕榈惬意新人补给			[14,3,1,214,1]	-1	30	CNY						195	[202106210800]	[202107120400]	4	1								
+211	0	com.bilibili.gcg2.giftpack211_6	com.bilibili.gcg2.giftpack211_6		棕榈惬意礼盒			[14,3,1,215,1]	-1	6	CNY						194	[202106210800]	[202107120400]	4	5								
+212	7	com.bilibili.gcg2.giftpack212_45	com.bilibili.gcg2.giftpack212_45		角色优整礼包			[14,3,1,216,1]	-1	45	CNY						191	[202201260800]	[202202230400]	4	3								
+213	0	com.bilibili.gcg2.giftpack213_648	com.bilibili.gcg2.giftpack213_648		沁心梦想补给			[14,3,1,217,1]	-1	648	CNY						199	[202107120800]	[202107300400]	4	1								
+214	0	com.bilibili.gcg2.giftpack214_328	com.bilibili.gcg2.giftpack214_328		沁心豪华补给			[14,3,1,218,1]	-1	328	CNY						196	[202107120800]	[202107300400]	4	1								
+215	0	com.bilibili.gcg2.giftpack215_108	com.bilibili.gcg2.giftpack215_108		沁心角色补给			[14,3,1,219,1]	-1	108	CNY						197	[202107120800]	[202107300400]	4	3								
+216	0	com.bilibili.gcg2.giftpack216_30	com.bilibili.gcg2.giftpack216_30		沁心新人补给			[14,3,1,220,1]	-1	30	CNY						195	[202107120800]	[202107300400]	4	1								
+217	0	com.bilibili.gcg2.giftpack217_6	com.bilibili.gcg2.giftpack217_6		沁心福袋			[14,3,1,221,1]	-1	6	CNY						194	[202107120800]	[202107300400]	4	5								
+218	7	com.bilibili.gcg2.giftpack218_238	com.bilibili.gcg2.giftpack218_238		辉光协调补给			[14,3,1,222,1]	-1	238	CNY						193	[202201260800]	[202202230400]	4	1								
+219	0	com.bilibili.gcg2.giftpack219_648	com.bilibili.gcg2.giftpack219_648		解暑梦想补给			[14,3,1,223,1]	-1	648	CNY						199	[202107300800]	[202108200400]	4	1								
+220	0	com.bilibili.gcg2.giftpack220_328	com.bilibili.gcg2.giftpack220_328		解暑豪华补给			[14,3,1,224,1]	-1	328	CNY						195	[202107300800]	[202108200400]	4	1								
+221	0	com.bilibili.gcg2.giftpack221_108	com.bilibili.gcg2.giftpack221_108		解暑角色补给			[14,3,1,225,1]	-1	108	CNY						198	[202107300800]	[202108200400]	4	3								
+222	0	com.bilibili.gcg2.giftpack222_68	com.bilibili.gcg2.giftpack222_68		解暑武器补给			[14,3,1,226,1]	-1	68	CNY						193	[202107300800]	[202108200400]	4	3								
+223	0	com.bilibili.gcg2.giftpack223_30	com.bilibili.gcg2.giftpack223_30		解暑新人补给			[14,3,1,227,1]	-1	30	CNY						196	[202107300800]	[202108200400]	4	1								
+224	0	com.bilibili.gcg2.giftpack224_6	com.bilibili.gcg2.giftpack224_6		解暑礼盒			[14,3,1,228,1]	-1	6	CNY						189	[202107300800]	[202108200400]	4	5								
+225	0	com.bilibili.gcg2.giftpack225_648	com.bilibili.gcg2.giftpack225_648		生日祭梦想补给			[14,3,1,229,1]	-1	648	CNY						199	[202108200800]	[202109090400]	4	1								
+226	0	com.bilibili.gcg2.giftpack226_328	com.bilibili.gcg2.giftpack226_328		生日祭豪华补给			[14,3,1,230,1]	-1	328	CNY						193	[202108200800]	[202109090400]	4	1								
+227	0	com.bilibili.gcg2.giftpack227_108	com.bilibili.gcg2.giftpack227_108		生日祭角色补给			[14,3,1,231,1]	-1	108	CNY						196	[202108200800]	[202109090400]	4	3								
+228	0	com.bilibili.gcg2.giftpack228_30	com.bilibili.gcg2.giftpack228_30		生日祭新人补给			[14,3,1,232,1]	-1	30	CNY						192	[202108200800]	[202109090400]	4	1								
+229	0	com.bilibili.gcg2.giftpack229_6	com.bilibili.gcg2.giftpack229_6		生日祭礼盒			[14,3,1,233,1]	-1	6	CNY						191	[202108200800]	[202109090400]	4	5								
+230	0	com.bilibili.gcg2.giftpack230_1	com.bilibili.gcg2.giftpack230_1		蛋糕补充包			[14,3,1,234,1]	-1	1	CNY						194	[202108200800]	[202109090400]	4	1								
+231	0	com.bilibili.gcg2.giftpack231_68	com.bilibili.gcg2.giftpack231_68		拉神之眼			[14,3,1,235,1]	-1	68	CNY						198	[202108200800]	[202109090400]	4	1		1						
+232	0	com.bilibili.gcg2.giftpack236_648	com.bilibili.gcg2.giftpack236_648		漫话梦想补给			[14,3,1,236,1]	-1	648	CNY						199	[202109090800]	[202109290400]	4	1								
+233	0	com.bilibili.gcg2.giftpack237_328	com.bilibili.gcg2.giftpack237_328		漫话豪华补给			[14,3,1,237,1]	-1	328	CNY						193	[202109090800]	[202109290400]	4	1								
+234	0	com.bilibili.gcg2.giftpack238_108	com.bilibili.gcg2.giftpack238_108		漫话角色补给			[14,3,1,238,1]	-1	108	CNY						196	[202109090800]	[202109290400]	4	2								
+235	0	com.bilibili.gcg2.giftpack239_30	com.bilibili.gcg2.giftpack239_30		漫话新人补给			[14,3,1,239,1]	-1	30	CNY						192	[202109090800]	[202109290400]	4	1								
+236	0	com.bilibili.gcg2.giftpack240_6	com.bilibili.gcg2.giftpack240_6		漫话盒子			[14,3,1,240,1]	-1	6	CNY						191	[202109090800]	[202109290400]	4	5								
+237	0	com.bilibili.gcg2.giftpack241_648	com.bilibili.gcg2.giftpack241_648		月夕梦想补给			[14,3,1,241,1]	-1	648	CNY						199	[202109290800]	[202110190400]	4	1								
+238	0	com.bilibili.gcg2.giftpack242_328	com.bilibili.gcg2.giftpack242_328		月夕豪华补给			[14,3,1,242,1]	-1	328	CNY						193	[202109290800]	[202110190400]	4	1								
+239	0	com.bilibili.gcg2.giftpack243_108	com.bilibili.gcg2.giftpack243_108		月夕角色补给			[14,3,1,243,1]	-1	108	CNY						196	[202109290800]	[202110190400]	4	2								
+240	0	com.bilibili.gcg2.giftpack244_30	com.bilibili.gcg2.giftpack244_30		月夕新人补给			[14,3,1,244,1]	-1	30	CNY						192	[202109290800]	[202110190400]	4	1								
+241	0	com.bilibili.gcg2.giftpack245_6	com.bilibili.gcg2.giftpack245_6		月夕福袋			[14,3,1,245,1]	-1	6	CNY						191	[202109290800]	[202110190400]	4	5								
+242	0	com.bilibili.gcg2.giftpack246_68	com.bilibili.gcg2.giftpack246_68		似海容情			[14,3,1,246,1]	-1	68	CNY						198	[202109300400]	[202110260400]	4	1		1						
+243	0	com.bilibili.gcg2.giftpack247_68	com.bilibili.gcg2.giftpack247_68		月夕武器补给			[14,3,1,247,1]	-1	68	CNY						196	[202109290800]	[202110190400]	4	3								
+244	0	com.bilibili.gcg2.giftpack248_98	com.bilibili.gcg2.giftpack248_98		特调咖啡补完计划			[14,6,1,3,1]	-1	98	CNY						191	{202109290800}	{202110290400}	4	1			1					
+245	0	com.bilibili.gcg2.giftpack249_648	com.bilibili.gcg2.giftpack249_648		茸毛梦想补给			[14,3,1,255,1]	-1	648	CNY						199	[202110190800]	[202111010400]	4	1								
+246	0	com.bilibili.gcg2.giftpack250_328	com.bilibili.gcg2.giftpack250_328		茸毛豪华补给			[14,3,1,256,1]	-1	328	CNY						193	[202110190800]	[202111010400]	4	1								
+247	0	com.bilibili.gcg2.giftpack251_108	com.bilibili.gcg2.giftpack251_108		茸毛角色补给			[14,3,1,257,1]	-1	108	CNY						196	[202110190800]	[202111010400]	4	2								
+248	0	com.bilibili.gcg2.giftpack252_30	com.bilibili.gcg2.giftpack252_30		茸毛新人补给			[14,3,1,258,1]	-1	30	CNY						192	[202110190800]	[202111010400]	4	1								
+249	0	com.bilibili.gcg2.giftpack253_6	com.bilibili.gcg2.giftpack253_6		茸毛福袋			[14,3,1,259,1]	-1	6	CNY						191	[202110190800]	[202111010400]	4	5								
+250	0	com.bilibili.gcg2.giftpack254_648	com.bilibili.gcg2.giftpack254_648		旬游梦想补给			[14,3,1,261,1]	-1	648	CNY						199	[202111190800]	[202112070400]	4	1								
+251	0	com.bilibili.gcg2.giftpack255_328	com.bilibili.gcg2.giftpack255_328		旬游豪华补给			[14,3,1,262,1]	-1	328	CNY						198	[202111190800]	[202112070400]	4	1								
+252	0	com.bilibili.gcg2.giftpack256_108	com.bilibili.gcg2.giftpack256_108		旬游角色补给			[14,3,1,263,1]	-1	108	CNY						197	[202111190800]	[202112070400]	4	2								
+256	0	com.bilibili.gcg2.giftpack257_68	com.bilibili.gcg2.giftpack257_68		旬游武器补给			[14,3,1,264,1]	-1	68	CNY						196	[202111190800]	[202112070400]	4	3								
+254	0	com.bilibili.gcg2.giftpack258_30	com.bilibili.gcg2.giftpack258_30		旬游新人补给			[14,3,1,265,1]	-1	30	CNY						195	[202111190800]	[202112070400]	4	1								
+255	0	com.bilibili.gcg2.giftpack259_6	com.bilibili.gcg2.giftpack259_6		旬游福袋			[14,3,1,266,1]	-1	6	CNY						194	[202111190800]	[202112070400]	4	5								
+253	0	com.bilibili.gcg2.giftpack260_68	com.bilibili.gcg2.giftpack260_68		袖掖芳华			[14,3,1,267,1]	-1	68	CNY						199	[202111190800]	[202112230400]	4	1		1						
+257	0	com.bilibili.gcg2.giftpack261_88	com.bilibili.gcg2.giftpack261_88		外景礼包			[14,3,1,268,1]	-1	88	CNY						199	[202111190800]		4	1		1			2			
+258	0	com.bilibili.gcg2.giftpack262_98	com.bilibili.gcg2.giftpack262_98		整备·追合计划			[14,6,1,4,1]	-1	98	CNY						191	[202111190800]	[202112230400]	4	1			1					
+259	0	com.bilibili.gcg2.giftpack263_648	com.bilibili.gcg2.giftpack263_648		拾途梦想补给			[14,3,1,274,1]	-1	648	CNY						199	[202112070800]	[202112230400]	4	1								
+260	0	com.bilibili.gcg2.giftpack264_328	com.bilibili.gcg2.giftpack264_328		拾途豪华补给			[14,3,1,275,1]	-1	328	CNY						198	[202112070800]	[202112230400]	4	1								
+261	0	com.bilibili.gcg2.giftpack265_108	com.bilibili.gcg2.giftpack265_108		拾途角色补给			[14,3,1,276,1]	-1	108	CNY						197	[202112070800]	[202112230400]	4	2								
+262	0	com.bilibili.gcg2.giftpack266_68	com.bilibili.gcg2.giftpack266_68		拾途武器补给			[14,3,1,277,1]	-1	68	CNY						196	[202112070800]	[202112230400]	4	3								
+263	0	com.bilibili.gcg2.giftpack267_30	com.bilibili.gcg2.giftpack267_30		拾途新人补给			[14,3,1,278,1]	-1	30	CNY						195	[202112070800]	[202112230400]	4	1								
+264	0	com.bilibili.gcg2.giftpack268_6	com.bilibili.gcg2.giftpack268_6		拾途福袋			[14,3,1,279,1]	-1	6	CNY						194	[202112070800]	[202112230400]	4	5								
+271	0	com.bilibili.gcg2.giftpack275_648	com.bilibili.gcg2.giftpack275_648		冒险梦想补给			[14,3,1,283,1]	-1	648	CNY						199	[202201060800]	[202201260400]	4	1								
+272	0	com.bilibili.gcg2.giftpack276_328	com.bilibili.gcg2.giftpack276_328		冒险豪华补给			[14,3,1,284,1]	-1	328	CNY						198	[202201060800]	[202201260400]	4	1								
+273	0	com.bilibili.gcg2.giftpack277_108	com.bilibili.gcg2.giftpack277_108		冒险角色补给			[14,3,1,285,1]	-1	108	CNY						197	[202201060800]	[202201260400]	4	2								
+274	0	com.bilibili.gcg2.giftpack278_68	com.bilibili.gcg2.giftpack278_68		冒险武器补给			[14,3,1,286,1]	-1	68	CNY						196	[202201060800]	[202201260400]	4	3								
+275	0	com.bilibili.gcg2.giftpack279_30	com.bilibili.gcg2.giftpack279_30		冒险新人补给			[14,3,1,287,1]	-1	30	CNY						195	[202201060800]	[202201260400]	4	1								
+276	0	com.bilibili.gcg2.giftpack280_6	com.bilibili.gcg2.giftpack280_6		冒险福袋			[14,3,1,288,1]	-1	6	CNY						194	[202201060800]	[202201260400]	4	5								
+277	0	com.bilibili.gcg2.giftpack281_648	com.bilibili.gcg2.giftpack281_648		科学梦想补给			[14,3,1,289,1]	-1	648	CNY						199	[202201260800]	[202202230400]	4	1								
+278	0	com.bilibili.gcg2.giftpack282_328	com.bilibili.gcg2.giftpack282_328		科学豪华补给			[14,3,1,290,1]	-1	328	CNY						198	[202201260800]	[202202230400]	4	1								
+279	0	com.bilibili.gcg2.giftpack283_108	com.bilibili.gcg2.giftpack283_108		科学角色补给			[14,3,1,291,1]	-1	108	CNY						197	[202201260800]	[202202230400]	4	2								
+280	0	com.bilibili.gcg2.giftpack284_68	com.bilibili.gcg2.giftpack284_68		科学武器补给			[14,3,1,292,1]	-1	68	CNY						196	[202201260800]	[202202230400]	4	3								
+281	0	com.bilibili.gcg2.giftpack285_30	com.bilibili.gcg2.giftpack285_30		科学新人补给			[14,3,1,293,1]	-1	30	CNY						195	[202201260800]	[202202230400]	4	1								
+282	0	com.bilibili.gcg2.giftpack286_6	com.bilibili.gcg2.giftpack286_6		科学匣子			[14,3,1,294,1]	-1	6	CNY						194	[202201260800]	[202202230400]	4	5								
+283	0	com.bilibili.gcg2.giftpack287_68	com.bilibili.gcg2.giftpack287_68		EX装扮礼包			[14,3,1,295,1]	-1	68	CNY						199	[202201260800]	[202203020400]	4	1		1						
+284	0	com.bilibili.gcg2.giftpack288_98	com.bilibili.gcg2.giftpack288_98		历年焕新启迪计划			[14,6,1,5,1]	-1	98	CNY						191	[202201260800]	[202202230400]	4	1			1					
+285	0	com.bilibili.gcg2.giftpack289_648	com.bilibili.gcg2.giftpack289_648		丝刻梦想补给			[14,3,1,296,1]	-1	648	CNY						199	[202202230800]	[202203160400]	4	1								
+286	0	com.bilibili.gcg2.giftpack290_328	com.bilibili.gcg2.giftpack290_328		丝刻豪华补给			[14,3,1,297,1]	-1	328	CNY						198	[202202230800]	[202203160400]	4	1								
+287	0	com.bilibili.gcg2.giftpack291_108	com.bilibili.gcg2.giftpack291_108		丝刻角色补给			[14,3,1,298,1]	-1	108	CNY						197	[202202230800]	[202203160400]	4	2								
+288	0	com.bilibili.gcg2.giftpack292_68	com.bilibili.gcg2.giftpack292_68		丝刻武器补给			[14,3,1,299,1]	-1	68	CNY						196	[202202230800]	[202203160400]	4	3								
+289	0	com.bilibili.gcg2.giftpack293_30	com.bilibili.gcg2.giftpack293_30		丝刻新人补给			[14,3,1,300,1]	-1	30	CNY						195	[202202230800]	[202203160400]	4	1								
+290	0	com.bilibili.gcg2.giftpack294_6	com.bilibili.gcg2.giftpack294_6		丝刻福袋			[14,3,1,301,1]	-1	6	CNY						194	[202202230800]	[202203160400]	4	5								
+291	0	com.bilibili.gcg2.giftpack295_648	com.bilibili.gcg2.giftpack295_648		慕芽梦想补给			[14,3,1,302,1]	-1	648	CNY						199	[202203160800]	[202204060400]	4	1								
+292	0	com.bilibili.gcg2.giftpack296_328	com.bilibili.gcg2.giftpack296_328		慕芽豪华补给			[14,3,1,303,1]	-1	328	CNY						198	[202203160800]	[202204060400]	4	1								
+293	0	com.bilibili.gcg2.giftpack297_108	com.bilibili.gcg2.giftpack297_108		慕芽角色补给			[14,3,1,304,1]	-1	108	CNY						197	[202203160800]	[202204060400]	4	2								
+294	0	com.bilibili.gcg2.giftpack298_68	com.bilibili.gcg2.giftpack298_68		慕芽武器补给			[14,3,1,305,1]	-1	68	CNY						196	[202203160800]	[202204060400]	4	3								
+295	0	com.bilibili.gcg2.giftpack299_30	com.bilibili.gcg2.giftpack299_30		慕芽新人补给			[14,3,1,306,1]	-1	30	CNY						195	[202203160800]	[202204060400]	4	1								
+296	0	com.bilibili.gcg2.giftpack300_6	com.bilibili.gcg2.giftpack300_6		慕芽福袋			[14,3,1,307,1]	-1	6	CNY						194	[202203160800]	[202204060400]	4	5								
+297	0	com.bilibili.gcg2.giftpack301_648	com.bilibili.gcg2.giftpack301_648		如意梦想补给			[14,3,1,308,1]	-1	648	CNY						199	[202204060800]	[202204270400]	4	1								
+298	0	com.bilibili.gcg2.giftpack302_328	com.bilibili.gcg2.giftpack302_328		如意豪华补给			[14,3,1,309,1]	-1	328	CNY						198	[202204060800]	[202204270400]	4	1								
+299	0	com.bilibili.gcg2.giftpack303_108	com.bilibili.gcg2.giftpack303_108		如意角色补给			[14,3,1,310,1]	-1	108	CNY						197	[202204060800]	[202204270400]	4	2								
+300	0	com.bilibili.gcg2.giftpack304_68	com.bilibili.gcg2.giftpack304_68		如意武器补给			[14,3,1,311,1]	-1	68	CNY						196	[202204060800]	[202204270400]	4	3								
+301	0	com.bilibili.gcg2.giftpack305_30	com.bilibili.gcg2.giftpack305_30		如意新人补给			[14,3,1,312,1]	-1	30	CNY						195	[202204060800]	[202204270400]	4	1								
+302	0	com.bilibili.gcg2.giftpack306_6	com.bilibili.gcg2.giftpack306_6		如意福袋			[14,3,1,313,1]	-1	6	CNY						194	[202204060800]	[202204270400]	4	5								
+303	0	com.bilibili.gcg2.giftpack307_648	com.bilibili.gcg2.giftpack307_648		时窗梦想补给			[14,3,1,314,1]	-1	648	CNY						199	[202204270800]	[202205180400]	4	1								
+304	0	com.bilibili.gcg2.giftpack308_328	com.bilibili.gcg2.giftpack308_328		时窗豪华补给			[14,3,1,315,1]	-1	328	CNY						198	[202204270800]	[202205180400]	4	1								
+305	0	com.bilibili.gcg2.giftpack309_108	com.bilibili.gcg2.giftpack309_108		时窗角色补给			[14,3,1,316,1]	-1	108	CNY						197	[202204270800]	[202205180400]	4	2								
+306	0	com.bilibili.gcg2.giftpack310_68	com.bilibili.gcg2.giftpack310_68		时窗武器补给			[14,3,1,317,1]	-1	68	CNY						196	[202204270800]	[202205180400]	4	3								
+307	0	com.bilibili.gcg2.giftpack311_30	com.bilibili.gcg2.giftpack311_30		时窗新人补给			[14,3,1,318,1]	-1	30	CNY						195	[202204270800]	[202205180400]	4	1								
+308	0	com.bilibili.gcg2.giftpack312_6	com.bilibili.gcg2.giftpack312_6		时窗福袋			[14,3,1,319,1]	-1	6	CNY						194	[202204270800]	[202205180400]	4	5								
+																													
+1001	0				朱颜藤梦·时无瑕			[13,1,1,6000,1]	62	145		12,5	[202105140000]	[202105200800]	128,138		190	[202101010400]	[202105200800]	4	1		1			101			Item/icon_main_background.png
+1002	0				绯服龙晴·伊珂丝			[13,2,1,6001,1]	62	75		12	[202101010400]	[202101211200]	66		190	[202101010400]		4	1		1			101			
+1003	0				生日艾琳·阿贝尔之梦			[13,2,1,6002,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101			UI/UI_Shop/shop_icon_back.png
+1004	0				生日小真·摩登波尔卡			[13,2,1,6003,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101	[202102020800,202102120000]		UI/UI_Shop/shop_icon_back.png
+1005	0				限定SP·无忧			[13,1,1,6004,1]	62	168		12	[202102100000]	[202103070000]	148		192	[202102100000]	[202103090800]	4	1		1			101			Item/icon_main_background.png
+1006	0				生日朱诺·玩乐俏佳人			[13,2,1,6005,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101	[202103310800,202104010000]		UI/UI_Shop/shop_icon_back.png
+1007	0				埃及·丽达			[13,1,1,6006,1]	62	138		15	[202104250000]	[202105200800]	118		193	[202104250000]	[202105200800]	4	1		1			101			Item/icon_main_background.png
+1008	0				限定SP·唯			[13,1,1,6007,1]	62	168		12	[202111190800]	[202112230400]	148		199	[202111190800]	[202112230400]	4	1		1			101			Item/icon_main_background.png
+1009	0				生日无瑕			[13,2,1,6008,1]	63	200							192	[202012070800]	[202012230400]	4	1		1			101	[202105130700,202105140000]		UI/UI_Shop/shop_icon_birth.png
+1010	0				生日可可			[13,2,1,6009,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101	[202106100000,202106140000]		UI/UI_Shop/shop_icon_back.png
+1011	0				甜品卡萝			[13,2,1,6010,1]	62	138		15	[202106120000]	[202107130000]	118		197	[202106120000]		4	1		1			101			Item/icon_main_background.png
+1012	0				生日格兰妮			[13,2,1,6011,1]	63	200							190	[202112070800]	[202112230400]	4	1		1			101	[202106210800,202107060000]		UI/UI_Shop/shop_icon_back.png
+1013	0				甜品小真			[13,2,1,6012,1]	62	138		15	[202106250000]	[202107260000]	118		190	[202106250000]		4	1		1			101			Item/icon_main_background.png
+1014	0				生日丽达			[13,2,1,6013,1]	63	200							190	[202112070800]	[202112230400]	4	1		1			101			UI/UI_Shop/shop_icon_back.png
+1015	0				生日千姬			[13,2,1,6014,1]	63	200							190	[202112070800]	[202112230400]	4	1		1			101			UI/UI_Shop/shop_icon_back.png
+1016	0				生日诗柔			[13,2,1,6015,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101			UI/UI_Shop/shop_icon_back.png
+1017	0				中秋阿妮亚			[13,2,1,6016,1]	62	138		15	[202109160000]	[202110110400]	118		198	[202109160000]		4	1		1			101			Item/icon_main_background.png
+1018	0				限定SP花嫁·艾琳			[13,2,1,6017,1]	62	168		12	[202111190800]	[202112230400]	148		199	[202111190800]	[202112230400]	4	1		1			101			Item/icon_main_background.png
+1019	0				生日沐恩			[13,2,1,6018,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101	[202109290800,202110100000]		UI/UI_Shop/shop_icon_back.png
+1020	0				花嫁朱诺			[13,2,1,6019,1]	62	138		15	[202110190800]	[202111140400]	118		197	[202110190800]	[202111140400]	4	1		1			101			Item/icon_main_background.png
+1021	0				万圣奈乐			[13,2,1,6020,1]	62	138		15	[202111010800]	[202111260400]	118		197	[202111010800]		4	1		1			101			Item/icon_main_background.png
+1022	0				生日伊珂丝			[13,2,1,6021,1]	63	200							192	[202112070800]	[202112230400]	4	1		1			101	[202111010800,202111130000]		UI/UI_Shop/shop_icon_back.png
+1023	0				周年庆·千姬(SP）			[13,2,1,6022,1]	62	168		12	[202111190800]	[202112230400]	148		199	[202111190800]	[202112230400]	4	1		1			101			Item/icon_main_background.png
+1024	0				生日时无忧			[13,2,1,6023,1]	63	200							192	[202112020000]	[202112230400]	4	1		1			101	[202111190800,202112020000]		UI/UI_Shop/shop_icon_birth.png
+1025	0				周年洛可可			[13,2,1,6024,1]	62	138		15	[202112070800]	[202201020400]	118		199	[202112070800]		4	1		1			101			Item/icon_main_background.png
+1026	0				奈乐生日			[13,2,1,6025,1]	63	200							199	[202112280000]	[202201040400]	4	1		1			101	[202112230800,202112280000]		UI/UI_Shop/shop_icon_birth.png
+1027	0				无瑕城市			[13,2,1,6026,1]	62	138		15	[202112230800]	[202201130400]	118		200	[202112230800]		4	1		1			101			Item/icon_main_background.png
+1028	0				生日艾琳2022			[13,2,1,6027,1]	63	200							199	[202201180000]	[202201250400]	4	1		1			101	[202201060800,202201180000]		UI/UI_Shop/shop_icon_birth.png
+1029	0				城市·伊珂丝(SP）			[13,2,1,6028,1]	62	168		12	[202201260800]	[202203020400]	148		202	[202201260800]	[202203020400]	4	1		1			101			Item/icon_main_background.png
+1030	0				生日小真2022			[13,2,1,6029,1]	63	200							201	[202202120000]	[202202190400]	4	1		1			101	[202201260800,202202120000]		UI/UI_Shop/shop_icon_birth.png
+1031	0				驻唱歌手·格兰尼			[13,2,1,6030,1]	62	138		15	[202202230800]	[202203230400]	118		200	[202202230800]		4	1		1			101			Item/icon_main_background.png
+1032	0				生日·阿尼娅2022			[13,2,1,6031,1]	63	200							199	[202202240000]	[202203030400]	4	1		1			101	[202202230800,202202240000]		UI/UI_Shop/shop_icon_birth.png
+1033	0				生日朱诺·2022			[13,2,1,6032,1]	63	200							192	[202204010000]	[202204080400]	4	1		1			101	[202203160800,202204010000]		UI/UI_Shop/shop_icon_birth.png
+1034	0				生日无瑕·2022			[13,2,1,6033,1]	63	200							192	[202205140000]	[202205210400]	4	1		1			101	[202204270800,202205140000]		UI/UI_Shop/shop_icon_birth.png
+1035	0				生日卡萝·2022			[13,2,1,6034,1]	63	200							192	[202205250000]	[202206010400]	4	1		1			101	[202205180800,202205250000]		UI/UI_Shop/shop_icon_birth.png
+																													
+2001	0				梳洗定妆包(皮肤)			[14,3,1,158,1]	62	6							10									102			
+2002	13				焕颜礼盒(皮肤)			[14,3,1,159,1]	62	10							20	[202203160800]	[202204080400]	4	2					102			
+2011	0				不灭珏心礼包			[14,3,1,281,1]	62	1							8									102			
+2012	0				伴身永琚礼包			[14,3,1,282,1]	62	2							9									102			

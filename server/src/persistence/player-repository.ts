@@ -248,6 +248,7 @@ import {
   makeMailbox,
   reconcileDailyPullMail,
   reconcileWelcomeMail,
+  reconcileYenAllowanceMail,
   type MailAction,
   type MailboxState,
 } from "../game-data/mail-data.js";
@@ -270,6 +271,14 @@ import {
   reconcileMoments,
   type MomentsState,
 } from "../game-data/moments-data.js";
+import {
+  IB_SHOP_ERROR_NOT_ENOUGH_YEN,
+  IB_SHOP_ERROR_PACK_OFFLINE,
+  MONEY_YEN,
+  YEN_ITEM_DETAIL,
+  YenPackCatalog,
+  type YenPack,
+} from "../game-data/yen-shop-data.js";
 import type { Logger } from "../logger.js";
 import type { JsonStore } from "./json-store.js";
 
@@ -663,6 +672,8 @@ export interface GirlViewStoryResult {
 
 export interface IBShopState {
   operationalDate: string;
+  /** ¥ packs: the day, week or month that each pack's purchase count belongs to. */
+  yenPeriods?: Record<string, string>;
 }
 
 export interface ShopShelfEntry {
@@ -734,12 +745,35 @@ export interface IBItemFreeResult {
 
 export class IBShopError extends Error {
   constructor(
-    readonly reason: "unknown_item" | "limit_reached",
-    readonly clientError: number = reason === "limit_reached" ? 20075 : 20074,
+    readonly reason:
+      | "unknown_item"
+      | "limit_reached"
+      | "not_enough_yen"
+      | "pack_offline"
+      | "level_too_low",
+    readonly clientError: number = IB_SHOP_CLIENT_ERRORS[reason],
   ) {
     super(`IB shop error: ${reason}`);
     this.name = "IBShopError";
   }
+}
+
+const IB_SHOP_CLIENT_ERRORS = {
+  unknown_item: 20074,
+  limit_reached: 20075,
+  level_too_low: 20079,
+  not_enough_yen: IB_SHOP_ERROR_NOT_ENOUGH_YEN,
+  pack_offline: IB_SHOP_ERROR_PACK_OFFLINE,
+} as const;
+
+export interface YenPackResult {
+  player: Player;
+  pack: YenPack;
+  contents: BaseAward[];
+  updatedMoney: MoneyState[];
+  updatedItems: InventoryEntryState[];
+  purchaseCount: number;
+  yen: number;
 }
 
 export interface CardEnhancementResult {
@@ -1690,7 +1724,9 @@ function awardMoneyId(genre: number, detail: number): number | null {
             ? MONEY_CARD_DECOMPOSITION_TOKEN
             : genre === 15 && detail === 20
               ? MONEY_WEAPON_DECOMPOSITION_TOKEN
-              : null;
+              : genre === 15 && detail === YEN_ITEM_DETAIL
+                ? MONEY_YEN
+                : null;
 }
 
 /**
@@ -1785,6 +1821,20 @@ function grantAwards(
       [genre, detail, particular, templateLevel, count],
       updatedItemGuids,
     );
+  }
+}
+
+/** The period a ¥ pack's purchase count belongs to; null when it never resets. */
+function yenPackPeriod(pack: YenPack, now: number): string | null {
+  switch (pack.limitType) {
+    case 1:
+      return shopOperationalDate(now);
+    case 2:
+      return shopOperationalWeek(now);
+    case 3:
+      return shopOperationalDate(now).slice(0, 7);
+    default:
+      return null;
   }
 }
 
@@ -3506,8 +3556,11 @@ export class PlayerRepository {
       if (player) {
         if (this.#welcomeGifts) reconcileStarterCafe(player, now);
         reconcileEnergyActivity(player, now);
-        if (this.#welcomeGifts)
-          reconcileWelcomeMail((player.mail ??= makeMailbox()), now);
+        if (this.#welcomeGifts) {
+          // The ¥ mail first, so that a new save shows the welcome mail on top.
+          reconcileYenAllowanceMail((player.mail ??= makeMailbox()), now);
+          reconcileWelcomeMail(player.mail, now);
+        }
         reconcileCustomGirlOutfits(player);
         reconcileHeadpatCharges(player.taskValues, now);
         reconcileInventoryLockState(player);
@@ -3576,8 +3629,10 @@ export class PlayerRepository {
       this.#activities.reconcile(player);
       reconcileHeadpatCharges(player.taskValues, now);
       state.players[safeAccount] = player;
-      if (this.#welcomeGifts)
-        reconcileWelcomeMail((player.mail ??= makeMailbox()), now, true);
+      if (this.#welcomeGifts) {
+        reconcileYenAllowanceMail((player.mail ??= makeMailbox()), now);
+        reconcileWelcomeMail(player.mail, now, true);
+      }
       this.#logger.info("player.created", { account: safeAccount, roleId });
     });
     if (!player) throw new Error(`Failed to create player: ${safeAccount}`);
@@ -4978,6 +5033,73 @@ export class PlayerRepository {
       itemGuid,
     });
     return { player: snapshot, item: claimedItem, purchaseCount };
+  }
+
+  /**
+   * Buys a gift pack of PurchaseIBShop that the original sold for real money
+   * (Currency -1) with ¥ (money 95): checks level, limit and balance first,
+   * then takes the price and grants the opened box (yen-shop-data.ts).
+   */
+  async buyYenPack(
+    account: string,
+    packId: number,
+    now = Date.now(),
+    catalog = YenPackCatalog.loadDefault(),
+  ): Promise<YenPackResult> {
+    const pack = catalog.pack(packId);
+    if (!pack) throw new IBShopError("unknown_item");
+    if (!pack.contents) throw new IBShopError("pack_offline");
+    const contents = pack.contents.map((award) => [...award] as BaseAward);
+    let player: Player | undefined;
+    let purchaseCount = 0;
+    const updatedItemGuids = new Set<number>();
+    const updatedMoneyIds = new Set<number>();
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      if (player.level < pack.level) throw new IBShopError("level_too_low");
+      const taskId = String(makeIBShopTaskId(pack.id));
+      const period = yenPackPeriod(pack, now);
+      const ibShop = (player.ibShop ??= {
+        operationalDate: bountyOperationalDate(now),
+      });
+      const periods = (ibShop.yenPeriods ??= {});
+      if (period !== null && periods[pack.id] !== period) {
+        periods[pack.id] = period;
+        player.taskValues[taskId] = 0;
+      }
+      purchaseCount = player.taskValues[taskId] ?? 0;
+      if (pack.limitType > 0 && pack.limitTimes > 0 && purchaseCount >= pack.limitTimes)
+        throw new IBShopError("limit_reached");
+      const wallet = player.money.find(({ id }) => id === MONEY_YEN);
+      if (!wallet || wallet.count < pack.cost) throw new IBShopError("not_enough_yen");
+      wallet.count -= pack.cost;
+      updatedMoneyIds.add(MONEY_YEN);
+      grantAwards(player, contents, updatedItemGuids, updatedMoneyIds);
+      reconcileGirlAppearanceState(player, updatedItemGuids);
+      purchaseCount += 1;
+      player.taskValues[taskId] = purchaseCount;
+      incrementDailyMissionProgress(player, 108, 1, now);
+    });
+    if (!player) throw new Error(`Failed to buy yen pack: ${account}`);
+    const snapshot = structuredClone(player);
+    const yen = snapshot.money.find(({ id }) => id === MONEY_YEN)?.count ?? 0;
+    this.#logger.info("player.ib_shop.yen_pack_bought", {
+      account,
+      packId: pack.id,
+      cost: pack.cost,
+      yen,
+      purchaseCount,
+    });
+    return {
+      player: snapshot,
+      pack,
+      contents,
+      updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
+      updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
+      purchaseCount,
+      yen,
+    };
   }
 
   async claimIBItemFree(

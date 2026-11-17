@@ -17,6 +17,8 @@
  * - ItemGiftCoffeeCoinAuto: coffee coins. Inferred: it shares description and
  *   icon with ItemCoffeeCoinAuto, and its genre 14 siblings are the diamond
  *   items that pay ExtParam1 diamonds each.
+ * - ItemPayDiamondAuto: ExtParam1 paid Earth Coins (money 12) each; the ¥ gift
+ *   packs hold it (yen-shop-data.ts).
  * - CafeItemAuto: furniture. This server keeps it as a stack that the cafe
  *   uses up when it places the furniture.
  *
@@ -33,6 +35,8 @@ export const CHAT_BUBBLE_TASK_GROUP = 78;
 export const RIKI_TASK_GROUP = 53;
 /** MoneyDef.txt id 7. */
 const COFFEE_COIN_MONEY_ID = 7;
+/** MoneyDef.txt id 12: paid Earth Coins, which MoneyLogic:GetMoneyValue adds to id 3. */
+const PAY_DIAMOND_MONEY_ID = 12;
 
 export type AutoUseEffect =
   /** Adds count * perItem to a wallet. */
@@ -132,6 +136,8 @@ export class AutoUseItemCatalog {
         effect = { kind: "money", moneyId: second, perItem: first };
       } else if (className === "ItemGiftCoffeeCoinAuto" && first !== null) {
         effect = { kind: "money", moneyId: COFFEE_COIN_MONEY_ID, perItem: first };
+      } else if (className === "ItemPayDiamondAuto" && first !== null) {
+        effect = { kind: "money", moneyId: PAY_DIAMOND_MONEY_ID, perItem: first };
       } else if (unlockTimeGroup !== undefined && first !== null && first <= 0xffff) {
         effect = { kind: "unlock-time", taskIds: [makeTaskId(unlockTimeGroup, first)] };
       } else if (className === "RikiItem" && rikiTaskIds.has(key)) {
