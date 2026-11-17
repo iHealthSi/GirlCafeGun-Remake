@@ -193,7 +193,7 @@ import {
   changeProfileLook,
   type ProfileLookChange,
   type ProfileLookState,
-} from "../game-data/profile-look-data.js";
+} from "../game-data/look-data.js";
 import {
   ACHIEVEMENT_TASK_GROUP,
   achievementProgress,
@@ -503,7 +503,7 @@ export interface Player {
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
   promise?: PromiseState;
-  /** Card skin, list mark and chat bubble (profile-look-data.ts). */
+  /** Card skin, list mark and chat bubble (look-data.ts). */
   profileLook?: ProfileLookState;
 }
 

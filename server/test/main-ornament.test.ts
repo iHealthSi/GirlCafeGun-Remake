@@ -23,7 +23,7 @@ import {
   LUA_COMMAND_SET_VISITING_CARD,
   PROFILE_LOOK_LOCKED_ERROR,
   profileLookReply,
-} from "../src/game-data/profile-look-data.js";
+} from "../src/game-data/look-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {

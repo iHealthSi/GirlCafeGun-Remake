@@ -12,7 +12,7 @@ import {
   LUA_COMMAND_GET_VISITING_CARD_DATA,
   PROFILE_LOOK_LOCKED_ERROR,
   profileLookReply,
-} from "../game-data/profile-look-data.js";
+} from "../game-data/look-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
 import { getMomentDefinition } from "../game-data/moments-data.js";
 import { dailyPullMailAwards, type MailAction } from "../game-data/mail-data.js";
