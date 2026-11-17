@@ -11,6 +11,10 @@ import {
   type ShopTabConfig,
 } from "../src/game-data/shop-data.js";
 import type { Logger } from "../src/logger.js";
+import {
+  makeDailyMissionTaskId,
+  dailyMissionProgress,
+} from "../src/game-data/daily-mission-data.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
   makeInitialState,
@@ -197,6 +201,54 @@ describe("shop goods list", () => {
 });
 
 describe("shop buy", () => {
+  it("credits daily shopping atomically, caps it, resets next day and persists it", async () => {
+    const { repository, store } = await createRepository();
+    const key = String(makeDailyMissionTaskId(108));
+    const first = await repository.buyShopGoods("tester", catalog, 20_010, 10, 1, NOW);
+    expect(first.taskValuesChanged).toBe(true);
+    expect(dailyMissionProgress(repository.get("tester")!.taskValues[key] ?? 0)).toBe(
+      1,
+    );
+    const second = await repository.buyShopGoods("tester", catalog, 20_010, 10, 1, NOW);
+    expect(second.taskValuesChanged).toBe(false);
+    await expect(
+      repository.buyShopGoods("tester", catalog, 20_010, 10, 1, NOW),
+    ).rejects.toMatchObject({ reason: "limit_reached" });
+    await store.flush();
+    const next = await repository.buyShopGoods(
+      "tester",
+      catalog,
+      20_010,
+      10,
+      1,
+      NEXT_DAY,
+    );
+    expect(next.taskValuesChanged).toBe(true);
+    const player = await repository.markLogin("tester", NEXT_DAY);
+    expect(dailyMissionProgress(player.taskValues[key] ?? 0)).toBe(1);
+    expect(player.dailyMissions?.operationalDate).toBe("2026-08-20");
+  });
+
+  it("does not credit failed purchases or browsing/refreshing a shelf", async () => {
+    const { repository } = await createRepository();
+    const key = String(makeDailyMissionTaskId(108));
+    await repository.getShopGoodsList("tester", catalog, 20_001, NOW);
+    await repository.refreshShop("tester", catalog, 20_001, NOW);
+    expect(dailyMissionProgress(repository.get("tester")!.taskValues[key] ?? 0)).toBe(
+      0,
+    );
+    await expect(
+      repository.buyShopGoods("tester", catalog, 20_010, 999, 1, NOW),
+    ).rejects.toThrow(ShopError);
+    await expect(
+      repository.buyShopGoods("tester", catalog, 20_010, 10, 0, NOW),
+    ).rejects.toThrow(ShopError);
+    await repository.setTaskValues("tester", [{ id: 123, value: 1 }]);
+    expect(dailyMissionProgress(repository.get("tester")!.taskValues[key] ?? 0)).toBe(
+      0,
+    );
+  });
+
   it("charges diamonds, grants goods and records counters", async () => {
     const { repository } = await createRepository();
     const goodsId = 10;

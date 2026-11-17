@@ -25,7 +25,8 @@ platform. Compilation targets Java 8 bytecode and Android API 24. Set `GCG_JAVA`
 and `GCG_ANDROID_SDK` to their installation locations when needed.
 
 The client recipes operate on a hash-pinned input and produce an overlay rather
-than editing the original. Both ARM libraries retain the Unity allocator and
+than editing the original. See [client baseline](client-base.md) before adapting
+scripts or table IDs from another client version. Both ARM libraries retain the Unity allocator and
 Cubism compatibility fixes. Native developer entry points are disabled before
 their UI, socket or command paths execute; developer Lua and UI content are
 removed. The launcher, embedded server, resource installer and updater are Java

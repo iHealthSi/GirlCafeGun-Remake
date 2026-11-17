@@ -2923,6 +2923,48 @@ export function createGatewayServer({
           }
           return;
         }
+        if (luaCommand === 256) {
+          const envelope = call?.parameters as
+            { tbParam?: Record<string, unknown> } | undefined;
+          const girlId = Number(envelope?.tbParam?.nId);
+          const ordinal = Number(envelope?.tbParam?.nValue);
+          try {
+            const player = await players.setGirlMainStoryProgress(
+              context.account,
+              girlId,
+              ordinal,
+            );
+            context.player = player;
+            send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(player.taskValues));
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: 256,
+                tbParam: {
+                  nId: girlId,
+                  nValue:
+                    player.taskValues[String((3 << 16) | ((girlId - 1) * 2000 + 14))] ??
+                    0,
+                },
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof GirlViewStoryError)) throw error;
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("CallClientTip", ["Error.1"]),
+            );
+            logger.warn("girl.main_story.rejected", {
+              account: context.account,
+              girlId,
+              ordinal,
+              reason: error.reason,
+            });
+          }
+          return;
+        }
         if (
           luaCommand !== null &&
           [228, 229, 230, 231, 232, 233, 234, 235, 239].includes(luaCommand)
@@ -3379,14 +3421,20 @@ export function createGatewayServer({
             return;
           }
           try {
-            const { result, updatedItems, updatedMoney, updatedFurniture, price } =
-              await players.buyShopGoods(
-                context.account,
-                shopCatalog,
-                shopId,
-                goodsId,
-                buyNum,
-              );
+            const {
+              result,
+              updatedItems,
+              updatedMoney,
+              updatedFurniture,
+              price,
+              taskValuesChanged,
+            } = await players.buyShopGoods(
+              context.account,
+              shopCatalog,
+              shopId,
+              goodsId,
+              buyNum,
+            );
             if (updatedItems.length > 0) {
               send(
                 COMMAND.ITEM_UPDATE_NTF,
@@ -3398,6 +3446,12 @@ export function createGatewayServer({
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
             }
             context.player = players.get(context.account);
+            if (taskValuesChanged && context.player)
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(context.player.taskValues),
+              );
             if (updatedFurniture.length && context.player)
               send(
                 COMMAND.ADD_FURNITURE_RSP,

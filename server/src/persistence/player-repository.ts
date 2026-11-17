@@ -124,6 +124,8 @@ import {
   defaultGirlFetterCatalog,
   GIRL_CARD_STORY_EVENT_OFFSET,
   GIRL_FETTER_EVENT_OFFSET,
+  GIRL_MAIN_STORY_OFFSET,
+  isGirlMainStoryTaskId,
 } from "../game-data/girl-fetter-data.js";
 import type {
   Award,
@@ -1208,8 +1210,34 @@ function reconcileGirlFetterUnlocks(
       player.taskValues[key] = 1;
       unlocked.push({ girlId: girl.girlId, index: node.index });
     }
+    reconcileGirlMainStoryProgress(player, girl.girlId);
   }
   return unlocked;
+}
+
+// Older saves contain read ELevel flags but lack the separate main-story cursor.
+// Repair it from consecutive completed main chapters without paying any awards.
+function reconcileGirlMainStoryProgress(player: Player, girlId: number): number {
+  const stories = defaultGirlFetterCatalog().mainStories(girlId);
+  const key = String(
+    makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET),
+  );
+  if (!stories.length) return player.taskValues[key] ?? 0;
+  let completed = 0;
+  for (const story of stories) {
+    const readKey = String(
+      makeGirlTaskId(
+        GIRL_STATE_TASK_GROUP,
+        girlId,
+        GIRL_FETTER_EVENT_OFFSET + story.index - 1,
+      ),
+    );
+    if ((player.taskValues[readKey] ?? 0) < 2) break;
+    completed += 1;
+  }
+  const progress = Math.max(player.taskValues[key] ?? 0, completed);
+  if (progress > 0) player.taskValues[key] = progress;
+  return progress;
 }
 
 function fixGirlModelTaskOffset(modelId: number): number {
@@ -3365,6 +3393,7 @@ export class PlayerRepository {
           commerceHandled = true;
           response = extra.response;
           runtime.notifications.push(...extra.notifications);
+          if (command === 14) incrementDailyMissionProgress(player, 108, 1, now);
         } else response = runtime.operate(command, values).response;
       }
       const pending = commerceHandled ? [] : automaticFurniture;
@@ -4109,6 +4138,7 @@ export class PlayerRepository {
         }
       }
       player.taskValues[key] = 2;
+      if (storyType === 1) reconcileGirlMainStoryProgress(player, girlId);
     });
     if (!player) throw new Error(`Failed to view girl story: ${account}`);
     const snapshot = structuredClone(player);
@@ -4127,6 +4157,32 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       alreadyRead,
     };
+  }
+
+  /** Stock LuaCall 256 receipt, sent when an affection main story starts. */
+  async setGirlMainStoryProgress(
+    account: string,
+    girlId: number,
+    ordinal: number,
+  ): Promise<Player> {
+    if (!Number.isSafeInteger(girlId) || !Number.isSafeInteger(ordinal) || ordinal <= 0)
+      throw new GirlViewStoryError("invalid_request");
+    return this.#store.update((state) => {
+      const player = state.players[account];
+      const girl = player?.girls.find((entry) => entry.girlId === girlId);
+      if (!player || !girl) throw new GirlViewStoryError("girl_not_owned");
+      const stories = defaultGirlFetterCatalog().mainStories(girlId);
+      const story = stories[ordinal - 1];
+      if (!story) throw new GirlViewStoryError("story_not_found");
+      const progress = reconcileGirlMainStoryProgress(player, girlId);
+      if (girl.level < story.requiredLevel || ordinal > progress + 1)
+        throw new GirlViewStoryError("story_locked");
+      const key = String(
+        makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET),
+      );
+      player.taskValues[key] = Math.max(progress, ordinal);
+      return structuredClone(player);
+    });
   }
 
   async endGirlTraining(
@@ -4239,6 +4295,7 @@ export class PlayerRepository {
       for (const { id, value } of changes) {
         if (
           isDailyMissionTaskValueId(id) ||
+          isGirlMainStoryTaskId(id) ||
           isRotationSelectionTaskId(id) ||
           isHeadpatTaskId(id) ||
           isCafePetTaskId(id, CafePetCatalog.loadDefault()) ||
@@ -4828,6 +4885,7 @@ export class PlayerRepository {
       purchaseCount += 1;
       player.taskValues[taskId] = purchaseCount;
       addInventoryAward(player, FREE_GIFT_PACK_AWARD, updatedItemGuids);
+      incrementDailyMissionProgress(player, 108, 1, now);
       item = player.inventory.find(({ guid }) => updatedItemGuids.has(guid));
     });
     if (!player || !item) {
@@ -4882,6 +4940,7 @@ export class PlayerRepository {
         nowSeconds + MONTH_CARD_LIMIT_DAYS * 86_400,
       );
       player.taskValues[monthTaskId] = monthCardEndTime;
+      incrementDailyMissionProgress(player, 108, 1, now);
     });
     if (!player) throw new Error(`Failed to claim IB item: ${account}`);
     const snapshot = structuredClone(player);
@@ -4973,6 +5032,7 @@ export class PlayerRepository {
     updatedMoney: MoneyState[];
     updatedFurniture: CafeFurnitureState[];
     price: number;
+    taskValuesChanged: boolean;
   }> {
     const tab = catalog.getTab(shopId);
     if (!tab) throw new ShopError("unknown_shop");
@@ -4984,6 +5044,7 @@ export class PlayerRepository {
     let player: Player | undefined;
     let result: ShopGoodsListResult | undefined;
     let price = 0;
+    let taskValuesChanged = false;
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedFurniture: CafeFurnitureState[] = [];
@@ -5097,6 +5158,7 @@ export class PlayerRepository {
       counters.total += buyNum;
       counters.shelf += buyNum;
       if (shelfEntry) shelfEntry.bought += buyNum;
+      taskValuesChanged = incrementDailyMissionProgress(player, 108, 1, now);
       result = buildShopGoodsList(player, catalog, shopId, now);
     });
     if (!player || !result) {
@@ -5109,6 +5171,7 @@ export class PlayerRepository {
       goodsId,
       buyNum,
       price,
+      taskValuesChanged,
     });
     return {
       result,
@@ -5116,6 +5179,7 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedFurniture: structuredClone(updatedFurniture),
       price,
+      taskValuesChanged,
     };
   }
 

@@ -17,6 +17,7 @@ import test_card_display
 import test_gacha
 import test_gamepad
 import patch_selectors
+import patch_prose_punctuation
 import test_selectors
 import test_title
 import test_offline_web
@@ -56,6 +57,7 @@ def main():
         print('Verified release login, title screens, controller layer, offline web and removed developer Lua',flush=True)
         changed['setting.u'],plain,proofs['settings']=patch_settings.build(apk.read('assets/setting.u'))
         changed['lang.u'],proofs['selectorLanguage']=patch_selectors.build_language(apk.read('assets/lang.u'))
+        changed['lang.u'],proofs['prosePunctuation']=patch_prose_punctuation.build_language(changed['lang.u'])
         replacements['assets/setting_decrypted.u']=write('assets/setting_decrypted.u',plain)
         print('Verified rarity, card layout, lobby schedule, native MagicTb loader',flush=True)
         changed['npc/neptune_roster.u'],proofs['card'],crop=patch_card.build(apk.read('assets/npc/neptune_roster.u'),args.art)

@@ -16,7 +16,8 @@ import {
   PlayerRepository,
 } from "../src/persistence/player-repository.js";
 import { COMMAND } from "../src/protocol/commands.js";
-import { makeServerLuaCall } from "../src/protocol/messages.js";
+import { makeServerLuaCall, parseTaskChanges } from "../src/protocol/messages.js";
+import { makeDailyMissionTaskId } from "../src/game-data/daily-mission-data.js";
 import {
   HEADER_SIZE,
   makePacket,
@@ -286,6 +287,69 @@ async function fixture() {
 }
 
 describe("cafe actual TCP persistence", () => {
+  it("persists the stock main-story start receipt and synchronizes its cursor before the callback", async () => {
+    const f = await fixture();
+    const key = (3 << 16) | (2000 + 14);
+    try {
+      const packets = await f.call(256, { nId: 2, nValue: 1 });
+      const sync = packets.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const ack = packets.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 256,
+      );
+      expect(sync).toBeGreaterThanOrEqual(0);
+      expect(sync).toBeLessThan(ack);
+      expect(parseTaskChanges(packets[sync]!.payload)).toContainEqual({
+        id: key,
+        value: 1,
+      });
+      expect(luaValue(packets, 256)).toEqual({ nId: 2, nValue: 1 });
+      await f.players.viewGirlStory(account, 2, 1, 1);
+      await f.store.update((state) => {
+        state.players[account]!.girls.find((girl) => girl.girlId === 2)!.level = 10;
+      });
+      const second = await f.call(256, { nId: 2, nValue: 2 });
+      expect(luaValue(second, 256)).toEqual({ nId: 2, nValue: 2 });
+      await f.reload();
+      expect(f.players.get(account)!.taskValues[String(key)]).toBe(2);
+      expect(
+        f.loginPackets
+          .filter((packet) => packet.command === COMMAND.TASK_VALUE_RSP)
+          .flatMap((packet) => parseTaskChanges(packet.payload)),
+      ).toContainEqual({ id: key, value: 2 });
+    } finally {
+      await f.cleanup();
+    }
+  }, 20000);
+
+  it("synchronizes the daily shopping task before the IB shop callback", async () => {
+    const f = await fixture();
+    try {
+      const packets = await f.call(10000, { Type: 1, Id: 12 });
+      expect(luaValue(packets, 10000)).toMatchObject({ Error: 0 });
+      const sync = packets.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const ack = packets.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 10000,
+      );
+      expect(sync).toBeGreaterThanOrEqual(0);
+      expect(sync).toBeLessThan(ack);
+      expect(parseTaskChanges(packets[sync]!.payload)).toContainEqual({
+        id: makeDailyMissionTaskId(108),
+        value: 2,
+      });
+      const repeated = await f.call(10000, { Type: 1, Id: 12 });
+      expect(luaValue(repeated, 10000)).toMatchObject({ Error: 20075 });
+      expect(
+        f.players.get(account)!.taskValues[String(makeDailyMissionTaskId(108))],
+      ).toBe(2);
+    } finally {
+      await f.cleanup();
+    }
+  }, 20000);
+
   it("materializes single and batch furniture purchases immediately, persists them, and recycles without duplicate coins", async () => {
     const f = await fixture();
     try {
@@ -339,6 +403,18 @@ describe("cafe actual TCP persistence", () => {
         purchased.some((packet) => packet.command === COMMAND.ADD_FURNITURE_RSP),
       ).toBe(true);
       expect(wallet()).toBeLessThan(before);
+      const taskIndex = purchased.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const callbackIndex = purchased.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 13,
+      );
+      expect(taskIndex).toBeGreaterThanOrEqual(0);
+      expect(taskIndex).toBeLessThan(callbackIndex);
+      expect(parseTaskChanges(purchased[taskIndex]!.payload)).toContainEqual({
+        id: makeDailyMissionTaskId(108),
+        value: 2,
+      });
       expect(f.players.get(account)!.cafe.furniture).toHaveLength(3);
       const firstNew = f.players
         .get(account)!
