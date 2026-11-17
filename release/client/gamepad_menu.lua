@@ -34,11 +34,16 @@ M.cfg = M.cfg or {
 	tabPrev     = { BTN.LB },
 	tabNext     = { BTN.RB },
 	skip        = { BTN.START },   -- story scenes: the Skip button
-	cursor      = { BTN.SELECT },  -- optional cursor on/off
-	rStickX     = 4, rStickY = 5,  -- same axis numbers as gamepad_fight.lua
-	hatX        = 6, hatY = 7,
+	cursor      = { BTN.SELECT },  -- left stick: pointer <-> focus steps
+	stickPointer = true,   -- the left stick moves a pointer (like a mouse); the d-pad moves the focus
+	rStickX     = 3, rStickY = 4,  -- same axis numbers as gamepad_fight.lua (Unity on Android)
+	hatX        = 5, hatY = 6,
 	scrollSpeed = 1.6,     -- right stick: viewport heights per second at full tilt
-	cursorSpeed = 1.1,     -- cursor: screen heights per second at full tilt
+	cursorSpeed = 1.5,     -- pointer: screen heights per second at full tilt
+	cursorCurve = 2.2,     -- pointer speed = full speed * tilt ^ curve (small tilts move it precisely)
+	cursorDead  = 0.15,    -- pointer: stick dead zone (radial)
+	cursorSlow  = 0.5,     -- pointer: speed share over a control it can press (easier to stop on it)
+	hoverEvery  = 0.05,    -- s: how often the control under the pointer is looked up
 	bigArea     = 0.45,    -- a target that covers this share of the screen is a backdrop
 	frame       = { 1.0, 0.80, 0.25 },  -- focus frame colour
 	thickness   = 0.006,   -- frame thickness, share of the screen height
@@ -70,7 +75,7 @@ local function named(name)
 	absent[name] = true
 	return nil
 end
-local STOCK = { [4] = { "RightHorizontal", 1 }, [5] = { "RightVertical", -1 } }
+local STOCK = { [3] = { "HandleFire", 1 }, [4] = { "RightHorizontal", 1 }, [5] = { "RightVertical", -1 } }
 local function axis(n)
 	if not n or n <= 0 then return 0 end
 	local v = named("gcgpad_a" .. n)
@@ -84,8 +89,12 @@ end
 local function now() return U3D.Time.realtimeSinceStartup end
 
 local logged = {}
+-- Login.lua lowers the Unity log filter, so a plain print never reaches logcat: lift it for our own lines
 local function log(msg)
+	local logger, filter
+	pcall(function() logger = U3D.Debug.unityLogger; filter = logger.filterLogType; logger.filterLogType = 3 end)
 	print("[pad] menu: " .. msg)
+	if logger and filter then pcall(function() logger.filterLogType = filter end) end
 end
 local function logOnce(msg)
 	if logged[msg] then return end
@@ -366,7 +375,7 @@ local st = {
 	shown = false, cursorOn = false, cx = 0, cy = 0,
 	prev = {}, dirHeld = nil, dirNext = 0, pending = nil,
 	pressed = nil, lastCheck = 0, lastTick = 0, errors = 0,
-	owner = 'menu', hudCheck = 0,
+	owner = 'menu', hudCheck = 0, hover = nil, hoverAt = 0, collectAt = 0,
 }
 
 local function owner(go, byId)
@@ -801,7 +810,8 @@ local function largestScroll()
 end
 
 local function scrollBy(rx, ry, dt)
-	local c = st.focus
+	-- pointer: the list under it; else the list that holds the focus
+	local c = st.cursorOn and st.hover or st.focus
 	local sr = c and c.scroll
 	if not sr then sr = largestScroll() end
 	if not sr then return end
@@ -899,10 +909,23 @@ local function edge(name, list)
 	return nil
 end
 
+local function leftStick()
+	return U3D.Input.GetAxisRaw('Horizontal'), U3D.Input.GetAxisRaw('Vertical')
+end
+local function dpad()
+	return axis(M.cfg.hatX), -axis(M.cfg.hatY)
+end
+-- the input that moves the focus: the d-pad only while the left stick drives the pointer
 local function stick()
-	local x, y = U3D.Input.GetAxisRaw('Horizontal'), U3D.Input.GetAxisRaw('Vertical')
-	if x * x + y * y < 0.04 then x, y = axis(M.cfg.hatX), -axis(M.cfg.hatY) end
+	if M.cfg.stickPointer then return dpad() end
+	local x, y = leftStick()
+	if x * x + y * y < 0.04 then x, y = dpad() end
 	return x, y
+end
+local function stickMoved()
+	local x, y = leftStick()
+	local d = M.cfg.cursorDead
+	return x * x + y * y > d * d
 end
 
 local function direction(x, y)
@@ -916,6 +939,7 @@ local function anyPadInput()
 	for n = 0, 11 do if key(n) then return true end end
 	local x, y = stick()
 	if x * x + y * y > 0.25 then return true end
+	if stickMoved() then return true end
 	local rx, ry = axis(M.cfg.rStickX), axis(M.cfg.rStickY)
 	return rx * rx + ry * ry > 0.25
 end
@@ -959,6 +983,32 @@ local function debugToggle()
 	end
 end
 
+-- ---------- pointer (the left stick as a mouse) ----------
+-- keepPlace: start where the pointer was, else on the focused control, else mid-screen
+local function pointerOn(keepPlace)
+	local sw, sh = U3D.Screen.width, U3D.Screen.height
+	if st.focus and st.focus.r and st.shown then st.cx, st.cy = G.center(st.focus.r)
+	elseif not (keepPlace and st.cx > 0 and st.cy > 0) then st.cx, st.cy = sw * 0.5, sh * 0.5 end
+	st.cursorOn, st.hover, st.hoverAt = true, nil, 0
+	hideFrame()
+end
+-- back to focus steps: the control under the pointer takes the focus
+local function pointerOff()
+	st.cursorOn = false
+	showCursor(false)
+	if st.hover and st.hover.r then setFocus(st.hover) end
+	st.hover = nil
+	st.shown = true
+	if not focusValid() then refresh(false) end
+end
+-- the control under the pointer; the full control scan runs at most twice a second
+local function hoverUpdate(t)
+	if t >= (st.collectAt or 0) + 0.5 then collect(); st.collectAt = t end
+	local c = owner(rayHit(st.cx, st.cy), st.all or st.byId)
+	if c and not c.r then c.r = screenRect(c.rt) end
+	st.hover = c
+end
+
 function M.Tick()
 	local t = now()
 	local dt = math.min(0.1, t - (st.lastTick > 0 and st.lastTick or t))
@@ -971,7 +1021,7 @@ function M.Tick()
 			-- start from scratch when the HUD gives the pad back: no cursor, and the first pad input only
 			-- shows the frame, so A still held from firing does not press the window that opens
 			st.shown, st.cursorOn, st.dirHeld, st.prev, st.pending = false, false, nil, {}, nil
-			st.focus, st.pressed = nil, nil
+			st.focus, st.pressed, st.hover = nil, nil, nil
 		end
 		M.owner = 'fight'
 		return
@@ -987,44 +1037,56 @@ function M.Tick()
 	end
 	if not st.shown and not st.cursorOn then
 		if not anyPadInput() then return end
-		-- first pad input after touch: show the frame, swallow this press
-		st.shown = true
+		-- first pad input after touch: show the frame (or the pointer, for the left stick), swallow this press
 		for name, list in pairs({ press = M.cfg.press, back = M.cfg.back, prev = M.cfg.tabPrev, next = M.cfg.tabNext,
 			skip = M.cfg.skip, cursor = M.cfg.cursor }) do st.prev[name] = anyKey(list) end
 		st.dirHeld, st.dirNext = direction(stick()), t + M.cfg.repeatDelay
 		if not focusValid() then refresh(false) end
+		if M.cfg.stickPointer and stickMoved() then pointerOn(false) else st.shown = true end
 		return
 	end
 
-	-- optional cursor
+	-- Select: the left stick drives the pointer, or (pressed again) steps the focus like the d-pad
 	if edge('cursor', M.cfg.cursor) == 'down' then
-		st.cursorOn = not st.cursorOn
 		if st.cursorOn then
-			if st.focus and st.focus.r then st.cx, st.cy = G.center(st.focus.r)
-			else st.cx, st.cy = U3D.Screen.width * 0.5, U3D.Screen.height * 0.5 end
-			hideFrame()
+			M.cfg.stickPointer = false
+			pointerOff()
 		else
-			showCursor(false)
-			st.shown = true
-			refresh(false)
+			M.cfg.stickPointer = true
+			pointerOn(true)
 		end
-		if M.cfg.debug then log('cursor ' .. tostring(st.cursorOn)) end
+		log('pointer ' .. tostring(st.cursorOn))
+	end
+	-- the left stick takes the pointer out; the d-pad puts the focus back
+	if not st.cursorOn and M.cfg.stickPointer and stickMoved() then pointerOn(true) end
+	if st.cursorOn and direction(dpad()) then
+		pointerOff()
+		st.dirHeld, st.dirNext = direction(dpad()), t + M.cfg.repeatDelay   -- this press only shows the focus
 	end
 
 	local story = storyCartoon()
 	local p = edge('press', M.cfg.press)
 
 	if st.cursorOn then
-		local x, y = stick()
+		local x, y = leftStick()
 		local m = math.sqrt(x * x + y * y)
-		if m > 0.15 then
-			local v = M.cfg.cursorSpeed * U3D.Screen.height * dt * m
+		local dz = M.cfg.cursorDead
+		if m > dz then
+			-- response curve: fine control near the centre, full speed at full tilt; slower over a control
+			local k = math.min(1, (m - dz) / (1 - dz)) ^ M.cfg.cursorCurve
+			if st.hover then k = k * M.cfg.cursorSlow end
+			local v = M.cfg.cursorSpeed * U3D.Screen.height * dt * k
 			st.cx = math.max(0, math.min(U3D.Screen.width, st.cx + x / m * v))
 			st.cy = math.max(0, math.min(U3D.Screen.height, st.cy + y / m * v))
 		end
 		showCursor(true)
+		if t >= st.hoverAt then
+			st.hoverAt = t + M.cfg.hoverEvery
+			hoverUpdate(t)
+		end
+		if st.hover and st.hover.r then showFrame(st.hover.r) else hideFrame() end
 		if p == 'down' then
-			collect()
+			collect(); st.collectAt = t
 			local c = owner(rayHit(st.cx, st.cy), st.all)
 			if c then pressDown(c.go)
 			elseif story then pcall(function() story:OnTouch() end) end

@@ -80,7 +80,7 @@ Shooting stages (`P.cfg` in `gamepad_fight.lua`):
 | Right stick | Aim (free aim; fire with the trigger) |
 | A | Lock on the nearest enemy; press again for the next nearest |
 | X / Y / B | Skill 1 / 2 / 3 |
-| LB | Dash: along the left stick, or with the stick at rest each girl away from the team center |
+| LB, left trigger | Dash: along the left stick, or with the stick at rest each girl away from the team center |
 | Start | Pause menu, open and close |
 | Select | Auto-fight on and off |
 | L3 + R3 | Debug log on and off |
@@ -89,13 +89,14 @@ Menus, popups and story scenes (`M.cfg` in `gamepad_menu.lua`):
 
 | Control | Action |
 | --- | --- |
-| D-pad, left stick | Move the focus (hold to repeat) |
-| A | Press the focused control (hold for long-press buttons) |
+| Left stick | Pointer, like a mouse: speed curve, slower over a control it can press, a frame marks that control |
+| D-pad | Move the focus (hold to repeat); the control under the pointer takes the focus |
+| A | Press the control under the pointer, or the focused one (hold for long-press buttons) |
 | B | Back: the window's close, back or cancel button, else a full-screen "tap to close" backdrop |
 | LB / RB | Previous / next tab of the top tab bar (a ToggleGroup), else a left / right arrow button |
-| Right stick | Scroll the list that holds the focus (else the largest list on screen) |
+| Right stick | Scroll the list under the pointer or with the focus (else the largest list on screen) |
 | Start | Story scene: Skip |
-| Select | Cursor on and off (below) |
+| Select | Left stick: pointer, or focus steps like the d-pad (below) |
 | L3 + R3 | Debug log on and off |
 
 Story scenes (`UI_Cartoon`): A advances the dialogue (`Cartoon:OnTouch`, the
@@ -107,25 +108,35 @@ choices appear, the first one takes the focus.
 
 What the client does (read from `libil2cpp.so` of the 0.1.3 client):
 `fightCamera:OnFight(v)` reaches `TeamFighting.SetAttackStart`, and each girl's
-`SchoolPlayerController.SetAttackStart` picks a target in a cone around `v`
-(the nearest one when `|v| < 0.5`) and keeps that direction and target until
-the next `OnFight`. While a girl fires, the game turns her to that direction.
-Offline, every `OnFight` call is applied at once. A dash (move skill) runs along
+`SchoolPlayerController.SetAttackStart` runs `AutoFindTarget`: a wide cone
+around `v` (the nearest enemy when `|v| < 0.5`), and for 0.2 s after a search
+it returns the last target whatever `v` is. She keeps `cacheFireDir` /
+`cacheFireTarget` until the next `OnFight`; her fire loop (`ConfigPrepareFire`)
+shoots along them and turns her toward `attackRotateToDirection`. Offline, every
+`OnFight` call is applied at once. A dash (move skill) runs along
 each girl's facing (`MoveController.RunMove` moves along `transform.forward`).
 So without help, fire stays on the first direction, and a dash while firing
 goes the fire way, not the stick way.
 
 What the layer does:
 
-- **Aim follows the input while the fire button stays down.** The layer calls
-  `OnFight` again when the wanted direction turns by more than `reaimAngle`
-  (12 degrees), at most once per `reaimGap` (0.05 s). A steady aim sends no
-  further call: each call restarts a charge weapon's timer.
+- **Direct aim (360 degrees).** `OnFight` starts fire once. Then, while fire is
+  held, the layer writes every girl's `cacheFireDir`, `attackRotateToDirection`
+  (and clears `cacheFireTarget`, `lastFindTargetTrans`) every `applyEvery`
+  (0.033 s), and turns her at once (`snapTurn`). This needs xLua's
+  `private_accessible` on `SchoolPlayerController` (logged once:
+  `[pad] private fields on|off`). No further `OnFight` call, so a charge weapon
+  keeps its charge. Without private access the layer falls back to calling
+  `OnFight` again when the aim turns by more than `reaimAngle` (8 degrees), at
+  most every `reaimGap` (0.2 s, the game's own target memory).
 - **Aim source, first match wins:** the right stick (radial dead zone
-  `aimDead`, 0.3; its last direction stays `aimHold`, 0.35 s, after the stick is
-  let go); a lock-on target; else, with `autoAim`, the nearest enemy, read every
-  `aimEvery` (0.1 s). With no enemy found, the layer sends a zero vector and the
-  game aims by itself, as before.
+  `aimDead`, 0.25; its last direction stays `aimHold`, 0.25 s, after the stick is
+  let go), with aim assist: an enemy within `assistAngle` (8 degrees) of the
+  stick takes the aim; a lock-on target; else, with `autoAim`, the nearest
+  enemy. With a target, each girl fires along her own line to it. The enemy list
+  is read every `aimEvery` (0.1 s). With no enemy found, the game aims by itself.
+  `autoAim` and `assistAngle` can be saved as PlayerPrefs `gcgpad.autoAim` (0/1)
+  and `gcgpad.assist` (degrees, 0 = off), read at each fight start.
 - **Lock-on (A):** locks the enemy nearest to the team center. A again takes the
   next one by distance (round robin). The lock stays on its enemy even when
   another one comes closer. When it dies, the nearest enemy left is locked
@@ -158,19 +169,26 @@ auto aim point the wrong way). Enemies spawn later, so the first fire of a
 fight logs `[pad] first fire: enemies=N`. Lock changes log `[pad] lock i/n` and
 `[pad] lock off`.
 
-Practices applied: radial dead zones; a minimum angle before the aim moves
-(filters stick noise); aim hold after the stick is let go; one button that locks
-and retargets, with a sticky lock; dash direction from the move stick; a dash
-pressed during its cooldown is buffered.
+Practices applied: radial dead zones; aim hold after the stick is let go; a
+small aim-assist cone; one button that locks and retargets, with a sticky lock;
+dash direction from the move stick; a dash pressed during its cooldown is
+buffered.
 
-## Optional cursor
+## Menu pointer
 
-Select turns a cursor on. The left stick (or d-pad) moves it and A taps whatever
-lies under it with the same pointer events. Select again turns it off and the
-focus frame returns. The cursor is for the rare control that focus navigation
-does not reach; it is not the main control. When the fight HUD takes the pad,
-the cursor turns off. After the fight the first pad input only shows the focus
-frame, so A still held from firing does not press the result window.
+The left stick moves a pointer, as a mouse would (the way Steam Input's
+"joystick mouse" works): speed = `cursorSpeed` (1.5 screen heights per second)
+times the tilt past `cursorDead` raised to `cursorCurve` (2.2), so a small tilt
+places it precisely and a full tilt crosses the screen fast. Over a control it
+can press, the pointer slows to `cursorSlow` (half) and a frame marks that
+control. A presses the control under the pointer with the same pointer events
+as a finger. The right stick scrolls the list under the pointer. The d-pad
+switches back to focus steps, starting on the control under the pointer; the
+left stick brings the pointer back. Select switches the left stick between the
+pointer and focus steps (`stickPointer`). When the fight HUD takes the pad, the
+pointer turns off. After the fight the first pad input only shows the focus
+frame or the pointer, so A still held from firing does not press the result
+window.
 
 ## Axes
 
@@ -179,9 +197,19 @@ stock table names five axes, and the layers use them when nothing else exists:
 
 | Joystick axis | Stock name | Used for |
 | --- | --- | --- |
-| 1, 2 | `Horizontal`, `Vertical` (also the arrow keys) | Move, focus |
-| 3 | `HandleFire` | Right trigger |
-| 4, 5 | `RightHorizontal`, `RightVertical` | Aim, scroll |
+| 1, 2 | `Horizontal`, `Vertical` (also the arrow keys) | Move, pointer |
+| 3 | `HandleFire` | Aim X, scroll X (on Android the 3rd axis is the right stick X) |
+| 4 | `RightHorizontal` | Aim Y, scroll Y (the right stick Y) |
+| 5 | `RightVertical` (stored inverted; the layers undo the sign) | D-pad X |
+
+Unity on Android numbers the axes of a standard (Xbox layout) pad as: 1/2 left
+stick, 3/4 right stick (`AXIS_Z` / `AXIS_RZ`), 5/6 d-pad (`AXIS_HAT_X` /
+`AXIS_HAT_Y`), 12 right trigger (`AXIS_GAS`), 13 left trigger (`AXIS_BRAKE`).
+These are the defaults since 2026-11-18 (a Flydigi Vader 5 in Xbox mode reports
+exactly these Android axes in `adb shell dumpsys input`). Before, the layers read
+4/5 as the right stick and 3 as the trigger: aim followed the stick's up/down
+only and a right push fired. Without the raw entries below, the triggers (12, 13)
+and the d-pad Y (6) cannot be read.
 
 Controllers do not agree on the axes of the right stick, the triggers and the
 d-pad. An optional change to the InputManager in the base APK's `data.unity3d`

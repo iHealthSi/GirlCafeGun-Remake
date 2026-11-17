@@ -279,7 +279,8 @@ UI.GetWindowGameObject = function(n) return windowObjects and windowObjects[n] e
 
 function frame(dt) clock = clock + (dt or 0.05); for _, fn in pairs(timers) do fn() end end
 function press(n) pad.buttons[n] = true; frame(); pad.buttons[n] = false; frame() end
-function stick(x, y) pad.h, pad.v = x, y; frame(); pad.h, pad.v = 0, 0; frame() end
+-- the d-pad (hat axes 5/6, down = positive) steps the focus; the left stick (pad.h / pad.v) is the pointer
+function dpad(x, y) pad.axes[5], pad.axes[6] = x, -y; frame(); pad.axes[5], pad.axes[6] = 0, 0; frame() end
 function focusName() local f = GamepadMenu._state.focus; return f and f.go.name or 'none' end
 function frameShown()
   local o = GamepadMenu.overlay
@@ -341,8 +342,8 @@ def scenario(chunk, report):
       UI.Open('UI_Login')
       press(0); frame(0.3)''')
     assert ev('focusName()') == 'BtnLogin', ev('focusName()')            # the main action takes the focus
-    check(lua, 'stick(1, 0)', '', 'title: right to Update', report); assert ev('focusName()') == 'BtnUpdate'
-    check(lua, 'stick(-1, 0)', '', 'title: back to start', report); assert ev('focusName()') == 'BtnLogin'
+    check(lua, 'dpad(1, 0)', '', 'title: right to Update', report); assert ev('focusName()') == 'BtnUpdate'
+    check(lua, 'dpad(-1, 0)', '', 'title: back to start', report); assert ev('focusName()') == 'BtnLogin'
     check(lua, 'press(0)', 'down BtnLogin|up BtnLogin|click BtnLogin', 'title: A starts', report)
     lua.execute('login.active = false; frame(0.3); touches = 1; frame(); touches = 0; frame()')
     lua.execute(SCENE)
@@ -357,24 +358,24 @@ def scenario(chunk, report):
                   ' or GamepadMenu.overlay.cursor[3].go.active')
 
     # spatial moves, edges, and the beam rule
-    check(lua, 'stick(1, 0)', '', 'right', report); assert ev('focusName()') == 'Cell3'
-    check(lua, 'stick(1, 0)', '', 'right at edge', report); assert ev('focusName()') == 'Cell3'
-    check(lua, 'stick(0, -1)', '', 'down', report); assert ev('focusName()') == 'Cell6'
-    check(lua, 'stick(-1, 0)', '', 'left', report); assert ev('focusName()') == 'Cell5'
-    check(lua, 'stick(0, 1); stick(0, 1)', '', 'up to the tab bar', report); assert ev('focusName()') == 'TabB'
-    check(lua, 'stick(-1, 0); stick(0, 1)', '', 'up to the top bar', report); assert ev('focusName()') == 'BtnBack'
-    check(lua, 'stick(0, -1)', '', 'back down', report); assert ev('focusName()') == 'TabA'
+    check(lua, 'dpad(1, 0)', '', 'right', report); assert ev('focusName()') == 'Cell3'
+    check(lua, 'dpad(1, 0)', '', 'right at edge', report); assert ev('focusName()') == 'Cell3'
+    check(lua, 'dpad(0, -1)', '', 'down', report); assert ev('focusName()') == 'Cell6'
+    check(lua, 'dpad(-1, 0)', '', 'left', report); assert ev('focusName()') == 'Cell5'
+    check(lua, 'dpad(0, 1); dpad(0, 1)', '', 'up to the tab bar', report); assert ev('focusName()') == 'TabB'
+    check(lua, 'dpad(-1, 0); dpad(0, 1)', '', 'up to the top bar', report); assert ev('focusName()') == 'BtnBack'
+    check(lua, 'dpad(0, -1)', '', 'back down', report); assert ev('focusName()') == 'TabA'
 
     # A presses like a finger: down on press, up and click on release
-    lua.execute('stick(0, -1)')
+    lua.execute('dpad(0, -1)')
     assert ev('focusName()') == 'Cell1'
     check(lua, 'pad.buttons[0] = true; frame()', 'down Cell1', 'A down', report)
     check(lua, 'frame()', '', 'A held', report)
     check(lua, 'pad.buttons[0] = false; frame()', 'up Cell1|click Cell1', 'A up', report)
 
     # held direction repeats after the delay
-    lua.execute('stick(0, 1)')   # back to TabA
-    check(lua, 'pad.h = 1; frame(0.05); frame(0.2); frame(0.2); pad.h = 0; frame()', '', 'repeat', report)
+    lua.execute('dpad(0, 1)')   # back to TabA
+    check(lua, 'pad.axes[5] = 1; frame(0.05); frame(0.2); frame(0.2); pad.axes[5] = 0; frame()', '', 'repeat', report)
     assert ev('focusName()') == 'TabC', ev('focusName()')
 
     # LB / RB: tabs of the toggle group
@@ -395,9 +396,9 @@ def scenario(chunk, report):
       el(pop, 'BtnClose', 1180, 660, 1250, 730)
       frame(0.3)''')
     assert ev('focusName()') == 'BtnConfirm', ev('focusName()')
-    check(lua, 'stick(-1, 0)', '', 'left in popup', report); assert ev('focusName()') == 'BtnCancel'
-    check(lua, 'stick(0, -1)', '', 'down: nothing below', report); assert ev('focusName()') == 'BtnCancel'
-    check(lua, 'stick(0, 1)', '', 'up: close, not the menu', report); assert ev('focusName()') == 'BtnClose'
+    check(lua, 'dpad(-1, 0)', '', 'left in popup', report); assert ev('focusName()') == 'BtnCancel'
+    check(lua, 'dpad(0, -1)', '', 'down: nothing below', report); assert ev('focusName()') == 'BtnCancel'
+    check(lua, 'dpad(0, 1)', '', 'up: close, not the menu', report); assert ev('focusName()') == 'BtnClose'
     check(lua, 'press(1)', 'down BtnClose|up BtnClose|click BtnClose', 'B closes popup', report)
     # the popup goes away: the focus returns to the control last used in the main window
     lua.execute('pop.active = false; frame(0.3)')
@@ -421,14 +422,14 @@ def scenario(chunk, report):
       for i = 1, 8 do items[i] = el(content, 'Item' .. i, 600, 800 - i * 190, 1300, 800 - i * 190 + 170) end
       UI.Open("UI_List"); frame(0.3)''')
     assert ev('focusName()') in ('Item2', 'Item3'), ev('focusName()')
-    lua.execute('for i = 1, 6 do stick(0, -1) end')
+    lua.execute('for i = 1, 6 do dpad(0, -1) end')
     assert ev('focusName()') == 'Item8', ev('focusName()')
     assert ev('content.transform.ay') > 0                  # content moved up to show the last item
     y0 = ev('select(2, items[8].transform:world()) + items[8].transform.r[2]')
     assert y0 >= 200, y0                                   # last item inside the viewport
     check(lua, 'press(0)', 'down Item8|up Item8|click Item8', 'A on scrolled item', report)
     before = ev('content.transform.ay')
-    check(lua, 'pad.axes[5] = -1; frame(0.1); pad.axes[5] = 0; frame()', '', 'right stick scrolls up', report)
+    check(lua, 'pad.axes[4] = -1; frame(0.1); pad.axes[4] = 0; frame()', '', 'right stick scrolls up', report)
     assert ev('content.transform.ay') < before
 
     # right stick over a list that holds no focus: the scene is scanned for the list a few times a second,
@@ -447,7 +448,7 @@ def scenario(chunk, report):
         return find(ty)
       end
       gstart = gcontent.transform.ay
-      pad.axes[5] = 1
+      pad.axes[4] = 1
       for i = 1, 100 do frame(0.01) end''')
     assert ev('focusName()') == 'BtnOk', ev('focusName()')
     assert ev('gcontent.transform.ay') > ev('gstart')          # the list under the stick still scrolls
@@ -456,7 +457,7 @@ def scenario(chunk, report):
     # the list goes away: the next tick looks again at once instead of moving a hidden list
     lua.execute('gview.active = false; gsr.isActiveAndEnabled = false; scrollScans = 0; frame(0.01)')
     assert ev('scrollScans') == 1, ev('scrollScans')
-    lua.execute('pad.axes[5] = 0; frame(); gal.active = false; frame(0.3)')
+    lua.execute('pad.axes[4] = 0; frame(); gal.active = false; frame(0.3)')
 
     # slider: left / right change its value
     lua.execute('''
@@ -465,7 +466,7 @@ def scenario(chunk, report):
       vol = el(opt, 'Volume', 700, 500, 1200, 560, 'slider')
       UI.Open("UI_Option"); frame(0.3)''')
     assert ev('focusName()') == 'Volume'
-    lua.execute('stick(1, 0)')
+    lua.execute('dpad(1, 0)')
     assert abs(ev('vol.sel.value') - 0.55) < 1e-6
 
     # touch hides the frame; the next pad input shows it again and is swallowed
@@ -488,14 +489,14 @@ def scenario(chunk, report):
     assert ev('focusName()') == 'none'
     check(lua, 'press(0)', 'advance', 'story A advances', report)
     check(lua, 'press(10)', 'down BtnSkip|up BtnSkip|click BtnSkip', 'story Start skips', report)
-    check(lua, 'stick(0, 1)', '', 'story d-pad', report); assert ev('focusName()') == 'BtnSkip'
+    check(lua, 'dpad(0, 1)', '', 'story d-pad', report); assert ev('focusName()') == 'BtnSkip'
     check(lua, 'press(1)', '', 'story B clears focus', report); assert ev('focusName()') == 'none'
     check(lua, 'press(0)', 'advance', 'story A advances again', report)
     lua.execute('''
       c1 = el(story, 'BtnChoice1', 700, 500, 1200, 580); c2 = el(story, 'BtnChoice2', 700, 380, 1200, 460)
       frame(0.6)''')
     assert ev('focusName()') == 'BtnChoice1'
-    check(lua, 'stick(0, -1); press(0)', 'down BtnChoice2|up BtnChoice2|click BtnChoice2', 'story choice', report)
+    check(lua, 'dpad(0, -1); press(0)', 'down BtnChoice2|up BtnChoice2|click BtnChoice2', 'story choice', report)
     lua.execute('story.active = false; openWindows.UI_Cartoon = false; storyPlaying = false')
 
     # optional cursor: Select on, stick moves it, A taps under it, Select off
@@ -505,7 +506,7 @@ def scenario(chunk, report):
       near = el(cur, 'Near', 860, 490, 1060, 590)
       UI.Open("UI_Cursor"); frame(0.3)''')
     check(lua, 'press(11)', '', 'cursor on', report)
-    assert ev('GamepadMenu._state.cursorOn') and not ev('frameShown()')
+    assert ev('GamepadMenu._state.cursorOn')   # the frame now marks the control under the pointer
     lua.execute('pad.h, pad.v = 1, -1; for i = 1, 12 do frame(0.05) end; pad.h, pad.v = 0, 0; frame()')
     cx, cy = ev('GamepadMenu._state.cx'), ev('GamepadMenu._state.cy')
     assert cx > 1300 and cy < 300, (cx, cy)
@@ -515,6 +516,34 @@ def scenario(chunk, report):
     check(lua, 'press(0)', '', 'cursor A on nothing', report)
     check(lua, 'press(11)', '', 'cursor off', report)
     assert not ev('GamepadMenu._state.cursorOn') and ev('frameShown()')
+    assert not ev('GamepadMenu.cfg.stickPointer')
+    lua.execute('pad.h = 1; frame(); pad.h = 0; frame()')
+    assert not ev('GamepadMenu._state.cursorOn')            # Select-off: the left stick steps the focus again
+    # pointer by default: the left stick brings it out where the focus is, Select is not needed
+    lua.execute('GamepadMenu.cfg.stickPointer = true; frame()')
+    fx = ev('focusName()')
+    lua.execute('pad.h = 0.3; frame(0.01); pad.h = 0; frame(0.01)')
+    assert ev('GamepadMenu._state.cursorOn'), 'stick did not bring the pointer'
+    if report: report('ok pointer: the left stick brings it out (focus was %s)' % fx)
+    # response curve: half tilt is much slower than full tilt; slower again over a control
+    def travel(tilt, x0=300, y0=900):
+        lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = %d, %d; GamepadMenu._state.hover = nil' % (x0, y0))
+        lua.execute('pad.h = %r; for i = 1, 4 do frame(0.05) end; pad.h = 0; frame(0.01)' % tilt)
+        return ev('GamepadMenu._state.cx') - x0
+    full, half = travel(1.0), travel(0.5)
+    assert 300 < full < 350 and half < full * 0.25, (full, half)   # 1.5 screen heights per second
+    if report: report('ok pointer: curve, full tilt %.0f px, half tilt %.0f px in 0.2 s' % (full, half))
+    # hover: the control under the pointer gets the frame; the pointer slows over it; A presses it
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150; frame(0.06); frame(0.06)')
+    assert ev('GamepadMenu._state.hover and GamepadMenu._state.hover.go.name') == 'Far' and ev('frameShown()')
+    over = travel(1.0, 1510, 150)
+    assert over < full * 0.7, (over, full)   # first frame at full speed, then half
+    lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 1600, 150; frame(0.06)')
+    check(lua, 'press(0)', 'down Far|up Far|click Far', 'pointer A presses the hover', report)
+    # the d-pad puts the focus back, on the control under the pointer
+    lua.execute('pad.axes[5] = 1; frame(); pad.axes[5] = 0; frame()')
+    assert not ev('GamepadMenu._state.cursorOn') and ev('focusName()') == 'Far' and ev('frameShown()'), ev('focusName()')
+    if report: report('ok pointer: d-pad returns to focus on the hovered control')
     # the cursor is on when a fight starts (it is turned off below, when the HUD takes the pad)
     check(lua, 'press(11)', '', 'cursor on before a fight', report)
     lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 960, 540')
@@ -528,7 +557,7 @@ def scenario(chunk, report):
       openWindows.UI_Fight = true; GamepadFight = { timer = 1 }
       frame(0.3)''')
     assert ev('GamepadMenu.owner') == 'fight' and not ev('frameShown()')
-    check(lua, 'press(0); press(1); stick(1, 0)', '', 'menu idle in fight', report)
+    check(lua, 'press(0); press(1); dpad(1, 0)', '', 'menu idle in fight', report)
     # the pause menu opens over the HUD: the menu layer takes the pad
     lua.execute('''
       openWindows.UI_MissionPause = true
@@ -561,7 +590,7 @@ def scenario(chunk, report):
       press(0); press(0)
       Game.Utils.ExecutePointerDownEvents = real''')
     assert sum('boom' in p for p in printed) == 1, printed
-    check(lua, 'stick(1, 0); press(0)', 'down B2|up B2|click B2', 'after an error', report)
+    check(lua, 'dpad(1, 0); press(0)', 'down B2|up B2|click B2', 'after an error', report)
     assert lua.eval('UI.Globals()') == (1, 2, 3, 4, 5, 6, 7)
 
     # an error in the start call never breaks UI.Open: the window still opens
