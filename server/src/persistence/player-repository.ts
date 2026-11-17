@@ -1838,6 +1838,28 @@ function yenPackPeriod(pack: YenPack, now: number): string | null {
   }
 }
 
+/**
+ * Starts a new purchase count for each ¥ pack whose day, week or month has
+ * passed. The client checks the count before it sends a purchase
+ * (IBLogic:DoBuyBox), so the reset cannot wait for one.
+ */
+function reconcileYenPackLimits(
+  player: Player,
+  now: number,
+  catalog = YenPackCatalog.loadDefault(),
+): void {
+  const periods = player.ibShop?.yenPeriods;
+  if (!periods) return;
+  for (const [id, stored] of Object.entries(periods)) {
+    const pack = catalog.pack(Number(id));
+    if (!pack) continue;
+    const period = yenPackPeriod(pack, now);
+    if (period === null || period === stored) continue;
+    periods[id] = period;
+    player.taskValues[String(makeIBShopTaskId(pack.id))] = 0;
+  }
+}
+
 function reconcileMaximumFightPower(player: Player): boolean {
   const maximum = maximumFormationPower(player);
   if (maximum <= player.fightPower) return false;
@@ -3556,6 +3578,7 @@ export class PlayerRepository {
       if (player) {
         if (this.#welcomeGifts) reconcileStarterCafe(player, now);
         reconcileEnergyActivity(player, now);
+        reconcileYenPackLimits(player, now);
         if (this.#welcomeGifts) {
           // The ¥ mail first, so that a new save shows the welcome mail on top.
           reconcileYenAllowanceMail((player.mail ??= makeMailbox()), now);

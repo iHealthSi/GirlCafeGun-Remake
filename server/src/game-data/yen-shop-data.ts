@@ -22,6 +22,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { AutoUseItemCatalog } from "./auto-use-item-data.js";
 import type { BaseAward } from "./chapter-config.js";
 
 export const MONEY_YEN = 95;
@@ -59,20 +60,8 @@ export interface YenPack {
 
 const BAG_BOX_GENRE = 8;
 const BOX_CLASSES = new Set(["IBGiftAuto", "ItemBoxAuto"]);
-/** AutoUse classes this server grants (see auto-use-item-data.ts and awardMoneyId). */
-const GRANTABLE_AUTO_CLASSES = new Set([
-  "ItemGoldAuto",
-  "ItemPayDiamondAuto",
-  "ItemGiftCoffeeCoinAuto",
-  "ItemNormalCoinAuto",
-  "ItemEquipCoinAuto",
-  "RikiItem",
-  "CafeItemAuto",
-  "ItemVisitingCardAuto",
-  "ItemPlayerListSkinAuto",
-  "ItemChatBubbleAuto",
-  "ItemHeadFrameAuto",
-]);
+/** Genre 15 wallets that awardMoneyId pays before any AutoUse rule (player-repository.ts). */
+const WALLET_DETAILS = new Set([1, 2, 4, 10, 11, 20, YEN_ITEM_DETAIL]);
 
 interface AutoUseRow {
   className: string;
@@ -99,7 +88,16 @@ export class YenPackCatalog {
   static #default: YenPackCatalog | undefined;
   readonly #packs = new Map<number, YenPack>();
 
-  constructor(purchaseIbShop: string, itemBoxInfo: string, autoUse: string) {
+  /**
+   * @param rules the server's AutoUse rules: an AutoUse item is granted only
+   *   when its row has a rule (not "none"), the same test grantAwards applies.
+   */
+  constructor(
+    purchaseIbShop: string,
+    itemBoxInfo: string,
+    autoUse: string,
+    rules: AutoUseItemCatalog,
+  ) {
     const auto = new Map<string, AutoUseRow>();
     for (const [g, d, p, l, className, first] of rows(autoUse)) {
       const value = Number.parseInt(first ?? "", 10);
@@ -142,7 +140,9 @@ export class YenPackCatalog {
         }
         return null;
       }
-      if (!GRANTABLE_AUTO_CLASSES.has(rule.className))
+      const effect =
+        g === 15 && WALLET_DETAILS.has(d) ? null : rules.effect(g, d, p, l);
+      if (effect !== null && effect.kind === "none")
         return `${rule.className} ${key(g, d, p, l)} has no rule`;
       out.push([g, d, p, l, n]);
       return null;
@@ -171,7 +171,7 @@ export class YenPackCatalog {
     }
   }
 
-  static loadDefault(): YenPackCatalog {
+  static loadDefault(rules = AutoUseItemCatalog.loadDefault()): YenPackCatalog {
     if (YenPackCatalog.#default) return YenPackCatalog.#default;
     const read = (file: string): string =>
       readFileSync(path.resolve(process.cwd(), "resources", file), "utf8");
@@ -179,6 +179,7 @@ export class YenPackCatalog {
       read("shop/purchaseibshop.txt"),
       read("shop/itemboxinfo.txt"),
       read("item/autouse.txt"),
+      rules,
     );
     return YenPackCatalog.#default;
   }

@@ -199,25 +199,35 @@ IBLOGIC_NEW = ('\t\t-- gcg2 offline: tbItem means the server took the price in y
                '\t\t\tif not tbParam.TradeNo or tbParam.TradeNo == "" then')
 
 PLAYER_ANCHOR = '--控制UI_Player资源各部分的显示和隐藏\nfunction tbClass:ShowOrHide(Area,type)'
-PLAYER_ADD = '''-- gcg2 offline: the yen wallet (money %d) in the first custom slot of the top bar, on the main screen
+PLAYER_ADD = '''-- gcg2 offline: the yen wallet (money %d) in the first custom slot of the top bar, on the main screen.
+-- UI.Call does not catch errors and UI_Main:OnOpen calls this: a fault hides the slot and is logged.
 function tbClass:ShowYen(bShow)
-    if not self.newItems or not self.newIds or not self.newItems[1] then return end
-    local item = self.newItems[1]
-    if not bShow then
-        if self.newIds[1] == %d then
-            self.newIds[1] = 0
-            item.obj:SetActive(false)
+    local ok, err = pcall(function()
+        if not self.newItems or not self.newIds or not self.newItems[1] then return end
+        local item = self.newItems[1]
+        if not bShow then
+            if self.newIds[1] == %d then
+                self.newIds[1] = 0
+                item.obj:SetActive(false)
+            end
+            return
         end
-        return
+        if me == nil then return end
+        local _, icon, _, count = MoneyLogic:GetInfo(%d)
+        self.newIds[1] = %d
+        self.newGDPLs[1] = {}
+        item.txt.text = NumberToString(count or 0)
+        item.icon.sprite = Sprite(icon or "%s")
+        item.oldVal = count
+        item.obj:SetActive(true)
+    end)
+    if not ok then
+        print("[yen] ShowYen failed: " .. tostring(err))
+        pcall(function()
+            self.newIds[1] = 0
+            self.newItems[1].obj:SetActive(false)
+        end)
     end
-    if me == nil then return end
-    local _, icon, _, count = MoneyLogic:GetInfo(%d)
-    self.newIds[1] = %d
-    self.newGDPLs[1] = {}
-    item.txt.text = NumberToString(count or 0)
-    item.icon.sprite = Sprite(icon or "%s")
-    item.oldVal = count
-    item.obj:SetActive(true)
 end
 
 ''' % (MONEY_YEN, MONEY_YEN, MONEY_YEN, MONEY_YEN, YEN_ICON)

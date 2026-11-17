@@ -5,6 +5,7 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { AutoUseItemCatalog } from "../src/game-data/auto-use-item-data.js";
 import { makeIBShopTaskId } from "../src/game-data/ib-shop-data.js";
 import {
   IB_SHOP_ERROR_NOT_ENOUGH_YEN,
@@ -210,9 +211,42 @@ describe("yen pack purchase", () => {
       reason: "limit_reached",
     });
     const nextMonth = new Date("2026-12-02T12:00:00+08:00").getTime();
+    // The client checks the count before it sends a purchase: the login resets it.
+    const relogged = await repository.getOrCreate("tester", nextMonth);
+    expect(relogged.taskValues[String(makeIBShopTaskId(7))]).toBe(0);
     const result = await repository.buyYenPack("tester", 7, nextMonth);
     expect(result.purchaseCount).toBe(1);
     expect(yen(repository)).toBe(YEN_ALLOWANCE - 2 * 108);
+  });
+
+  it("resets a weekly limit at the first login of the next week", async () => {
+    const repository = await createRepository();
+    await claimAllowance(repository);
+    await repository.buyYenPack("tester", 88, NOW);
+    const sameWeek = new Date("2026-11-19T12:00:00+08:00").getTime();
+    expect(
+      (await repository.getOrCreate("tester", sameWeek)).taskValues[
+        String(makeIBShopTaskId(88))
+      ],
+    ).toBe(1);
+    const nextWeek = new Date("2026-11-24T12:00:00+08:00").getTime();
+    expect(
+      (await repository.getOrCreate("tester", nextWeek)).taskValues[
+        String(makeIBShopTaskId(88))
+      ],
+    ).toBe(0);
+  });
+
+  it("puts every item of a sellable pack in a wallet, the bag or an AutoUse rule", () => {
+    const rules = AutoUseItemCatalog.loadDefault();
+    for (const pack of YenPackCatalog.loadDefault().packs()) {
+      for (const [g, d, p, l] of pack.contents ?? []) {
+        const effect = rules.effect(g, d, p, l);
+        expect(g === 8 && effect === null, `${pack.id}: bag box ${g}-${d}`).toBe(false);
+        if (g === 15 && [1, 2, 4, 10, 11, 20].includes(d)) continue;
+        expect(effect?.kind, `${pack.id}: ${g}-${d}-${p}-${l}`).not.toBe("none");
+      }
+    }
   });
 
   it("grants every sellable pack with no item left unhandled", async () => {
