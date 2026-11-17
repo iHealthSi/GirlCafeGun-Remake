@@ -66,6 +66,7 @@ import {
   weaponDecompositionReward,
 } from "../game-data/weapon-decomposition-data.js";
 import { INITIAL_COFFEE_TASK_VALUES, type CafeCoffee } from "../game-data/cafe-data.js";
+import { reconcileStarterCafe } from "../game-data/cafe-starter.js";
 import { CafeCatalog } from "../game-data/cafe-catalog.js";
 import { CafePetCatalog } from "../game-data/cafe-pet-catalog.js";
 import {
@@ -395,6 +396,7 @@ export interface CafeFurnitureState {
 }
 
 export interface CafeState {
+  starterVersion?: number;
   pets?: CafePetState;
   business?: CafeBusinessState;
   rooms?: HouseRoomState[];
@@ -3490,6 +3492,7 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[safeAccount];
       if (player) {
+        if (this.#welcomeGifts) reconcileStarterCafe(player, now);
         if (this.#welcomeGifts)
           reconcileWelcomeMail((player.mail ??= makeMailbox()), now);
         reconcileCustomGirlOutfits(player);
@@ -3547,6 +3550,7 @@ export class PlayerRepository {
         bounty: makeInitialBountyState(),
         ...makeStarterRoster(registerTime),
       };
+      if (this.#welcomeGifts) reconcileStarterCafe(player, now);
       reconcileInventoryLockState(player);
       reconcileRuneState(player);
       reconcileDailyMissions(player);

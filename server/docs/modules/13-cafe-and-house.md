@@ -1,5 +1,18 @@
 # Cafe and house
 
+## Release starter layout (0.1.4)
+
+Release welcome-gift policy also initializes an unfurnished cafe using the
+original CafeDefault theme (table 1), with safe owned object IDs, its exact
+nine item poses and four real dining positions. Sixty starting cups match an
+eligible customer's preference so sales can fund the next batch and earn cafe
+coins. No recurring free stock or changed sale rates are introduced.
+
+Login repairs older empty accounts once. Existing owned furniture, including
+stored collections and acquisition items, prevents the layout grant. A durable
+starter version prevents repeated grants after furniture is recycled. This
+does not alter progression, money, pets, staff or customized layouts.
+
 ## Current scope
 
 Core cafe implementation (2026-11-06), phone playtest passed.
