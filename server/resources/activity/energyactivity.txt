@@ -1,0 +1,5 @@
+INT	STR	STR	STR	INT
+编号	描述	开始领取时间	结束领取时间	获得体力
+Id	Des	BeginTime	EndTime	Energy
+1	activity.event9.tip	1100	1400	30
+2	activity.event9.tip	1800	2000	30

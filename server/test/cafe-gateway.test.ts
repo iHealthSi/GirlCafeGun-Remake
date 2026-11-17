@@ -651,6 +651,23 @@ describe("cafe actual TCP persistence", () => {
       });
       await f.reload();
       expect(luaValue(await f.call(112), 112)).toMatchObject({ roomgirlslist: rows });
+      const packets = await f.native(
+        COMMAND.GET_HOUSEINFO_REQ,
+        Buffer.alloc(0),
+        COMMAND.GET_HOUSEINFO_RSP,
+      );
+      const cache = decodeFields(firstBytes(decodeFields(packets.at(-1)!.payload), 2)!);
+      const areas = cache
+        .filter((field) => field.fieldNumber === 4)
+        .map((field) => decodeFields(field.value as Buffer));
+      expect(areas.map((area) => firstNumber(area, 1))).toEqual([1, 2, 6]);
+      expect(
+        areas.map((area) =>
+          area
+            .filter((field) => field.fieldNumber === 2)
+            .map((field) => Number(field.value)),
+        ),
+      ).toEqual([[2], [7], [9]]);
     } finally {
       await f.cleanup();
     }

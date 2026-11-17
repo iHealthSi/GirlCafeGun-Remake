@@ -39,8 +39,7 @@ async function fixture(
 ) {
   const root = path.resolve(import.meta.dirname, "../../tools/cafe-fix");
   const directory = await mkdtemp(path.join(root, "cafe-starter-"));
-  if (!directory.startsWith(root + path.sep))
-    throw new Error("Unsafe test directory");
+  if (!directory.startsWith(root + path.sep)) throw new Error("Unsafe test directory");
   const filePath = path.join(directory, "state.json");
   const store = new JsonStore({ filePath, initialState: makeInitialState(), logger });
   await store.initialize();
@@ -78,6 +77,7 @@ describe("release starter café", () => {
         })),
       ).toEqual(catalog.theme(1)!.poses);
       expect(player.cafe.business!.seats).toHaveLength(4);
+      expect(player.cafe.rooms!.map((room) => room.roomId)).toEqual([1, 2, 6]);
       expect(
         player.cafe.business!.seats.every((seat) =>
           validCafeSeat(player, seat.position, catalog),

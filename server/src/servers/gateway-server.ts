@@ -56,6 +56,7 @@ import {
 } from "../game-data/guide-data.js";
 import { NORMAL_ACTIVITY_ACHIEVEMENT_AWARD_TYPE } from "../game-data/activity-achievement-data.js";
 import { EIGHT_DAY_SIGN_UP_ACTIVITY_ID } from "../game-data/eight-day-sign-up-data.js";
+import { ENERGY_ACTIVITY_ID } from "../game-data/energy-activity-data.js";
 import {
   GachaCatalog,
   type GachaRollResult,
@@ -848,6 +849,8 @@ export function createGatewayServer({
       const result = await updateMailbox({ kind: "list" }, now);
       context.player = result.player;
       if (socket.destroyed) return;
+      if (result.taskValuesChanged)
+        send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(result.player.taskValues));
       const messages = result.player.mail?.messages ?? [];
       if (!mailDate) {
         send(COMMAND.GET_MAIL_RSP, 0, makeMailListResponse(messages));
@@ -1660,6 +1663,26 @@ export function createGatewayServer({
               : {};
           const activityId = Number(parameters.nActivityId);
           const achievementId = Number(parameters.nId);
+          if (activityId === ENERGY_ACTIVITY_ID) {
+            const result = await players.claimEnergyActivity(context.account);
+            sendPromiseUpdates(result, true);
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("NormalActivityMsg", {
+                nType: 4,
+                nEnergy: result.energy,
+                bFullAdd: result.claimed,
+              }),
+            );
+            logger.info("activity.energy_claim", {
+              account: context.account,
+              claimed: result.claimed,
+              energy: result.energy,
+              reason: result.reason,
+            });
+            return;
+          }
           if (activityId === EIGHT_DAY_SIGN_UP_ACTIVITY_ID) {
             try {
               const result = await players.claimEightDaySignUpAward(

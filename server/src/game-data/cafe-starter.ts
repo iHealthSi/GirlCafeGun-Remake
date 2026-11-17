@@ -2,7 +2,7 @@ import { CafeCatalog } from "./cafe-catalog.js";
 import { INITIAL_COFFEE_TASK_VALUES } from "./cafe-data.js";
 import { nextCafeFurnitureObjectId } from "./cafe-furniture-data.js";
 import { CafeRuntime, makeCafeBusinessState } from "./cafe-runtime.js";
-import { isNativeFixedHouseObjectId } from "./house-data.js";
+import { completeHouseRooms, isNativeFixedHouseObjectId } from "./house-data.js";
 import type { Player } from "../persistence/player-repository.js";
 
 /** Release starter grant and one-time repair for pre-existing unfurnished cafés. */
@@ -12,6 +12,7 @@ export function reconcileStarterCafe(
   catalog = CafeCatalog.loadDefault(),
 ): void {
   const cafe = player.cafe;
+  cafe.rooms = completeHouseRooms(cafe.rooms);
   if (cafe.starterVersion === 1) return;
   cafe.starterVersion = 1;
   const furniture = (cafe.furniture ??= []);

@@ -1,5 +1,37 @@
 # Release validation
 
+## Release 0.1.5
+
+Repairs cafe staff lookup for existing 0.1.4 starter layouts by restoring the
+three required native area records, including locked bedrooms. Furniture,
+staff, stock, currencies and progression are retained. Assignments synchronize
+native room membership as well as the cafe business list.
+
+The Recharge Power page's exact request (`NormalActivityGetAward` with only
+`nActivityId: 8`) now has a handler. The original client table grants 30 power
+once in each 11:00-14:00 and 18:00-20:00 window in the in-game server clock
+(UTC+8). Claim flags persist, resist repeated/client-edited requests, reset at
+the 04:00 daily boundary, and synchronize before the UI callback. Missed windows
+do not grant automatic rewards.
+
+All 486 server tests passed across 85 files, including real TCP callbacks,
+restart persistence, staff room membership, concurrent power claims and daily
+reset. TypeScript and affected ESLint checks passed. The client evidence was
+read back from the exact 0.1.4 APK; the native staff lookup bytes match the
+reviewed disassembly. No phone playtest is claimed.
+
+Game assets and all 34 data-pack URLs are unchanged. The 0.1.4-to-0.1.5 signed
+update is 3,821,288 bytes and includes the server fix and exact APK delta.
+No new game-data packs are uploaded. The pre-upload object inventory was
+6,903,581,074 bytes; the projected upload peak is 7,536,177,073 bytes, below the
+9 GB threshold that reserves 1 GB of the 10 GB hosting budget.
+
+The complete hosted APK, all five update packages and public manifest/signature
+matched their local SHA-256 hashes. All 34 reused pack routes returned their
+signed sizes; APK resume ranges across the private-part boundary matched and
+private-part URLs remained inaccessible. Coffee reward values and rules are
+unchanged; client/server coffee, preference and coin-cap tables agree.
+
 ## Release 0.1.4
 
 Includes the six collaborator contributions merged into main, affection-story

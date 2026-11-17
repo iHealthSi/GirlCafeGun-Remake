@@ -67,6 +67,13 @@ import {
 } from "../game-data/weapon-decomposition-data.js";
 import { INITIAL_COFFEE_TASK_VALUES, type CafeCoffee } from "../game-data/cafe-data.js";
 import { reconcileStarterCafe } from "../game-data/cafe-starter.js";
+import {
+  currentEnergyWindow,
+  energyActivityTaskId,
+  isEnergyActivityTaskId,
+  reconcileEnergyActivity,
+  type EnergyActivityState,
+} from "../game-data/energy-activity-data.js";
 import { CafeCatalog } from "../game-data/cafe-catalog.js";
 import { CafePetCatalog } from "../game-data/cafe-pet-catalog.js";
 import {
@@ -81,6 +88,7 @@ import {
 } from "../game-data/cafe-furniture-commerce.js";
 import {
   isNativeFixedHouseObjectId,
+  completeHouseRooms,
   type HouseChanges,
   type HouseData,
   type HouseRoomState,
@@ -478,6 +486,7 @@ export interface Player {
   gacha: GachaState;
   dailyMissions?: DailyMissionState;
   dailySignUp: DailySignUpState;
+  energyActivity?: EnergyActivityState;
   eightDaySignUp: EightDaySignUpState;
   bounty?: BountyState;
   ibShop?: IBShopState;
@@ -2532,6 +2541,9 @@ function applyCafeStaff(player: Player, rows: unknown, now: number): number[][][
   reconcilePromise(player, PromiseCatalog.loadDefault(), now);
   player.promise!.assignments = assignments;
   player.cafe.roomGirlsList = normalized;
+  player.cafe.rooms = completeHouseRooms(player.cafe.rooms);
+  for (const [index, room] of player.cafe.rooms.entries())
+    room.girlIds = normalized[index]!.map((girl) => girl.girlId);
   return normalized.map((row) => row.map(({ girlId, modelId }) => [girlId, modelId]));
 }
 
@@ -3493,6 +3505,7 @@ export class PlayerRepository {
       player = state.players[safeAccount];
       if (player) {
         if (this.#welcomeGifts) reconcileStarterCafe(player, now);
+        reconcileEnergyActivity(player, now);
         if (this.#welcomeGifts)
           reconcileWelcomeMail((player.mail ??= makeMailbox()), now);
         reconcileCustomGirlOutfits(player);
@@ -3551,6 +3564,7 @@ export class PlayerRepository {
         ...makeStarterRoster(registerTime),
       };
       if (this.#welcomeGifts) reconcileStarterCafe(player, now);
+      reconcileEnergyActivity(player, now);
       reconcileInventoryLockState(player);
       reconcileRuneState(player);
       reconcileDailyMissions(player);
@@ -3616,6 +3630,7 @@ export class PlayerRepository {
       reconcileRuneState(player);
       reconcileDailyMissions(player, now);
       reconcileDailySignUp(player, now);
+      reconcileEnergyActivity(player, now);
       reconcileEightDaySignUp(player, now, true);
       reconcileBounty(player, now);
       reconcileChapterStarTaskValues(player);
@@ -3638,7 +3653,12 @@ export class PlayerRepository {
     if (action.kind === "list") {
       const player = this.get(account);
       const lastDailyDate = player?.mail?.lastDailyDate;
-      if (player && lastDailyDate && lastDailyDate >= dailySignUpOperationalDate(now)) {
+      if (
+        player &&
+        lastDailyDate &&
+        lastDailyDate >= dailySignUpOperationalDate(now) &&
+        player.energyActivity?.operationalDate === dailySignUpOperationalDate(now)
+      ) {
         return {
           player,
           acceptedIds: [],
@@ -3653,6 +3673,7 @@ export class PlayerRepository {
       const player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       const mailbox = (player.mail ??= makeMailbox());
+      const energyTasksChanged = reconcileEnergyActivity(player, now);
       reconcileDailyPullMail(mailbox, dailyAwards, now);
       const items = new Set<number>();
       const money = new Set<number>();
@@ -3670,7 +3691,7 @@ export class PlayerRepository {
         updatedGirls: snapshot.girls.filter(({ girlId }) =>
           roster.updatedGirlIds.has(girlId),
         ),
-        taskValuesChanged: roster.tasksChanged,
+        taskValuesChanged: roster.tasksChanged || energyTasksChanged,
       };
     });
   }
@@ -3852,6 +3873,8 @@ export class PlayerRepository {
         player.cafe.roomGirlsList = player.cafe.roomGirlsList.map((row) =>
           row.filter((entry) => entry.girlId !== girlId),
         );
+      for (const room of player.cafe.rooms ?? [])
+        room.girlIds = room.girlIds.filter((id) => id !== girlId);
       endTime = Math.floor(now / 1_000) + config.durationSeconds;
       player.taskValues[
         String(makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_CAFE_POSITION_OFFSET))
@@ -4302,6 +4325,7 @@ export class PlayerRepository {
           isGirlMainStoryTaskId(id) ||
           isRotationSelectionTaskId(id) ||
           isHeadpatTaskId(id) ||
+          isEnergyActivityTaskId(id) ||
           isCafePetTaskId(id, CafePetCatalog.loadDefault()) ||
           (id >>> 16 === 60 && (id & 0xffff) >= 101 && (id & 0xffff) <= 104)
         )
@@ -4586,6 +4610,52 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
     };
+  }
+
+  /** UI_EnergyGet sends only nActivityId=8; the server chooses the live window. */
+  async claimEnergyActivity(
+    account: string,
+    now = Date.now(),
+  ): Promise<
+    PromiseOperationResult & {
+      energy: number;
+      claimed: boolean;
+      reason?: string;
+    }
+  > {
+    if (!Number.isSafeInteger(now) || now < 0)
+      throw new Error("Invalid energy activity clock");
+    let result:
+      | (PromiseOperationResult & { energy: number; claimed: boolean; reason?: string })
+      | undefined;
+    await this.#store.update((state) => {
+      const player = state.players[account];
+      if (!player) throw new Error("Unknown energy activity player");
+      reconcileEnergyActivity(player, now);
+      const window = currentEnergyWindow(now);
+      const task = window ? String(energyActivityTaskId(window.id)) : "";
+      const reason =
+        player.energyActivity!.operationalDate > dailySignUpOperationalDate(now)
+          ? "clock_reversed"
+          : !window
+            ? "not_open"
+            : (player.taskValues[task] ?? 0) > 0
+              ? "already_claimed"
+              : undefined;
+      const items = new Set<number>(),
+        money = new Set<number>();
+      if (!reason && window) {
+        grantAwards(player, [[15, 4, 1, 1, window.energy]], items, money);
+        player.taskValues[task] = 1;
+      }
+      result = {
+        ...promiseResult(player, undefined, items, money),
+        claimed: !reason,
+        energy: reason ? 0 : window!.energy,
+        ...(reason ? { reason } : {}),
+      };
+    });
+    return result!;
   }
 
   async claimEightDaySignUpAward(

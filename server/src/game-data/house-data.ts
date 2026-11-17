@@ -17,6 +17,23 @@ export interface HouseRoomState {
   themeId: number;
   furnitureIds: number[];
 }
+
+/** GetGirlinWhichArea returns unassigned unless all three native areas exist,
+ * including the locked bedrooms. Always restore the complete structural set. */
+export function completeHouseRooms(
+  rooms: readonly HouseRoomState[] = [],
+): HouseRoomState[] {
+  return [1, 2, 6].map(
+    (roomId) =>
+      rooms.find((room) => room.roomId === roomId) ?? {
+        roomId,
+        girlIds: [],
+        friendGirlId: 0,
+        themeId: 0,
+        furnitureIds: [],
+      },
+  );
+}
 export interface HouseThemeState {
   themeId: number;
   templateThemeId: number;
