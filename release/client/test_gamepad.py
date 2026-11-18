@@ -47,6 +47,8 @@ U3D = {
       if name == "Horizontal" then return pad.h end
       if name == "Vertical" then return pad.v end
       local n = tonumber(name:match("^gcgpad_a(%d+)$"))
+      if n == 1 and (rawAxes or rawAxes == nil) then return pad.h end   -- raw left stick (Vertical is up-positive,
+      if n == 2 and (rawAxes or rawAxes == nil) then return -pad.v end  -- the raw axis down-positive)
       if n and rawAxes then return pad.axes[n] or 0 end
       local s = STOCK[name]
       if s then return (pad.axes[s[1]] or 0) * s[2] end

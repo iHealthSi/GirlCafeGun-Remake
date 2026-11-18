@@ -1009,7 +1009,10 @@ local function edge(name, list)
 	return nil
 end
 
+-- raw axes 1/2 (no per-axis dead zone, see gamepad_fight.lua); the stock entries without them
 local function leftStick()
+	local x, y = named('gcgpad_a1'), named('gcgpad_a2')
+	if x and y then return x, -y end
 	return U3D.Input.GetAxisRaw('Horizontal'), U3D.Input.GetAxisRaw('Vertical')
 end
 local function dpad()

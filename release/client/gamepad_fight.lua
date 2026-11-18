@@ -63,7 +63,7 @@ P.cfg = P.cfg or {
 	rTrigger    = 12, lTrigger = 13,
 	hatX        = 5, hatY = 6,
 	debug       = false,           -- L3+R3 toggles: logs every button / axis change
-	aimTrace    = 20,              -- s of aim-stick use per fight logged 5 times a second ([pad] trace ...); 0 = off
+	aimTrace    = 30,              -- s of stick use per fight logged 5 times a second ([pad] trace ...); 0 = off
 }
 
 -- Login.lua lowers the Unity log filter, so a plain print never reaches logcat: lift it for our own lines
@@ -117,6 +117,15 @@ local function axis(n)
 		if v then v = v * STOCK[n][2] end
 	end
 	return v or 0
+end
+
+-- The left stick, raw. The stock Horizontal / Vertical entries have a dead zone of 0.19 PER AXIS (seen in
+-- the installed APK), which pulls directions near an axis onto it; the raw entries have none, and the
+-- callers use a round dead zone. Raw axis 2 is down-positive, Vertical is up-positive.
+local function leftStickRaw()
+	local x, y = named("gcgpad_a1"), named("gcgpad_a2")
+	if x and y then return x, -y end
+	return U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
 end
 
 local broken = {}
@@ -469,17 +478,20 @@ end
 -- Aim trace: what the stick gives, what this layer writes and where the girls really face. Angles in
 -- degrees, Unity yaw convention (0 = world +z, 90 = world +x). One line per 0.2 s of aim-stick use.
 local function yaw(x, z) return math.deg(math.atan(x, z)) % 360 end
-local function trace(rx, ry)
+local function trace(rx, ry, lx, ly)
 	local cfg = P.cfg
-	local line = string.format("trace raw=%.2f,%.2f stick=%.0f fire=%s", rx, ry, math.deg(math.atan(st.fy, st.fx)) % 360,
-		tostring(st.firing))
+	local sh, sv = U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
+	local line = string.format("trace raw=%.2f,%.2f stick=%.0f fire=%s left=%.2f,%.2f stock=%.2f,%.2f", rx, ry,
+		math.deg(math.atan(st.fy, st.fx)) % 360, tostring(st.firing), lx, ly, sh, sv)
 	if st.wx ~= 0 or st.wz ~= 0 then line = line .. string.format(" world=%.0f", yaw(st.wx, st.wz)) end
 	for i, g in ipairs(st.girls) do
 		local ok, v = pcall(function()
 			local s = string.format(" g%d=%.0f", i, g.tr.eulerAngles.y)
 			if private then
 				local d = g.pc.cacheFireDir
-				s = s .. string.format("/dir%.0f/rot%s", yaw(d.x, d.z), tostring(g.pc.isFireRotate))
+				s = s .. string.format("/dir%.0f/rot%s/reload%s%s/move%.0f", yaw(d.x, d.z), tostring(g.pc.isFireRotate),
+					g.pc.isChangeBullet and "1" or "0", g.pc.ChangeBulletAnimateStart and "1" or "0",
+					(function() local q = g.pc.moveRotateToDirection; return q.eulerAngles.y end)())
 			end
 			return s
 		end)
@@ -527,7 +539,7 @@ function P.Tick()
 	local t = now()
 
 	-- move: stock Horizontal/Vertical (left stick = joystick axes 1/2, and the arrow keys), else the hat
-	local x, y = U3D.Input.GetAxisRaw("Horizontal"), U3D.Input.GetAxisRaw("Vertical")
+	local x, y = leftStickRaw()
 	if x * x + y * y < cfg.dead * cfg.dead then
 		x, y = axis(cfg.hatX), -axis(cfg.hatY)
 	end
@@ -550,9 +562,10 @@ function P.Tick()
 		if st.lock then st.lock = nil; log("lock off") end
 	end
 	local free = st.freeAt ~= nil and t - st.freeAt <= cfg.aimHold
-	if aimed and st.traceLeft > 0 and t >= st.traceAt then
+	if (aimed or st.moving) and st.traceLeft > 0 and t >= st.traceAt then
 		st.traceAt, st.traceLeft = t + 0.2, st.traceLeft - 0.2
-		pcall(trace, rx, ry)
+		if not st.girls[1] then pcall(function() st.girls = readGirls() end) end
+		pcall(trace, rx, ry, x, y)
 	end
 	if pressed("lock", cfg.lock) then try("lock", lockNext) end
 

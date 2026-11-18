@@ -220,6 +220,8 @@ U3D = {
       if name == "Horizontal" then return pad.h end
       if name == "Vertical" then return pad.v end
       local n = tonumber(name:match("^gcgpad_a(%d+)$"))
+      if n == 1 and (rawAxes or rawAxes == nil) then return pad.h end   -- raw left stick (Vertical is up-positive,
+      if n == 2 and (rawAxes or rawAxes == nil) then return -pad.v end  -- the raw axis down-positive)
       if n then return pad.axes[n] or 0 end
       error("Input Axis " .. name .. " is not setup.")
     end,
