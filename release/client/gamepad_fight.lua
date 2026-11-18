@@ -518,6 +518,7 @@ local function caps()
 		.. " autoAim=" .. tostring(P.cfg.autoAim) .. " assist=" .. tostring(P.cfg.assistAngle))
 end
 
+local legacyFireAndDash, improvedFireAndDash
 function P.Tick()
 	local cfg = P.cfg
 	-- L3 + R3: debug log on/off
@@ -537,6 +538,13 @@ function P.Tick()
 	if GamepadMenu and GamepadMenu.owner == 'menu' and not GamepadMenu.off then P.Reset(); syncEdges(cfg); return end
 	if not P.capsDone then try("caps", caps) end
 	local t = now()
+	-- Settings > Operation > Controller Support (gamepad_menu.lua keeps it in the save): Default runs the
+	-- first release's behaviour (below: legacyFireAndDash), Improved everything this file adds.
+	-- Without the menu module (tests of this file alone) the layer runs Improved.
+	if t >= (P.modeAt or 0) then
+		P.modeAt = t + 0.5
+		P.improved = not GamepadMode or GamepadMode.Improved()
+	end
 
 	-- move: stock Horizontal/Vertical (left stick = joystick axes 1/2, and the arrow keys), else the hat
 	local x, y = leftStickRaw()
@@ -567,6 +575,38 @@ function P.Tick()
 		if not st.girls[1] then pcall(function() st.girls = readGirls() end) end
 		pcall(trace, rx, ry, x, y)
 	end
+	if not P.improved then
+		legacyFireAndDash(cfg, aimed)
+	else
+		improvedFireAndDash(cfg, t, mx, my, aimed, free)
+	end
+
+	-- skills (edge-triggered)
+	if pressed("s1", cfg.skill1) then try("skill", skill, 0, nil) end
+	if pressed("s2", cfg.skill2) then try("skill", skill, 1, nil) end
+	if pressed("s3", cfg.skill3) then try("skill", skill, 2, nil) end
+	if pressed("auto", cfg.auto) then try("auto", autoFight) end
+end
+
+-- Default mode: the controller as first released (Remake pull request 2). A, RB or the right trigger fire
+-- in the girls' own aim; the right stick fires toward its direction. The direction goes to the game once,
+-- when fire starts, and the game keeps it while fire is held. LB dodges where the girls face.
+local LEGACY_FIRE = { BTN.A, BTN.RB }
+legacyFireAndDash = function(cfg, aimed)
+	if pressed("dodge", cfg.dodge) then try("dodge", skill, 3, nil) end
+	local wantFire = aimed or anyKey(LEGACY_FIRE) or axis(cfg.rTrigger) > cfg.trigger
+	if wantFire and not st.firing then
+		local ax, ay = 0, 0
+		if aimed then ax, ay = st.fx, st.fy end
+		try("fire", fireStart, ax, ay)
+		st.firing = true
+	elseif not wantFire and st.firing then
+		try("fire", fireStop)
+		st.firing = false
+	end
+end
+
+improvedFireAndDash = function(cfg, t, mx, my, aimed, free)
 	if pressed("lock", cfg.lock) then try("lock", lockNext) end
 
 	-- dash: LB or the left trigger (a press during its cooldown waits up to dashBuffer)
@@ -632,12 +672,6 @@ function P.Tick()
 		try("fire", fireStop)
 		st.firing = false
 	end
-
-	-- skills (edge-triggered)
-	if pressed("s1", cfg.skill1) then try("skill", skill, 0, nil) end
-	if pressed("s2", cfg.skill2) then try("skill", skill, 1, nil) end
-	if pressed("s3", cfg.skill3) then try("skill", skill, 2, nil) end
-	if pressed("auto", cfg.auto) then try("auto", autoFight) end
 end
 
 -- A failed tick (for example while the scene loads) is skipped and logged once. After this many

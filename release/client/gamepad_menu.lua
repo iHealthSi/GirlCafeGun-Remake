@@ -104,6 +104,84 @@ local function logOnce(msg)
 	log(msg)
 end
 
+
+-- ---------- controller support mode (Settings > Operation > Controller Support) ----------
+-- Kept in the save as task value (32, 999): group 32 is UI_User's own settings group (Left-hand Mode is
+-- 32/1002), so the server stores it like the other Operation settings. 0 (never set) and 1 = Default: the
+-- controller layers as first released (fire keeps its first direction, plain dash, focus frame, cross
+-- cursor). 2 = HealthS Claude Improved: free aim, lock-on, dash rules, the menu pointer.
+GamepadMode = GamepadMode or {}
+local Mode = GamepadMode
+Mode.GROUP, Mode.ID, Mode.DEFAULT, Mode.IMPROVED = 32, 999, 1, 2
+function Mode.Get()
+	local ok, v = pcall(function() return me:GetTaskValue(Mode.GROUP, Mode.ID) end)
+	return (ok and v == Mode.IMPROVED) and Mode.IMPROVED or Mode.DEFAULT
+end
+function Mode.Improved() return Mode.Get() == Mode.IMPROVED end
+function Mode.Set(improved)
+	local v = improved and Mode.IMPROVED or Mode.DEFAULT
+	local ok, err = pcall(function() me:SetTaskValue(Mode.GROUP, Mode.ID, v) end)
+	log('mode ' .. (improved and 'improved' or 'default') .. (ok and '' or (' not saved: ' .. tostring(err))))
+end
+
+-- The Operation page gets a "Controller Support" section below Layout Settings, made from the page's own
+-- header (Title3) and two-choice row (Toggle: Fixed / Free Joystick, the same look and spacing). The page
+-- scrolls, so the section fits in its Region below the Customize button.
+Mode.LABELS = { title = 'Controller Support', default = 'Default', improved = 'HealthS Claude Improved' }
+Mode.TITLE_Y, Mode.ROW_Y = -692, -742
+function Mode.BuildSettings(page, region)
+	local ok, err = pcall(function()
+		if region:Find('GamepadTitle') then return end
+		local function clone(name, newName, y)
+			local src = region:Find(name)
+			local go = U3D.Object.Instantiate(src.gameObject, region)
+			go.name = newName
+			local rt = go:GetComponent(typeof(U3D.RectTransform))
+			rt.anchoredPosition = V2(rt.anchoredPosition.x, y)
+			return go.transform
+		end
+		local function text(tr, value)
+			local tx = tr:Find('Text'):GetComponent(typeof(UGUI.Text))
+			tx.text = value
+			tx.horizontalOverflow = U3D.HorizontalWrapMode.Overflow
+		end
+		text(clone('Title3', 'GamepadTitle', Mode.TITLE_Y), Mode.LABELS.title)
+		local row = clone('Toggle', 'GamepadMode', Mode.ROW_Y)
+		local tDefault = row:Find('Tgl1'):GetComponent(typeof(UGUI.Toggle))
+		local tImproved = row:Find('Tgl2'):GetComponent(typeof(UGUI.Toggle))
+		text(row:Find('Tgl1'), Mode.LABELS.default)
+		text(row:Find('Tgl2'), Mode.LABELS.improved)
+		local quiet = false
+		-- one of the two is always on; a tap on the other moves the choice and saves it
+		local function show(improved)
+			quiet = true
+			tDefault.isOn, tImproved.isOn = not improved, improved
+			for _, t in ipairs({ tDefault, tImproved }) do
+				local check = t.transform:Find('Checkmark')
+				if check then check.gameObject:SetActive(t.isOn) end
+			end
+			quiet = false
+		end
+		for _, pair in ipairs({ { tDefault, false }, { tImproved, true } }) do
+			local t, improved = pair[1], pair[2]
+			t.group = nil   -- the cloned toggles must not join the joystick toggles' group
+			t.onValueChanged:RemoveAllListeners()
+			t.onValueChanged:AddListener(function(on)
+				if quiet then return end
+				if on then Mode.Set(improved) end
+				show(Mode.Improved())
+			end)
+		end
+		page.gamepadModeShow = show
+		show(Mode.Improved())
+	end)
+	if not ok then logOnce('settings: ' .. tostring(err)) end
+end
+-- the page shows the stored choice each time the Operation tab opens
+function Mode.ShowSettings(page)
+	if page.gamepadModeShow then pcall(page.gamepadModeShow, Mode.Improved()) end
+end
+
 local function alive(o)
 	if o == nil then return false end
 	local ok, dead = pcall(Game.Utils.IsDestroyed, o)
@@ -378,6 +456,7 @@ local st = {
 	prev = {}, dirHeld = nil, dirNext = 0, pending = nil,
 	pressed = nil, lastCheck = 0, lastTick = 0, errors = 0,
 	owner = 'menu', hudCheck = 0, hover = nil, hoverAt = 0, collectAt = 0,
+	improved = false, stickPointer = false, modeAt = 0,
 }
 
 local function owner(go, byId)
@@ -687,7 +766,7 @@ end
 
 local function pressDown(go)
 	st.pressed = go
-	pointerInside(go, true)
+	if st.improved then pointerInside(go, true) end
 	Game.Utils.ExecutePointerDownEvents(go)
 end
 
@@ -960,7 +1039,8 @@ local function showCursor(on, hand)
 	local o = on and overlay() or M.overlay
 	if not (o and alive(o.root)) then return end
 	if not on then o.arrow.go:SetActive(false); o.hand.go:SetActive(false) end
-	if not on or spritesReady(o) then
+	-- Default mode keeps the first release's white cross
+	if not on or (st.improved and spritesReady(o)) then
 		for i = 1, 3 do o.cursor[i].go:SetActive(false) end
 		o.arrow.go:SetActive(on and not hand)
 		o.hand.go:SetActive(on and hand == true)
@@ -983,7 +1063,11 @@ end
 -- focus steps show the pointer (the hand) gliding to the focused control; focusFrame = true brings back the
 -- old frame instead
 local function showFocus(r, dt)
-	if M.cfg.focusFrame then showFrame(r); return end
+	if M.cfg.focusFrame or not st.improved then
+		if not st.cursorOn and st.pointerShown then showCursor(false); st.pointerShown = false end
+		showFrame(r)
+		return
+	end
 	local tx, ty = G.center(r)
 	if not st.pointerShown then
 		st.cx, st.cy = tx, ty
@@ -1020,7 +1104,7 @@ local function dpad()
 end
 -- the input that moves the focus: the d-pad only while the left stick drives the pointer
 local function stick()
-	if M.cfg.stickPointer then return dpad() end
+	if st.stickPointer then return dpad() end
 	local x, y = leftStick()
 	if x * x + y * y < 0.04 then x, y = dpad() end
 	return x, y
@@ -1115,8 +1199,8 @@ local function hoverUpdate(t)
 	if c and not c.r then c.r = screenRect(c.rt) end
 	local old = st.hover
 	if (old and old.go) ~= (c and c.go) then
-		if old and old.go ~= st.pressed then pointerInside(old.go, false) end
-		if c then pointerInside(c.go, true) end
+		if st.improved and old and old.go ~= st.pressed then pointerInside(old.go, false) end
+		if st.improved and c then pointerInside(c.go, true) end
 	end
 	st.hover = c
 end
@@ -1126,6 +1210,11 @@ function M.Tick()
 	local dt = math.min(0.1, t - (st.lastTick > 0 and st.lastTick or t))
 	st.lastTick = t
 	clearSelection()
+	if t >= st.modeAt then
+		st.modeAt = t + 0.5
+		st.improved = Mode.Improved()
+	end
+	st.stickPointer = st.improved and M.cfg.stickPointer
 
 	if hudOwns() then
 		if M.owner ~= 'fight' then
@@ -1154,23 +1243,24 @@ function M.Tick()
 			skip = M.cfg.skip, cursor = M.cfg.cursor }) do st.prev[name] = anyKey(list) end
 		st.dirHeld, st.dirNext = direction(stick()), t + M.cfg.repeatDelay
 		if not focusValid() then refresh(false) end
-		if M.cfg.stickPointer and stickMoved() then pointerOn(false) else st.shown = true end
+		if st.stickPointer and stickMoved() then pointerOn(false) else st.shown = true end
 		return
 	end
 
 	-- Select: the left stick drives the pointer, or (pressed again) steps the focus like the d-pad
 	if edge('cursor', M.cfg.cursor) == 'down' then
 		if st.cursorOn then
-			M.cfg.stickPointer = false
+			if st.improved then M.cfg.stickPointer = false end
 			pointerOff()
 		else
-			M.cfg.stickPointer = true
+			if st.improved then M.cfg.stickPointer = true end
 			pointerOn(true)
 		end
+		st.stickPointer = st.improved and M.cfg.stickPointer
 		log('pointer ' .. tostring(st.cursorOn))
 	end
 	-- the left stick takes the pointer out; the d-pad puts the focus back
-	if not st.cursorOn and M.cfg.stickPointer and stickMoved() then pointerOn(true) end
+	if not st.cursorOn and st.stickPointer and stickMoved() then pointerOn(true) end
 	if st.cursorOn and direction(dpad()) then
 		pointerOff()
 		st.dirHeld, st.dirNext = direction(dpad()), t + M.cfg.repeatDelay   -- this press only shows the focus
@@ -1187,6 +1277,7 @@ function M.Tick()
 			-- response curve: fine control near the centre, full speed at full tilt; slower over a control
 			local k = math.min(1, (m - dz) / (1 - dz)) ^ M.cfg.cursorCurve
 			if st.hover then k = k * M.cfg.cursorSlow end
+			if not st.improved then k = m * 0.75 end   -- Default: the first release's linear speed (1.1 screens/s)
 			local v = M.cfg.cursorSpeed * U3D.Screen.height * dt * k
 			st.cx = math.max(0, math.min(U3D.Screen.width, st.cx + x / m * v))
 			st.cy = math.max(0, math.min(U3D.Screen.height, st.cy + y / m * v))

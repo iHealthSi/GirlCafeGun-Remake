@@ -381,6 +381,41 @@ def check_aim_dash(chunk, start, stop, report):
     return n[0]
 
 
+def check_default_mode(chunk, start, stop, report):
+    """Settings > Controller Support = Default: the first release's behaviour, then a switch to Improved."""
+    lua = LuaRuntime(unpack_returned_tuples=True)
+    lua.execute(MOCK)
+    printed = []
+    lua.globals().print = lambda *a: printed.append(' '.join(str(x) for x in a))
+    lua.globals().rawAxes = True
+    lua.execute(chunk)
+    lua.execute("improved = false; GamepadMode = { Improved = function() return improved end }")
+    lua.execute("girls({0, 1}, {-1, 0}); E1 = enemy(10, 0); foes(E1)\n" + start + '\ntake()')
+    steps = [
+        ("pad.buttons[0] = true", "fire 0.00 0.00"),             # A fires (the game aims)
+        ("pad.buttons[0] = false", "firestop"),
+        ("pad.axes[3] = 0.5; pad.axes[4] = 0.8", "fire 0.53 -0.85"),   # the right stick fires toward it
+        ("pad.axes[3] = -0.8; pad.axes[4] = 0", ""),             # turning it sends nothing: the game keeps the first
+        ("pad.axes[3] = 0; pad.axes[4] = 0", "firestop"),
+        ("pad.axes[12] = 1", "fire 0.00 0.00"),
+        ("pad.axes[12] = 0; pad.v = -1", "move 0.00 -1.00|firestop"),
+        ("pad.buttons[4] = true", "move 0.00 -1.00|skill 3"),    # LB: a plain dodge, no direction, no turn
+        ("pad.buttons[4] = false; pad.axes[13] = 1", "move 0.00 -1.00"),   # LT does nothing
+        ("pad.axes[13] = 0; pad.v = 0", "move 0.00 0.00"),
+    ]
+    for i, (setup, want) in enumerate(steps):
+        lua.execute(setup + '\nframe()')
+        got = lua.eval('take()')
+        assert got == want, ('default', i, setup, got, want)
+        if report: report('ok default step %d  %-46s -> %s' % (i, setup, got))
+    assert lua.eval('aims()') == '- -'                     # Default writes nothing into the girls
+    lua.execute('improved = true; frames(60); pad.buttons[0] = true; frame()')
+    assert lua.eval('take()') == '' and printed[-1] == '[pad] lock 1/1', printed[-1]   # Improved: A locks on
+    lua.execute('pad.buttons[0] = false; frame(); take()')
+    lua.execute(stop)
+    if report: report('ok default mode: first release behaviour; Improved within 0.5 s of the switch')
+
+
 def check_fallback(chunk, start, stop, report):
     """No private access (xlua refuses): the layer re-aims with OnFight, at most every reaimGap."""
     lua = LuaRuntime(unpack_returned_tuples=True)
@@ -434,7 +469,8 @@ def run(script=None, report=None):
     check_restart(chunk, start, stop, report)
     aim_steps = check_aim_dash(chunk, start, stop, report)
     check_fallback(chunk, start, stop, report)
-    return {'aimDashSteps': aim_steps, 'aim360SixteenAngles': True, 'directAimNoExtraOnFight': True,
+    check_default_mode(chunk, start, stop, report)
+    return {'defaultModeFirstRelease': True, 'aimDashSteps': aim_steps, 'aim360SixteenAngles': True, 'directAimNoExtraOnFight': True,
             'assistCone': True, 'fallbackWithoutPrivateAccess': True,
             'dashFollowsMoveStick': True, 'reaimWhileFiring': True,
             'lockOnCyclesAndRelocks': True, 'scatterWithoutStick': True, 'dashBuffered': True,'controllerLayerExecutedInMockRuntime': True, 'syntheticHudSource': synthetic,

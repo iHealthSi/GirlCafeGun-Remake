@@ -252,6 +252,10 @@ CS = { System = { Collections = { Generic = { List = function() return newList e
        Game = { EventTriggerListener = T.ETL }, UnityEngine = { EventSystems = {} } }
 
 timers = {}
+-- the player: task values as the server keeps them (Settings > Controller Support is 32/999; 2 = Improved)
+taskValues = { [32 * 65536 + 999] = 2 }
+me = { GetTaskValue = function(self, g, id) return taskValues[g * 65536 + id] or 0 end,
+       SetTaskValue = function(self, g, id, v) taskValues[g * 65536 + id] = v end }
 cartoon = { OnTouch = function() log('advance') end }
 storyPlaying = false
 Game = {
@@ -333,6 +337,105 @@ def check(lua, code, want, label, report):
     got = lua.eval('take()')
     assert got == want, (label, code, got, want)
     if report: report('ok %-28s %-62s -> %s' % (label, code.strip().replace('\n', '; ')[:62], got))
+
+
+SETTINGS_MOCK = r"""
+-- a minimal Operation page: Region with the header Title3 and the two-choice row Toggle (Tgl1, Tgl2)
+local function node(name, parent)
+  local t = { name = name, children = {}, comps = {}, parent = parent, ap = { x = 10, y = -5 } }
+  -- as in Unity, the GameObject's name is its transform's name
+  t.gameObject = setmetatable({ transform = t, active = true }, {
+    __index = function(_, k) if k == 'name' then return t.name end end,
+    __newindex = function(o, k, v) if k == 'name' then t.name = v else rawset(o, k, v) end end })
+  rawset(t.gameObject, 'SetActive', function(self, v) self.active = v end)
+  rawset(t.gameObject, 'GetComponent', function(self, ty) return t.comps[ty] end)
+  t.comps[T.RectTransform] = setmetatable({}, { __index = function(_, k) if k == 'anchoredPosition' then return t.ap end end,
+                                                __newindex = function(_, k, v) if k == 'anchoredPosition' then t.ap = v end end })
+  function t:Find(path)
+    local cur = self
+    for part in path:gmatch('[^/]+') do
+      local nxt; for _, c in ipairs(cur.children) do if c.name == part then nxt = c end end
+      if not nxt then return nil end; cur = nxt
+    end
+    return cur
+  end
+  function t:GetComponent(ty) return t.comps[ty] end
+  if parent then table.insert(parent.children, t) end
+  return t
+end
+local function text(parent, value) local n = node('Text', parent); n.comps[T.Text] = { text = value }; return n end
+local function toggle(parent, name, label, on, group)
+  local n = node(name, parent); text(n, label); node('Checkmark', n)
+  local listeners = {}
+  local tg = { group = group, transform = n, listeners = listeners }
+  tg.onValueChanged = { AddListener = function(_, f) table.insert(listeners, f) end,
+                        RemoveAllListeners = function() for i = #listeners, 1, -1 do listeners[i] = nil end end }
+  setmetatable(tg, { __index = function(_, k) if k == 'isOn' then return rawget(tg, '_on') end end,
+                     __newindex = function(_, k, v)
+                       if k == 'isOn' then local old = rawget(tg, '_on'); rawset(tg, '_on', v)
+                         if old ~= v then for _, f in ipairs(listeners) do f(v) end end
+                       else rawset(tg, k, v) end end })
+  tg.isOn = on
+  n.comps[T.Toggle] = tg
+  return tg
+end
+local function copy(src, parent)
+  local n = node(src.name, parent)
+  n.ap = { x = src.ap.x, y = src.ap.y }
+  for ty, c in pairs(src.comps) do
+    if ty == T.Text then n.comps[ty] = { text = c.text }
+    elseif ty ~= T.RectTransform then n.comps[ty] = c end
+  end
+  for _, ch in ipairs(src.children) do
+    if ch.comps[T.Toggle] then
+      local old = ch.comps[T.Toggle]
+      local tg = toggle(n, ch.name, ch:Find('Text').comps[T.Text].text, old.isOn, old.group)
+      for _, f in ipairs(old.listeners) do tg.onValueChanged:AddListener(f) end   -- Instantiate copies listeners
+    else copy(ch, n) end
+  end
+  return n
+end
+U3D.Object.Instantiate = function(go, parent) return copy(go.transform, parent).gameObject end
+U3D.HorizontalWrapMode = { Overflow = 1 }
+T.Text, T.Toggle = { name = 'Text' }, { name = 'Toggle' }
+U3D.UI.Text, U3D.UI.Toggle = T.Text, T.Toggle
+region = node('Region')
+local title3 = node('Title3', region); text(title3, 'Layout Settings')
+local row = node('Toggle', region)
+joyGroup = { name = 'joystick group' }
+fixedJoy = toggle(row, 'Tgl1', 'Fixed Joystick', true, joyGroup)
+freeJoy = toggle(row, 'Tgl2', 'Free Joystick', false, joyGroup)
+joyChanges = 0
+fixedJoy.onValueChanged:AddListener(function() joyChanges = joyChanges + 1 end)
+page = {}
+"""
+
+
+def check_settings(lua, report):
+    """Settings > Operation > Controller Support: built from the page's own rows, saved as task value 32/999."""
+    ev = lua.eval
+    lua.execute(SETTINGS_MOCK)
+    lua.execute('taskValues[32 * 65536 + 999] = nil; GamepadMode.BuildSettings(page, region)')
+    assert ev("region:Find('GamepadTitle/Text').comps[T.Text].text") == 'Controller Support'
+    assert ev("region:Find('GamepadTitle').ap.y") == -692 and ev("region:Find('GamepadMode').ap.y") == -742
+    assert ev("region:Find('GamepadMode/Tgl1/Text').comps[T.Text].text") == 'Default'
+    assert ev("region:Find('GamepadMode/Tgl2/Text').comps[T.Text].text") == 'HealthS Claude Improved'
+    d, i = "region:Find('GamepadMode/Tgl1').comps[T.Toggle]", "region:Find('GamepadMode/Tgl2').comps[T.Toggle]"
+    assert ev(d + '.isOn') and not ev(i + '.isOn'), 'never set: Default'
+    assert ev(d + '.group') is None and ev(i + '.group') is None     # not in the joystick toggles' group
+    lua.execute(i + '.isOn = true')
+    assert ev('taskValues[32 * 65536 + 999]') == 2 and ev(i + '.isOn') and not ev(d + '.isOn')
+    assert ev("region:Find('GamepadMode/Tgl2/Checkmark').gameObject.active") and not ev("region:Find('GamepadMode/Tgl1/Checkmark').gameObject.active")
+    lua.execute(i + '.isOn = false')                                   # the chosen one cannot be switched off
+    assert ev(i + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
+    lua.execute(d + '.isOn = true')
+    assert ev('taskValues[32 * 65536 + 999]') == 1 and ev(d + '.isOn') and not ev(i + '.isOn')
+    assert ev('fixedJoy.isOn') and not ev('freeJoy.isOn') and ev('joyChanges') == 0   # the joystick row is untouched
+    lua.execute('taskValues[32 * 65536 + 999] = 2; GamepadMode.ShowSettings(page)')
+    assert ev(i + '.isOn') and not ev(d + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
+    lua.execute('GamepadMode.BuildSettings(page, region)')            # a second build adds nothing
+    assert ev("#region.children") == 4
+    if report: report('ok settings: Controller Support row from the page\'s own rows, saved as task 32/999')
 
 
 def scenario(chunk, report):
@@ -579,6 +682,17 @@ def scenario(chunk, report):
     assert abs(ev('GamepadMenu._state.cx') - 1600) < 2 and abs(ev('GamepadMenu._state.cy') - 150) < 2
     assert not ev('GamepadMenu.overlay.bars[1].go.active')
     if report: report('ok pointer: d-pad returns to focus on the hovered control')
+    # Default mode (task 32/999 = 1): the first release's menu: the stick steps the focus, the frame marks it
+    lua.execute('taskValues[32 * 65536 + 999] = 1; frame(0.6); frame(0.05)')
+    assert ev('GamepadMenu.overlay.bars[1].go.active') and not ev('GamepadMenu.overlay.hand.go.active')
+    before = ev('focusName()')
+    lua.execute('pad.v = 1; frame(); pad.v = 0; frame()')   # up from Far: Near
+    assert not ev('GamepadMenu._state.cursorOn') and ev('focusName()') != before, ev('focusName()')
+    check(lua, 'press(11)', '', 'default: Select turns the cursor on', report)
+    assert ev('GamepadMenu._state.cursorOn') and ev('GamepadMenu.overlay.cursor[2].go.active')   # the white cross
+    check(lua, 'press(11)', '', 'default: Select turns it off', report)
+    lua.execute('taskValues[32 * 65536 + 999] = 2; frame(0.6)')
+    if report: report('ok default mode: focus frame, stick steps the focus, cross cursor on Select')
     # the cursor is on when a fight starts (it is turned off below, when the HUD takes the pad)
     check(lua, 'press(11)', '', 'cursor on before a fight', report)
     lua.execute('GamepadMenu._state.cx, GamepadMenu._state.cy = 960, 540')
@@ -707,6 +821,8 @@ def run(script=None, report=None):
         # synthetic UI.Open carrying the start call.
         chunk = g.lua_script(NAME, SYNTHETIC).decode('utf8').split(g.MENU_BEGIN)[0] + text[text.index(g.MENU_BEGIN):]
     focus_logs = scenario(chunk, report)
+    lua_s, _ = lua_runtime(chunk)
+    check_settings(lua_s, report)
     return {'menuLayerExecutedInMockRuntime': True, 'syntheticUiSource': synthetic,
             'anchorRequiredExactlyOnce': True, 'patchIdempotent': True, 'realtimeTimer': True,
             'popupBlocksMenuBelow': True, 'scrollListReachesClippedItems': True, 'tabsAndBack': True,

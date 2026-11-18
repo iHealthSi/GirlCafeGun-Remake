@@ -65,6 +65,22 @@ it:
 - A touch hides the frame. The next pad input shows it again and does nothing
   else, so the first press after touch never presses blind.
 
+## Controller Support setting
+
+Settings > Operation has a **Controller Support** section below Layout Settings, with two choices:
+
+| Choice | What the pad does |
+| --- | --- |
+| Default | The controller layers as first released: A, RB or RT fire; the right stick aims and fires, and the direction goes to the game once, when fire starts; LB dodges where the girls face; in menus the left stick and d-pad step a focus frame, Select turns a white-cross cursor on. |
+| HealthS Claude Improved | Everything below that is marked as part of it: free 360-degree aim, aim assist, A lock-on, LB / LT dash along the move stick (or a scatter), fire that resumes after a dash; in menus a mouse-like pointer (the tutorial's arrow and hand) on the left stick and focus steps on the d-pad. |
+
+The choice is kept in the save as task value (32, 999): group 32 is the Settings page's own group (its
+Left-hand Mode is 32/1002), which the client may write. 0 (never set) and 1 mean Default, 2 means
+Improved. `GamepadMode` in `gamepad_menu.lua` reads and writes it; both layers check it twice a second.
+The section is made at run time from the page's own header (`Title3`) and two-choice row (`Toggle`, the
+Fixed / Free Joystick row), so it has the page's look; `patch_gamepad.py` adds the two calls to
+`UI_User.lua`. Raw axis numbers and the visible `[pad]` log apply to both choices.
+
 ## Default mapping
 
 Button numbers follow the standard Android layout in Unity (A = 0, B = 1, X = 2,
