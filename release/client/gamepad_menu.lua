@@ -216,7 +216,7 @@ function Mode.BuildSettings(page, region)
 		-- the arrow: a chevron of two thin bars in the text colour (no arrow sprite or glyph in the client)
 		local arrow = go.transform:Find('Arrow')
 		arrow:GetComponent(typeof(UGUI.Image)).enabled = false
-		for _, bar in ipairs({ { -5, 45 }, { 5, -45 } }) do
+		for _, bar in ipairs({ { -5, -45 }, { 5, 45 } }) do
 			local b = U3D.GameObject('Chevron')
 			b.transform:SetParent(arrow, false)
 			local bi = b:AddComponent(typeof(UGUI.Image))
