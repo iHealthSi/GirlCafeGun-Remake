@@ -435,6 +435,7 @@ U3D.Object.DestroyImmediate = function(c) for _, o in ipairs(allNodes) do for k,
 U3D.Component = { name = 'Component' }
 U3D.MonoBehaviour = { name = 'MonoBehaviour' }
 U3D.GameObject = function(name) return node(name).gameObject end
+U3D.Quaternion = { Euler = function(x, y, z) return { z = z } end }
 T.Image, T.Dropdown = { name = 'Image' }, { name = 'Dropdown' }
 U3D.UI.Image, U3D.UI.Dropdown = T.Image, T.Dropdown
 U3D.Color = U3D.Color or function(r, g, b, a) return { r, g, b, a } end

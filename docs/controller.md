@@ -67,7 +67,7 @@ it:
 
 ## Controller Support setting
 
-Settings > Operation has a **Controller Support** section below Layout Settings, with two choices:
+Settings > Operation has a **Controller Support** dropdown, next to the Customize button, with two choices:
 
 | Choice | What the pad does |
 | --- | --- |
@@ -77,9 +77,14 @@ Settings > Operation has a **Controller Support** section below Layout Settings,
 The choice is kept in the save as task value (32, 999): group 32 is the Settings page's own group (its
 Left-hand Mode is 32/1002), which the client may write. 0 (never set) and 1 mean Default, 2 means
 Improved. `GamepadMode` in `gamepad_menu.lua` reads and writes it; both layers check it twice a second.
-The section is made at run time from the page's own header (`Title3`) and two-choice row (`Toggle`, the
-Fixed / Free Joystick row), so it has the page's look; `patch_gamepad.py` adds the two calls to
-`UI_User.lua`. Raw axis numbers and the visible `[pad]` log apply to both choices.
+The page does not scroll, so the dropdown sits in the free right half of the Layout Settings section: a
+header "Controller Support" on the Layout Settings line (a copy of the page's `Title3` without its line and
+without the client's localization script, which would put the old text back) and, in the Customize row
+(`Btns`), a Unity Dropdown made with the client's own `DefaultControls.CreateDropdown`, in the page's font,
+text colour and check sprite. Positions follow the Customize button, because the Chinese client's page is laid
+out differently from the English one. The menu layer reads the dropdown's value on every tick and saves a
+change, so a finger, the pad or the pointer can pick; `patch_gamepad.py` adds the two calls to `UI_User.lua`.
+Raw axis numbers and the visible `[pad]` log apply to both choices.
 
 ## Default mapping
 

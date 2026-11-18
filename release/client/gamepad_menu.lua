@@ -213,17 +213,19 @@ function Mode.BuildSettings(page, region)
 		local label = go.transform:Find('Label')
 		rt(label).offsetMin = V2(16, 2)
 		style(label:GetComponent(typeof(UGUI.Text)))
-		-- the arrow: a down-pointing triangle in the page font (the client has no arrow sprite to hand)
+		-- the arrow: a chevron of two thin bars in the text colour (no arrow sprite or glyph in the client)
 		local arrow = go.transform:Find('Arrow')
 		arrow:GetComponent(typeof(UGUI.Image)).enabled = false
-		local mark = U3D.GameObject('Mark')
-		mark.transform:SetParent(arrow, false)
-		local markText = mark:AddComponent(typeof(UGUI.Text))
-		style(markText, '\226\150\188')   -- U+25BC
-		markText.alignment = U3D.TextAnchor.MiddleCenter
-		markText.raycastTarget = false
-		local mr = rt(mark.transform)
-		mr.anchorMin, mr.anchorMax, mr.sizeDelta = V2(0, 0), V2(1, 1), V2(16, 0)
+		for _, bar in ipairs({ { -5, 45 }, { 5, -45 } }) do
+			local b = U3D.GameObject('Chevron')
+			b.transform:SetParent(arrow, false)
+			local bi = b:AddComponent(typeof(UGUI.Image))
+			bi.color, bi.raycastTarget = pageText.color, false
+			local br = rt(b.transform)
+			br.sizeDelta = V2(15, 4)
+			br.anchoredPosition = V2(bar[1], 0)
+			b.transform.localRotation = U3D.Quaternion.Euler(0, 0, bar[2])
+		end
 		local opts = CS.System.Collections.Generic.List(CS.System.String)()
 		opts:Add(Mode.LABELS.default)
 		opts:Add(Mode.LABELS.improved)
