@@ -349,8 +349,17 @@ local function node(name, parent)
     __newindex = function(o, k, v) if k == 'name' then t.name = v else rawset(o, k, v) end end })
   rawset(t.gameObject, 'SetActive', function(self, v) self.active = v end)
   rawset(t.gameObject, 'GetComponent', function(self, ty) return t.comps[ty] end)
-  t.comps[T.RectTransform] = setmetatable({}, { __index = function(_, k) if k == 'anchoredPosition' then return t.ap end end,
-                                                __newindex = function(_, k, v) if k == 'anchoredPosition' then t.ap = v end end })
+  t.size, t.pivot = { 100, 40 }, { x = 0.5, y = 0.5 }
+  t.comps[T.RectTransform] = setmetatable({}, {
+    __index = function(_, k)
+      if k == 'anchoredPosition' then return t.ap end
+      if k == 'rect' then return { width = t.size[1], height = t.size[2] } end
+      if k == 'pivot' then return t.pivot end
+      return rawget(t, '_' .. k)
+    end,
+    __newindex = function(_, k, v)
+      if k == 'anchoredPosition' then t.ap = v elseif k == 'pivot' then t.pivot = v else rawset(t, '_' .. k, v) end
+    end })
   function t:Find(path)
     local cur = self
     for part in path:gmatch('[^/]+') do
@@ -382,6 +391,7 @@ end
 local function copy(src, parent)
   local n = node(src.name, parent)
   n.ap = { x = src.ap.x, y = src.ap.y }
+  n.size, n.pivot = { src.size[1], src.size[2] }, { x = src.pivot.x, y = src.pivot.y }
   for ty, c in pairs(src.comps) do
     if ty == T.Text then n.comps[ty] = { text = c.text }
     elseif ty ~= T.RectTransform then n.comps[ty] = c end
@@ -397,14 +407,21 @@ local function copy(src, parent)
 end
 U3D.Object.Instantiate = function(go, parent) return copy(go.transform, parent).gameObject end
 U3D.HorizontalWrapMode = { Overflow = 1 }
+U3D.TextAnchor = { MiddleLeft = 3 }
 T.Text, T.Toggle = { name = 'Text' }, { name = 'Toggle' }
 U3D.UI.Text, U3D.UI.Toggle = T.Text, T.Toggle
 region = node('Region')
-local title3 = node('Title3', region); text(title3, 'Layout Settings')
+local title3 = node('Title3', region); text(title3, 'Layout Settings')   -- as in the English prefab
+title3.ap, title3.size = { x = 527, y = -566 }, { 1054, 52 }
+local diamond = node('Image', title3); diamond.ap = { x = -372, y = -3 }
+node('Line', title3)
+local btns = node('Btns', region); btns.ap, btns.size = { x = 414, y = -626 }, { 828, 69 }
+local customize = node('zidingyi', btns); customize.ap, customize.size = { x = 269, y = -34 }, { 181, 54 }
 local row = node('Toggle', region)
 joyGroup = { name = 'joystick group' }
 fixedJoy = toggle(row, 'Tgl1', 'Fixed Joystick', true, joyGroup)
 freeJoy = toggle(row, 'Tgl2', 'Free Joystick', false, joyGroup)
+row:Find('Tgl1').ap, row:Find('Tgl2').ap = { x = 234, y = -23 }, { x = 672, y = -23 }
 joyChanges = 0
 fixedJoy.onValueChanged:AddListener(function() joyChanges = joyChanges + 1 end)
 page = {}
@@ -417,15 +434,22 @@ def check_settings(lua, report):
     lua.execute(SETTINGS_MOCK)
     lua.execute('taskValues[32 * 65536 + 999] = nil; GamepadMode.BuildSettings(page, region)')
     assert ev("region:Find('GamepadTitle/Text').comps[T.Text].text") == 'Controller Support'
-    assert ev("region:Find('GamepadTitle').ap.y") == -692 and ev("region:Find('GamepadMode').ap.y") == -742
-    assert ev("region:Find('GamepadMode/Tgl1/Text').comps[T.Text].text") == 'Default'
-    assert ev("region:Find('GamepadMode/Tgl2/Text').comps[T.Text].text") == 'HealthS Claude Improved'
-    d, i = "region:Find('GamepadMode/Tgl1').comps[T.Toggle]", "region:Find('GamepadMode/Tgl2').comps[T.Toggle]"
+    # header on the Layout Settings line, its diamond 70 units left of choice 1; no second line
+    assert ev("region:Find('GamepadTitle').ap.y") == -566 and not ev("region:Find('GamepadTitle/Line').gameObject.active")
+    right = 269 + 181 * 0.5                                   # Customize's right edge in the row
+    x1 = right + 160
+    assert ev("region:Find('Btns/GamepadMode/Tgl1').ap.x") == x1 and ev("region:Find('Btns/GamepadMode/Tgl2').ap.x") == x1 + 190
+    diamond_x = ev("region:Find('GamepadTitle').ap.x") - 1054 * 0.5 + 1054 * 0.5 - 372   # Title3 left = x - w/2
+    assert abs(diamond_x - (x1 - 70)) < 1e-6, (diamond_x, x1 - 70)
+    assert ev("region:Find('Btns/GamepadMode').pivot.y") == 0.5     # centred on the Customize row
+    assert ev("region:Find('Btns/GamepadMode/Tgl1/Text').comps[T.Text].text") == 'Default'
+    assert ev("region:Find('Btns/GamepadMode/Tgl2/Text').comps[T.Text].text") == 'HealthS Claude Improved'
+    d, i = "region:Find('Btns/GamepadMode/Tgl1').comps[T.Toggle]", "region:Find('Btns/GamepadMode/Tgl2').comps[T.Toggle]"
     assert ev(d + '.isOn') and not ev(i + '.isOn'), 'never set: Default'
     assert ev(d + '.group') is None and ev(i + '.group') is None     # not in the joystick toggles' group
     lua.execute(i + '.isOn = true')
     assert ev('taskValues[32 * 65536 + 999]') == 2 and ev(i + '.isOn') and not ev(d + '.isOn')
-    assert ev("region:Find('GamepadMode/Tgl2/Checkmark').gameObject.active") and not ev("region:Find('GamepadMode/Tgl1/Checkmark').gameObject.active")
+    assert ev("region:Find('Btns/GamepadMode/Tgl2/Checkmark').gameObject.active") and not ev("region:Find('Btns/GamepadMode/Tgl1/Checkmark').gameObject.active")
     lua.execute(i + '.isOn = false')                                   # the chosen one cannot be switched off
     assert ev(i + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
     lua.execute(d + '.isOn = true')
@@ -434,7 +458,7 @@ def check_settings(lua, report):
     lua.execute('taskValues[32 * 65536 + 999] = 2; GamepadMode.ShowSettings(page)')
     assert ev(i + '.isOn') and not ev(d + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
     lua.execute('GamepadMode.BuildSettings(page, region)')            # a second build adds nothing
-    assert ev("#region.children") == 4
+    assert ev("#region.children") == 4 and ev("#region:Find('Btns').children") == 2
     if report: report('ok settings: Controller Support row from the page\'s own rows, saved as task 32/999')
 
 

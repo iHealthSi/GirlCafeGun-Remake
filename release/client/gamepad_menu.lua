@@ -124,33 +124,60 @@ function Mode.Set(improved)
 	log('mode ' .. (improved and 'improved' or 'default') .. (ok and '' or (' not saved: ' .. tostring(err))))
 end
 
--- The Operation page gets a "Controller Support" section below Layout Settings, made from the page's own
--- header (Title3) and two-choice row (Toggle: Fixed / Free Joystick, the same look and spacing). The page
--- scrolls, so the section fits in its Region below the Customize button.
+-- The Operation page gets a "Controller Support" choice. The page does not scroll, so it goes into the
+-- free right half of the Layout Settings section: a header on the Layout Settings line (a copy of Title3
+-- without its line) and, in the Customize button's row (Btns), the two choices (a copy of the Fixed / Free
+-- Joystick row, Toggle). Positions follow the Customize button, not fixed numbers: the Chinese client's
+-- page differs from the English one.
 Mode.LABELS = { title = 'Controller Support', default = 'Default', improved = 'HealthS Claude Improved' }
-Mode.TITLE_Y, Mode.ROW_Y = -692, -742
+Mode.GAP, Mode.SPACING = 160, 190   -- from the Customize button's right edge to the first choice; between them
 function Mode.BuildSettings(page, region)
 	local ok, err = pcall(function()
 		if region:Find('GamepadTitle') then return end
-		local function clone(name, newName, y)
-			local src = region:Find(name)
-			local go = U3D.Object.Instantiate(src.gameObject, region)
-			go.name = newName
-			local rt = go:GetComponent(typeof(U3D.RectTransform))
-			rt.anchoredPosition = V2(rt.anchoredPosition.x, y)
-			return go.transform
-		end
-		local function text(tr, value)
+		local btns = region:Find('Btns')
+		local btn = btns:Find('zidingyi'):GetComponent(typeof(U3D.RectTransform))
+		-- right edge of Customize in the row's own space (its anchor is the row's left edge)
+		local right = btn.anchoredPosition.x + btn.rect.width * (1 - btn.pivot.x)
+		local x1 = right + Mode.GAP
+		local x2 = x1 + Mode.SPACING
+		local function label(tr, value)
 			local tx = tr:Find('Text'):GetComponent(typeof(UGUI.Text))
 			tx.text = value
 			tx.horizontalOverflow = U3D.HorizontalWrapMode.Overflow
+			tx.alignment = U3D.TextAnchor.MiddleLeft
+			return tx
 		end
-		text(clone('Title3', 'GamepadTitle', Mode.TITLE_Y), Mode.LABELS.title)
-		local row = clone('Toggle', 'GamepadMode', Mode.ROW_Y)
-		local tDefault = row:Find('Tgl1'):GetComponent(typeof(UGUI.Toggle))
-		local tImproved = row:Find('Tgl2'):GetComponent(typeof(UGUI.Toggle))
-		text(row:Find('Tgl1'), Mode.LABELS.default)
-		text(row:Find('Tgl2'), Mode.LABELS.improved)
+		-- header: Title3 moved right so that its diamond sits just left of the first choice
+		local src = region:Find('Title3')
+		local title = U3D.Object.Instantiate(src.gameObject, region).transform
+		title.gameObject.name = 'GamepadTitle'
+		local srt = src:GetComponent(typeof(U3D.RectTransform))
+		local trt = title:GetComponent(typeof(U3D.RectTransform))
+		local diamond = src:Find('Image'):GetComponent(typeof(U3D.RectTransform))
+		-- the row's left edge in the page (Region) space; the header's diamond goes 70 units left of choice 1
+		local brt = btns:GetComponent(typeof(U3D.RectTransform))
+		local rowLeft = brt.anchoredPosition.x - brt.rect.width * brt.pivot.x
+		local w = srt.rect.width
+		trt.anchoredPosition = V2(rowLeft + x1 - 70 + w * srt.pivot.x - w * 0.5 - diamond.anchoredPosition.x, srt.anchoredPosition.y)
+		local line = title:Find('Line')
+		if line then line.gameObject:SetActive(false) end
+		label(title, Mode.LABELS.title)
+		-- the two choices, centred on the Customize row
+		local row = U3D.Object.Instantiate(region:Find('Toggle').gameObject, btns).transform
+		row.gameObject.name = 'GamepadMode'
+		local rrt = row:GetComponent(typeof(U3D.RectTransform))
+		rrt.anchorMin, rrt.anchorMax, rrt.pivot = V2(0, 0.5), V2(0, 0.5), V2(0, 0.5)
+		rrt.anchoredPosition = V2(0, 0)
+		local t1, t2 = row:Find('Tgl1'), row:Find('Tgl2')
+		local p1 = t1:GetComponent(typeof(U3D.RectTransform))
+		local p2 = t2:GetComponent(typeof(U3D.RectTransform))
+		p1.anchoredPosition = V2(x1, p1.anchoredPosition.y)
+		p2.anchoredPosition = V2(x2, p2.anchoredPosition.y)
+		local tDefault = t1:GetComponent(typeof(UGUI.Toggle))
+		local tImproved = t2:GetComponent(typeof(UGUI.Toggle))
+		label(t1, Mode.LABELS.default)
+		label(t2, Mode.LABELS.improved)
+		log(string.format('settings: Controller Support built (Customize right edge %.0f, choices at %.0f / %.0f)', right, x1, x2))
 		local quiet = false
 		-- one of the two is always on; a tap on the other moves the choice and saves it
 		local function show(improved)
