@@ -124,85 +124,124 @@ function Mode.Set(improved)
 	log('mode ' .. (improved and 'improved' or 'default') .. (ok and '' or (' not saved: ' .. tostring(err))))
 end
 
--- The Operation page gets a "Controller Support" choice. The page does not scroll, so it goes into the
+-- The Operation page gets a "Controller Support" dropdown. The page does not scroll, so it goes into the
 -- free right half of the Layout Settings section: a header on the Layout Settings line (a copy of Title3
--- without its line) and, in the Customize button's row (Btns), the two choices (a copy of the Fixed / Free
--- Joystick row, Toggle). Positions follow the Customize button, not fixed numbers: the Chinese client's
--- page differs from the English one.
+-- without its line) and, in the Customize button's row (Btns), a Unity Dropdown made with the client's
+-- own UnityEngine.UI.DefaultControls.CreateDropdown, dressed with the page's font, text colour and check
+-- sprite. Positions follow the Customize button: the Chinese client's page differs from the English one.
+-- The menu layer reads the dropdown's value every tick and saves a change (no Lua -> C# event hook needed).
 Mode.LABELS = { title = 'Controller Support', default = 'Default', improved = 'HealthS Claude Improved' }
-Mode.GAP, Mode.SPACING = 160, 190   -- from the Customize button's right edge to the first choice; between them
+Mode.GAP, Mode.WIDTH, Mode.HEIGHT = 110, 400, 50   -- from Customize's right edge; dropdown size (page units)
+local function dropLocalized(tr)
+	-- the client's LocalizedText puts the original key's text back: a copy must not keep it
+	pcall(function()
+		local cs = tr:GetComponents(typeof(U3D.Component))
+		for i = 0, cs.Length - 1 do
+			local c = cs[i]
+			local okName, n = pcall(function() return c:GetType().Name end)
+			if okName and (n == 'LocalizedText' or n == 'LocalizableText') then U3D.Object.DestroyImmediate(c) end
+		end
+	end)
+end
+local function rt(tr) return tr:GetComponent(typeof(U3D.RectTransform)) end
 function Mode.BuildSettings(page, region)
 	local ok, err = pcall(function()
 		if region:Find('GamepadTitle') then return end
 		local btns = region:Find('Btns')
-		local btn = btns:Find('zidingyi'):GetComponent(typeof(U3D.RectTransform))
+		local btn = rt(btns:Find('zidingyi'))
 		-- right edge of Customize in the row's own space (its anchor is the row's left edge)
 		local right = btn.anchoredPosition.x + btn.rect.width * (1 - btn.pivot.x)
-		local x1 = right + Mode.GAP
-		local x2 = x1 + Mode.SPACING
-		local function label(tr, value)
-			local tx = tr:Find('Text'):GetComponent(typeof(UGUI.Text))
-			tx.text = value
-			tx.horizontalOverflow = U3D.HorizontalWrapMode.Overflow
+		local x = right + Mode.GAP
+		-- the page's look: the font and colour of a choice label, the check sprite of a joystick toggle
+		local pageText = region:Find('Toggle/Tgl1/Text'):GetComponent(typeof(UGUI.Text))
+		local check = region:Find('Toggle/Tgl1/Checkmark'):GetComponent(typeof(UGUI.Image))
+		local box = region:Find('Toggle/Tgl1/Background'):GetComponent(typeof(UGUI.Image))
+		local function style(tx, value)
+			tx.font, tx.fontSize, tx.color = pageText.font, pageText.fontSize, pageText.color
 			tx.alignment = U3D.TextAnchor.MiddleLeft
-			return tx
+			if value then tx.text = value end
 		end
-		-- header: Title3 moved right so that its diamond sits just left of the first choice
+		-- header: Title3 moved right so that its diamond sits just left of the dropdown
 		local src = region:Find('Title3')
 		local title = U3D.Object.Instantiate(src.gameObject, region).transform
 		title.gameObject.name = 'GamepadTitle'
-		local srt = src:GetComponent(typeof(U3D.RectTransform))
-		local trt = title:GetComponent(typeof(U3D.RectTransform))
-		local diamond = src:Find('Image'):GetComponent(typeof(U3D.RectTransform))
-		-- the row's left edge in the page (Region) space; the header's diamond goes 70 units left of choice 1
-		local brt = btns:GetComponent(typeof(U3D.RectTransform))
+		local srt, trt = rt(src), rt(title)
+		local diamond = rt(src:Find('Image'))
+		local brt = rt(btns)
 		local rowLeft = brt.anchoredPosition.x - brt.rect.width * brt.pivot.x
 		local w = srt.rect.width
-		trt.anchoredPosition = V2(rowLeft + x1 - 70 + w * srt.pivot.x - w * 0.5 - diamond.anchoredPosition.x, srt.anchoredPosition.y)
+		trt.anchoredPosition = V2(rowLeft + x - 30 + w * srt.pivot.x - w * 0.5 - diamond.anchoredPosition.x, srt.anchoredPosition.y)
 		local line = title:Find('Line')
 		if line then line.gameObject:SetActive(false) end
-		label(title, Mode.LABELS.title)
-		-- the two choices, centred on the Customize row
-		local row = U3D.Object.Instantiate(region:Find('Toggle').gameObject, btns).transform
-		row.gameObject.name = 'GamepadMode'
-		local rrt = row:GetComponent(typeof(U3D.RectTransform))
-		rrt.anchorMin, rrt.anchorMax, rrt.pivot = V2(0, 0.5), V2(0, 0.5), V2(0, 0.5)
-		rrt.anchoredPosition = V2(0, 0)
-		local t1, t2 = row:Find('Tgl1'), row:Find('Tgl2')
-		local p1 = t1:GetComponent(typeof(U3D.RectTransform))
-		local p2 = t2:GetComponent(typeof(U3D.RectTransform))
-		p1.anchoredPosition = V2(x1, p1.anchoredPosition.y)
-		p2.anchoredPosition = V2(x2, p2.anchoredPosition.y)
-		local tDefault = t1:GetComponent(typeof(UGUI.Toggle))
-		local tImproved = t2:GetComponent(typeof(UGUI.Toggle))
-		label(t1, Mode.LABELS.default)
-		label(t2, Mode.LABELS.improved)
-		log(string.format('settings: Controller Support built (Customize right edge %.0f, choices at %.0f / %.0f)', right, x1, x2))
-		local quiet = false
-		-- one of the two is always on; a tap on the other moves the choice and saves it
+		dropLocalized(title:Find('Text'))
+		local titleText = title:Find('Text'):GetComponent(typeof(UGUI.Text))
+		titleText.text = Mode.LABELS.title
+		titleText.horizontalOverflow = U3D.HorizontalWrapMode.Overflow
+		titleText.alignment = U3D.TextAnchor.MiddleLeft
+		-- the dropdown
+		local res = UGUI.DefaultControls.Resources()
+		res.checkmark = check.sprite
+		local go = UGUI.DefaultControls.CreateDropdown(res)
+		go.name = 'GamepadMode'
+		go.transform:SetParent(btns, false)
+		local drt = rt(go.transform)
+		drt.anchorMin, drt.anchorMax, drt.pivot = V2(0, 0.5), V2(0, 0.5), V2(0, 0.5)
+		drt.anchoredPosition = V2(x, 0)
+		drt.sizeDelta = V2(Mode.WIDTH, Mode.HEIGHT)
+		local dd = go:GetComponent(typeof(UGUI.Dropdown))
+		-- box: light, like the page's panels; the open list below it in the same colours
+		go:GetComponent(typeof(UGUI.Image)).color = U3D.Color(1, 1, 1, 0.85)
+		local template = go.transform:Find('Template')
+		rt(template).sizeDelta = V2(0, Mode.HEIGHT * 2 + 12)
+		template:GetComponent(typeof(UGUI.Image)).color = U3D.Color(0.97, 0.97, 0.98, 0.98)
+		local item = template:Find('Viewport/Content/Item')
+		rt(item).sizeDelta = V2(0, Mode.HEIGHT)
+		rt(template:Find('Viewport/Content')).sizeDelta = V2(0, Mode.HEIGHT + 6)
+		local itemBg = item:Find('Item Background'):GetComponent(typeof(UGUI.Image))
+		itemBg.color = U3D.Color(0.55, 0.85, 1, 0.55)
+		local itemCheck = item:Find('Item Checkmark')
+		local icr = rt(itemCheck)
+		icr.sizeDelta = V2(32, 30)
+		itemCheck:GetComponent(typeof(UGUI.Image)).color = U3D.Color(1, 1, 1, 1)
+		local itemLabel = item:Find('Item Label')
+		local ilr = rt(itemLabel)
+		ilr.offsetMin = V2(46, 1)
+		style(itemLabel:GetComponent(typeof(UGUI.Text)))
+		local label = go.transform:Find('Label')
+		rt(label).offsetMin = V2(16, 2)
+		style(label:GetComponent(typeof(UGUI.Text)))
+		-- the arrow: the page's checkbox frame turned into a small "open" mark (no stock arrow sprite)
+		local arrow = go.transform:Find('Arrow')
+		local aimg = arrow:GetComponent(typeof(UGUI.Image))
+		aimg.sprite, aimg.color = box.sprite, U3D.Color(1, 1, 1, 1)
+		rt(arrow).sizeDelta = V2(28, 26)
+		local opts = CS.System.Collections.Generic.List(CS.System.String)()
+		opts:Add(Mode.LABELS.default)
+		opts:Add(Mode.LABELS.improved)
+		dd:ClearOptions()
+		dd:AddOptions(opts)
+		Mode.dropdown = dd
 		local function show(improved)
-			quiet = true
-			tDefault.isOn, tImproved.isOn = not improved, improved
-			for _, t in ipairs({ tDefault, tImproved }) do
-				local check = t.transform:Find('Checkmark')
-				if check then check.gameObject:SetActive(t.isOn) end
-			end
-			quiet = false
-		end
-		for _, pair in ipairs({ { tDefault, false }, { tImproved, true } }) do
-			local t, improved = pair[1], pair[2]
-			t.group = nil   -- the cloned toggles must not join the joystick toggles' group
-			t.onValueChanged:RemoveAllListeners()
-			t.onValueChanged:AddListener(function(on)
-				if quiet then return end
-				if on then Mode.Set(improved) end
-				show(Mode.Improved())
-			end)
+			Mode.shown = improved and 1 or 0
+			dd.value = Mode.shown
+			dd:RefreshShownValue()
 		end
 		page.gamepadModeShow = show
 		show(Mode.Improved())
+		log(string.format('settings: Controller Support dropdown built (Customize right edge %.0f, dropdown at %.0f)', right, x))
 	end)
 	if not ok then logOnce('settings: ' .. tostring(err)) end
+end
+-- called every menu tick: a value picked in the dropdown (finger, pad or pointer) is saved
+function Mode.Poll()
+	local dd = Mode.dropdown
+	if not dd then return end
+	local ok, v = pcall(function() return dd.value end)
+	if not ok then Mode.dropdown = nil; return end   -- the page was destroyed
+	if v ~= Mode.shown then
+		Mode.shown = v
+		Mode.Set(v == 1)
+	end
 end
 -- the page shows the stored choice each time the Operation tab opens
 function Mode.ShowSettings(page)
@@ -1237,6 +1276,7 @@ function M.Tick()
 	local dt = math.min(0.1, t - (st.lastTick > 0 and st.lastTick or t))
 	st.lastTick = t
 	clearSelection()
+	pcall(Mode.Poll)
 	if t >= st.modeAt then
 		st.modeAt = t + 0.5
 		st.improved = Mode.Improved()

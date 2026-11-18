@@ -341,8 +341,10 @@ def check(lua, code, want, label, report):
 
 SETTINGS_MOCK = r"""
 -- a minimal Operation page: Region with the header Title3 and the two-choice row Toggle (Tgl1, Tgl2)
+allNodes = {}
 local function node(name, parent)
   local t = { name = name, children = {}, comps = {}, parent = parent, ap = { x = 10, y = -5 } }
+  table.insert(allNodes, t)
   -- as in Unity, the GameObject's name is its transform's name
   t.gameObject = setmetatable({ transform = t, active = true }, {
     __index = function(_, k) if k == 'name' then return t.name end end,
@@ -372,7 +374,15 @@ local function node(name, parent)
   if parent then table.insert(parent.children, t) end
   return t
 end
-local function text(parent, value) local n = node('Text', parent); n.comps[T.Text] = { text = value }; return n end
+-- a text as in the Chinese client: a Text plus the client's LocalizedText (it puts the key's text back)
+local function localized() return { GetType = function() return { Name = 'LocalizedText' } end } end
+local function text(parent, value)
+  local n = node('Text', parent); n.comps[T.Text] = { text = value }; n.comps.loc = localized()
+  function n:GetComponents() local out = { Length = 0 }
+    for k, c in pairs(self.comps) do if k ~= T.RectTransform then out[out.Length] = c; out.Length = out.Length + 1 end end
+    return out end
+  return n
+end
 local function toggle(parent, name, label, on, group)
   local n = node(name, parent); text(n, label); node('Checkmark', n)
   local listeners = {}
@@ -394,6 +404,8 @@ local function copy(src, parent)
   n.size, n.pivot = { src.size[1], src.size[2] }, { x = src.pivot.x, y = src.pivot.y }
   for ty, c in pairs(src.comps) do
     if ty == T.Text then n.comps[ty] = { text = c.text }
+    elseif ty == 'loc' then n.comps[ty] = localized()
+      n.GetComponents = src.GetComponents
     elseif ty ~= T.RectTransform then n.comps[ty] = c end
   end
   for _, ch in ipairs(src.children) do
@@ -406,6 +418,38 @@ local function copy(src, parent)
   return n
 end
 U3D.Object.Instantiate = function(go, parent) return copy(go.transform, parent).gameObject end
+U3D.Object.DestroyImmediate = function(c) for _, o in ipairs(allNodes) do for k, x in pairs(o.comps) do if x == c then o.comps[k] = nil end end end end
+U3D.Component = { name = 'Component' }
+T.Image, T.Dropdown = { name = 'Image' }, { name = 'Dropdown' }
+U3D.UI.Image, U3D.UI.Dropdown = T.Image, T.Dropdown
+U3D.Color = U3D.Color or function(r, g, b, a) return { r, g, b, a } end
+local function img(n) n.comps[T.Image] = { sprite = nil, color = nil }; return n end
+U3D.UI.DefaultControls = {
+  Resources = function() return {} end,
+  CreateDropdown = function(res)
+    local root = img(node('Dropdown'))
+    local label = node('Label', root); label.comps[T.Text] = { text = '' }
+    img(node('Arrow', root))
+    local template = img(node('Template', root))
+    local viewport = node('Viewport', template)
+    local content = node('Content', viewport)
+    local item = node('Item', content)
+    img(node('Item Background', item)); img(node('Item Checkmark', item))
+    local il = node('Item Label', item); il.comps[T.Text] = { text = '' }
+    local dd = { options = {}, res = res }
+    setmetatable(dd, { __index = function(_, k) if k == 'value' then return rawget(dd, '_v') or 0 end end,
+                       __newindex = function(_, k, v) if k == 'value' then rawset(dd, '_v', v); label.comps[T.Text].text = dd.options[v + 1] or ''
+                                    else rawset(dd, k, v) end end })
+    function dd:ClearOptions() self.options = {} end
+    function dd:AddOptions(list) for i = 0, list.Count - 1 do table.insert(self.options, list[i]) end end
+    function dd:RefreshShownValue() label.comps[T.Text].text = self.options[self.value + 1] or '' end
+    root.comps[T.Dropdown] = dd
+    function root.gameObject.transform:SetParent(parent) self.parent = parent; table.insert(parent.children, self) end
+    return root.gameObject
+  end }
+CS.System.String = 'String'
+CS.System.Collections.Generic.List = function() return function()
+  local l = { Count = 0 }; function l:Add(v) self[self.Count] = v; self.Count = self.Count + 1 end; return l end end
 U3D.HorizontalWrapMode = { Overflow = 1 }
 U3D.TextAnchor = { MiddleLeft = 3 }
 T.Text, T.Toggle = { name = 'Text' }, { name = 'Toggle' }
@@ -422,6 +466,11 @@ joyGroup = { name = 'joystick group' }
 fixedJoy = toggle(row, 'Tgl1', 'Fixed Joystick', true, joyGroup)
 freeJoy = toggle(row, 'Tgl2', 'Free Joystick', false, joyGroup)
 row:Find('Tgl1').ap, row:Find('Tgl2').ap = { x = 234, y = -23 }, { x = 672, y = -23 }
+for _, n in ipairs({ 'Tgl1', 'Tgl2' }) do
+  img(node('Background', row:Find(n))).comps[T.Image].sprite = 'box sprite'
+  row:Find(n .. '/Checkmark').comps[T.Image] = { sprite = 'check sprite' }
+end
+row:Find('Tgl1/Text').comps[T.Text].font, row:Find('Tgl1/Text').comps[T.Text].fontSize = 'page font', 30
 joyChanges = 0
 fixedJoy.onValueChanged:AddListener(function() joyChanges = joyChanges + 1 end)
 page = {}
@@ -437,29 +486,32 @@ def check_settings(lua, report):
     # header on the Layout Settings line, its diamond 70 units left of choice 1; no second line
     assert ev("region:Find('GamepadTitle').ap.y") == -566 and not ev("region:Find('GamepadTitle/Line').gameObject.active")
     right = 269 + 181 * 0.5                                   # Customize's right edge in the row
-    x1 = right + 160
-    assert ev("region:Find('Btns/GamepadMode/Tgl1').ap.x") == x1 and ev("region:Find('Btns/GamepadMode/Tgl2').ap.x") == x1 + 190
-    diamond_x = ev("region:Find('GamepadTitle').ap.x") - 1054 * 0.5 + 1054 * 0.5 - 372   # Title3 left = x - w/2
-    assert abs(diamond_x - (x1 - 70)) < 1e-6, (diamond_x, x1 - 70)
-    assert ev("region:Find('Btns/GamepadMode').pivot.y") == 0.5     # centred on the Customize row
-    assert ev("region:Find('Btns/GamepadMode/Tgl1/Text').comps[T.Text].text") == 'Default'
-    assert ev("region:Find('Btns/GamepadMode/Tgl2/Text').comps[T.Text].text") == 'HealthS Claude Improved'
-    d, i = "region:Find('Btns/GamepadMode/Tgl1').comps[T.Toggle]", "region:Find('Btns/GamepadMode/Tgl2').comps[T.Toggle]"
-    assert ev(d + '.isOn') and not ev(i + '.isOn'), 'never set: Default'
-    assert ev(d + '.group') is None and ev(i + '.group') is None     # not in the joystick toggles' group
-    lua.execute(i + '.isOn = true')
-    assert ev('taskValues[32 * 65536 + 999]') == 2 and ev(i + '.isOn') and not ev(d + '.isOn')
-    assert ev("region:Find('Btns/GamepadMode/Tgl2/Checkmark').gameObject.active") and not ev("region:Find('Btns/GamepadMode/Tgl1/Checkmark').gameObject.active")
-    lua.execute(i + '.isOn = false')                                   # the chosen one cannot be switched off
-    assert ev(i + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
-    lua.execute(d + '.isOn = true')
-    assert ev('taskValues[32 * 65536 + 999]') == 1 and ev(d + '.isOn') and not ev(i + '.isOn')
+    x = right + 110
+    dd = "region:Find('Btns/GamepadMode').comps[T.Dropdown]"
+    label = "region:Find('Btns/GamepadMode/Label').comps[T.Text]"
+    assert ev("region:Find('Btns/GamepadMode').ap.x") == x and ev("region:Find('Btns/GamepadMode').pivot.y") == 0.5
+    diamond_x = ev("region:Find('GamepadTitle').ap.x") - 372
+    assert abs(diamond_x - (x - 30)) < 1e-6, (diamond_x, x - 30)
+    # the header copy loses LocalizedText (it would put 'Layout Settings' back); the page's own texts keep it
+    assert ev("region:Find('GamepadTitle/Text').comps.loc") is None and ev("region:Find('Title3/Text').comps.loc") is not None
+    # a dropdown with the two choices, in the page's font and with its check sprite; never set: Default
+    assert list(ev(dd + '.options').values()) == ['Default', 'HealthS Claude Improved']
+    assert ev(dd + '.value') == 0 and ev(label + '.text') == 'Default'
+    assert ev(label + '.font') == 'page font' and ev(dd + '.res.checkmark') == 'check sprite'
+    # picking in the dropdown (finger or pad) is saved at the next menu tick
+    lua.execute(dd + '.value = 1; GamepadMode.Poll()')
+    assert ev('taskValues[32 * 65536 + 999]') == 2
+    lua.execute('GamepadMode.Poll()')
+    assert ev('taskValues[32 * 65536 + 999]') == 2
+    lua.execute(dd + '.value = 0; GamepadMode.Poll()')
+    assert ev('taskValues[32 * 65536 + 999]') == 1
     assert ev('fixedJoy.isOn') and not ev('freeJoy.isOn') and ev('joyChanges') == 0   # the joystick row is untouched
-    lua.execute('taskValues[32 * 65536 + 999] = 2; GamepadMode.ShowSettings(page)')
-    assert ev(i + '.isOn') and not ev(d + '.isOn') and ev('taskValues[32 * 65536 + 999]') == 2
+    # the page shows the stored choice when it opens, without saving it again
+    lua.execute('taskValues[32 * 65536 + 999] = 2; GamepadMode.ShowSettings(page); GamepadMode.Poll()')
+    assert ev(dd + '.value') == 1 and ev(label + '.text') == 'HealthS Claude Improved'
     lua.execute('GamepadMode.BuildSettings(page, region)')            # a second build adds nothing
     assert ev("#region.children") == 4 and ev("#region:Find('Btns').children") == 2
-    if report: report('ok settings: Controller Support row from the page\'s own rows, saved as task 32/999')
+    if report: report('ok settings: Controller Support dropdown (Default / HealthS Claude Improved), saved as task 32/999')
 
 
 def scenario(chunk, report):
