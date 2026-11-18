@@ -132,15 +132,19 @@ end
 -- The menu layer reads the dropdown's value every tick and saves a change (no Lua -> C# event hook needed).
 Mode.LABELS = { title = 'Controller Support', default = 'Default', improved = 'HealthS Claude Improved' }
 Mode.GAP, Mode.WIDTH, Mode.HEIGHT = 110, 400, 50   -- from Customize's right edge; dropdown size (page units)
+-- The client puts a localized text back into a copied header (a script on the header or its text). A copy
+-- keeps only the plain UI parts: every other script under it is removed (their names are logged once).
+local KEEP = { Text = true, Image = true, RawImage = true, Outline = true, Shadow = true }
 local function dropLocalized(tr)
-	-- the client's LocalizedText puts the original key's text back: a copy must not keep it
 	pcall(function()
-		local cs = tr:GetComponents(typeof(U3D.Component))
+		local cs = tr:GetComponentsInChildren(typeof(U3D.MonoBehaviour), true)
+		local gone = {}
 		for i = 0, cs.Length - 1 do
 			local c = cs[i]
 			local okName, n = pcall(function() return c:GetType().Name end)
-			if okName and (n == 'LocalizedText' or n == 'LocalizableText') then U3D.Object.DestroyImmediate(c) end
+			if okName and not KEEP[n] then gone[#gone + 1] = n; U3D.Object.DestroyImmediate(c) end
 		end
+		if #gone > 0 then logOnce('settings: header copy without ' .. table.concat(gone, ', ')) end
 	end)
 end
 local function rt(tr) return tr:GetComponent(typeof(U3D.RectTransform)) end
@@ -155,7 +159,6 @@ function Mode.BuildSettings(page, region)
 		-- the page's look: the font and colour of a choice label, the check sprite of a joystick toggle
 		local pageText = region:Find('Toggle/Tgl1/Text'):GetComponent(typeof(UGUI.Text))
 		local check = region:Find('Toggle/Tgl1/Checkmark'):GetComponent(typeof(UGUI.Image))
-		local box = region:Find('Toggle/Tgl1/Background'):GetComponent(typeof(UGUI.Image))
 		local function style(tx, value)
 			tx.font, tx.fontSize, tx.color = pageText.font, pageText.fontSize, pageText.color
 			tx.alignment = U3D.TextAnchor.MiddleLeft
@@ -173,7 +176,7 @@ function Mode.BuildSettings(page, region)
 		trt.anchoredPosition = V2(rowLeft + x - 30 + w * srt.pivot.x - w * 0.5 - diamond.anchoredPosition.x, srt.anchoredPosition.y)
 		local line = title:Find('Line')
 		if line then line.gameObject:SetActive(false) end
-		dropLocalized(title:Find('Text'))
+		dropLocalized(title)
 		local titleText = title:Find('Text'):GetComponent(typeof(UGUI.Text))
 		titleText.text = Mode.LABELS.title
 		titleText.horizontalOverflow = U3D.HorizontalWrapMode.Overflow
@@ -210,11 +213,17 @@ function Mode.BuildSettings(page, region)
 		local label = go.transform:Find('Label')
 		rt(label).offsetMin = V2(16, 2)
 		style(label:GetComponent(typeof(UGUI.Text)))
-		-- the arrow: the page's checkbox frame turned into a small "open" mark (no stock arrow sprite)
+		-- the arrow: a down-pointing triangle in the page font (the client has no arrow sprite to hand)
 		local arrow = go.transform:Find('Arrow')
-		local aimg = arrow:GetComponent(typeof(UGUI.Image))
-		aimg.sprite, aimg.color = box.sprite, U3D.Color(1, 1, 1, 1)
-		rt(arrow).sizeDelta = V2(28, 26)
+		arrow:GetComponent(typeof(UGUI.Image)).enabled = false
+		local mark = U3D.GameObject('Mark')
+		mark.transform:SetParent(arrow, false)
+		local markText = mark:AddComponent(typeof(UGUI.Text))
+		style(markText, '\226\150\188')   -- U+25BC
+		markText.alignment = U3D.TextAnchor.MiddleCenter
+		markText.raycastTarget = false
+		local mr = rt(mark.transform)
+		mr.anchorMin, mr.anchorMax, mr.sizeDelta = V2(0, 0), V2(1, 1), V2(16, 0)
 		local opts = CS.System.Collections.Generic.List(CS.System.String)()
 		opts:Add(Mode.LABELS.default)
 		opts:Add(Mode.LABELS.improved)

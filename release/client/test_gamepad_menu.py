@@ -351,6 +351,18 @@ local function node(name, parent)
     __newindex = function(o, k, v) if k == 'name' then t.name = v else rawset(o, k, v) end end })
   rawset(t.gameObject, 'SetActive', function(self, v) self.active = v end)
   rawset(t.gameObject, 'GetComponent', function(self, ty) return t.comps[ty] end)
+  rawset(t.gameObject, 'AddComponent', function(self, ty) local c = { gameObject = self }; t.comps[ty] = c; return c end)
+  function t:SetParent(parent) self.parent = parent; table.insert(parent.children, self) end
+  -- every script component under this node (the Text / Image tables and the client's LocalizedText)
+  function t:GetComponentsInChildren(ty)
+    local out = { Length = 0 }
+    local function walk(n)
+      for k, c in pairs(n.comps) do if k ~= T.RectTransform then out[out.Length] = c; out.Length = out.Length + 1 end end
+      for _, ch in ipairs(n.children) do walk(ch) end
+    end
+    walk(self)
+    return out
+  end
   t.size, t.pivot = { 100, 40 }, { x = 0.5, y = 0.5 }
   t.comps[T.RectTransform] = setmetatable({}, {
     __index = function(_, k)
@@ -377,7 +389,8 @@ end
 -- a text as in the Chinese client: a Text plus the client's LocalizedText (it puts the key's text back)
 local function localized() return { GetType = function() return { Name = 'LocalizedText' } end } end
 local function text(parent, value)
-  local n = node('Text', parent); n.comps[T.Text] = { text = value }; n.comps.loc = localized()
+  local n = node('Text', parent); n.comps[T.Text] = { text = value, GetType = function() return { Name = 'Text' } end }
+  n.comps.loc = localized()
   function n:GetComponents() local out = { Length = 0 }
     for k, c in pairs(self.comps) do if k ~= T.RectTransform then out[out.Length] = c; out.Length = out.Length + 1 end end
     return out end
@@ -403,7 +416,7 @@ local function copy(src, parent)
   n.ap = { x = src.ap.x, y = src.ap.y }
   n.size, n.pivot = { src.size[1], src.size[2] }, { x = src.pivot.x, y = src.pivot.y }
   for ty, c in pairs(src.comps) do
-    if ty == T.Text then n.comps[ty] = { text = c.text }
+    if ty == T.Text then n.comps[ty] = { text = c.text, GetType = c.GetType }
     elseif ty == 'loc' then n.comps[ty] = localized()
       n.GetComponents = src.GetComponents
     elseif ty ~= T.RectTransform then n.comps[ty] = c end
@@ -420,6 +433,8 @@ end
 U3D.Object.Instantiate = function(go, parent) return copy(go.transform, parent).gameObject end
 U3D.Object.DestroyImmediate = function(c) for _, o in ipairs(allNodes) do for k, x in pairs(o.comps) do if x == c then o.comps[k] = nil end end end end
 U3D.Component = { name = 'Component' }
+U3D.MonoBehaviour = { name = 'MonoBehaviour' }
+U3D.GameObject = function(name) return node(name).gameObject end
 T.Image, T.Dropdown = { name = 'Image' }, { name = 'Dropdown' }
 U3D.UI.Image, U3D.UI.Dropdown = T.Image, T.Dropdown
 U3D.Color = U3D.Color or function(r, g, b, a) return { r, g, b, a } end
@@ -451,7 +466,7 @@ CS.System.String = 'String'
 CS.System.Collections.Generic.List = function() return function()
   local l = { Count = 0 }; function l:Add(v) self[self.Count] = v; self.Count = self.Count + 1 end; return l end end
 U3D.HorizontalWrapMode = { Overflow = 1 }
-U3D.TextAnchor = { MiddleLeft = 3 }
+U3D.TextAnchor = { MiddleLeft = 3, MiddleCenter = 4 }
 T.Text, T.Toggle = { name = 'Text' }, { name = 'Toggle' }
 U3D.UI.Text, U3D.UI.Toggle = T.Text, T.Toggle
 region = node('Region')
