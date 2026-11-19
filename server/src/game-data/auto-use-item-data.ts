@@ -25,6 +25,8 @@
  *   have no model id, so they get no rule.
  * - ItemBackGroundAuto: ExtParam1 is the background id N; owned when task 87/(2000 + N)
  *   is above 0 (MainOrnament.lua).
+ * - ItemPayDiamondAuto: ExtParam1 paid Earth Coins (money 12) each; the ¥ gift
+ *   packs hold it (yen-shop-data.ts).
  * - CafeItemAuto: furniture. This server keeps it as a stack that the cafe
  *   uses up when it places the furniture.
  *
@@ -44,6 +46,8 @@ export const MAIN_BACKGROUND_TASK_GROUP = 87;
 const MAIN_BACKGROUND_TASK_OFFSET = 2000;
 /** MoneyDef.txt id 7. */
 const COFFEE_COIN_MONEY_ID = 7;
+/** MoneyDef.txt id 12: paid Earth Coins, which MoneyLogic:GetMoneyValue adds to id 3. */
+const PAY_DIAMOND_MONEY_ID = 12;
 
 export type AutoUseEffect =
   /** Adds count * perItem to a wallet. */
@@ -146,6 +150,8 @@ export class AutoUseItemCatalog {
         effect = { kind: "money", moneyId: second, perItem: first };
       } else if (className === "ItemGiftCoffeeCoinAuto" && first !== null) {
         effect = { kind: "money", moneyId: COFFEE_COIN_MONEY_ID, perItem: first };
+      } else if (className === "ItemPayDiamondAuto" && first !== null) {
+        effect = { kind: "money", moneyId: PAY_DIAMOND_MONEY_ID, perItem: first };
       } else if (unlockTimeGroup !== undefined && first !== null && first <= 0xffff) {
         effect = { kind: "unlock-time", taskIds: [makeTaskId(unlockTimeGroup, first)] };
       } else if (className === "RikiItem" && rikiTaskIds.has(key)) {

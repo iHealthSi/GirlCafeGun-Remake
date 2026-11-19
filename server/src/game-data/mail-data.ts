@@ -1,6 +1,7 @@
 import type { BaseAward } from "./chapter-config.js";
 import { dailySignUpOperationalDate } from "./daily-sign-up-data.js";
 import type { Gdpln } from "./gacha-data.js";
+import { YEN_ALLOWANCE_AWARD, YEN_ALLOWANCE_CAMPAIGN } from "./yen-shop-data.js";
 import {
   recruitmentPolicy,
   RECRUITMENT_ROTATION_POOL_ID,
@@ -61,6 +62,29 @@ export function reconcileWelcomeMail(
     ].map((award) => [...award]),
   });
   campaigns.push(WELCOME_CAMPAIGN);
+}
+
+/**
+ * The starting ¥ of a save: one mail, once. The campaign marker stays after the
+ * mail is claimed or deleted, so the mail never comes back.
+ */
+export function reconcileYenAllowanceMail(mailbox: MailboxState, now: number): void {
+  const campaigns = (mailbox.deliveredCampaigns ??= []);
+  if (campaigns.includes(YEN_ALLOWANCE_CAMPAIGN)) return;
+  mailbox.messages.unshift({
+    id: mailbox.nextId++,
+    operationalDate: dailySignUpOperationalDate(now),
+    receivedAt: Math.floor(now / 1000),
+    read: false,
+    // Full-width ￥ (U+FFE5): the game font has it, game text uses it.
+    title: "Your Starting ￥",
+    sender: "Cafe Staff",
+    content:
+      "Manager, here is ￥1000 for the gift packs in the shop. " +
+      "Don't spend it all in one place!",
+    attachments: [[...YEN_ALLOWANCE_AWARD]],
+  });
+  campaigns.push(YEN_ALLOWANCE_CAMPAIGN);
 }
 
 export type MailAction =

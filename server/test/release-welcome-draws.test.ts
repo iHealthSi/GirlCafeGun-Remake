@@ -9,7 +9,9 @@ import {
   reconcileWelcomeMail,
   WELCOME_AWARDS,
   WELCOME_RECRUITMENT_AWARDS,
+  type MailMessage,
 } from "../src/game-data/mail-data.js";
+import { YEN_ITEM_DETAIL } from "../src/game-data/yen-shop-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
@@ -78,6 +80,16 @@ function ticketCounts(player: Player): number[] {
   );
 }
 
+/** The starting ¥ mail (yen-shop.test.ts covers it) is left out of these checks. */
+function withoutYenMail(messages: readonly MailMessage[] = []): MailMessage[] {
+  return messages.filter(
+    ({ attachments }) =>
+      !attachments.some(
+        ([genre, detail]) => genre === 15 && detail === YEN_ITEM_DETAIL,
+      ),
+  );
+}
+
 it("mails a new manager exactly 200 usable draws of each kind, once, across restart and claim retries", async () => {
   await fixture(async ({ open }) => {
     let { players } = await open(true);
@@ -85,7 +97,8 @@ it("mails a new manager exactly 200 usable draws of each kind, once, across rest
     const fresh = await players.getOrCreate(account, now);
     expect(fresh.level).toBe(1);
     expect(ticketCounts(fresh)).toEqual([0, 0]);
-    expect(fresh.mail?.messages).toHaveLength(1);
+    // The welcome mail on top, the starting ¥ mail below it.
+    expect(fresh.mail?.messages).toHaveLength(2);
     const welcome = fresh.mail!.messages[0]!;
     expect(welcome.attachments).toEqual([
       ...WELCOME_AWARDS,
@@ -120,7 +133,7 @@ it("mails a new manager exactly 200 usable draws of each kind, once, across rest
 
     ({ players } = await open(true));
     const restarted = await players.getOrCreate(account, now);
-    expect(restarted.mail?.messages).toEqual([]);
+    expect(withoutYenMail(restarted.mail?.messages)).toEqual([]);
     expect(ticketCounts(restarted)).toEqual([20, 20]);
     expect(
       (
@@ -168,7 +181,7 @@ it("mails a new manager exactly 200 usable draws of each kind, once, across rest
     }
     const spent = await (await open(true)).players.getOrCreate(account, now);
     expect(ticketCounts(spent)).toEqual([0, 0]);
-    expect(spent.mail?.messages).toEqual([]);
+    expect(withoutYenMail(spent.mail?.messages)).toEqual([]);
   });
 });
 
@@ -194,11 +207,13 @@ it("does not add the recruitment bonus to existing players, old welcome mail, or
     for (const account of ["unclaimed-old", "claimed-old", "GM", "legacy"]) {
       const player = await upgraded.getOrCreate(account, now);
       expect(ticketCounts(player)).toEqual([0, 0]);
-      for (const message of player.mail?.messages ?? [])
+      for (const message of withoutYenMail(player.mail?.messages))
         expect(message.attachments).toEqual(WELCOME_AWARDS);
     }
-    expect(upgraded.get("unclaimed-old")!.mail!.messages).toEqual(oldMessages);
-    expect(upgraded.get("claimed-old")!.mail!.messages).toEqual([]);
+    expect(withoutYenMail(upgraded.get("unclaimed-old")!.mail!.messages)).toEqual(
+      oldMessages,
+    );
+    expect(withoutYenMail(upgraded.get("claimed-old")!.mail!.messages)).toEqual([]);
     upgraded = (await open(true)).players;
     for (const account of ["unclaimed-old", "claimed-old", "GM", "legacy"])
       expect(ticketCounts(await upgraded.getOrCreate(account, now))).toEqual([0, 0]);

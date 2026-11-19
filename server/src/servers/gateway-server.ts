@@ -105,6 +105,7 @@ import {
   parseDeleteHouseThemeRequest,
   isNativeFixedHouseObjectId,
 } from "../game-data/house-data.js";
+import { YenPackCatalog } from "../game-data/yen-shop-data.js";
 import type { Logger } from "../logger.js";
 import {
   AchievementAwardError,
@@ -5172,6 +5173,62 @@ export function createGatewayServer({
                   peer,
                   account: context.account,
                   packId: pack.id,
+                  reason: error.reason,
+                  clientError: error.clientError,
+                });
+              }
+            } else if (
+              doRechargeCall.shopType === 1 &&
+              YenPackCatalog.loadDefault().pack(doRechargeCall.id) !== undefined
+            ) {
+              try {
+                const result = await players.buyYenPack(
+                  context.account,
+                  doRechargeCall.id,
+                );
+                context.player = result.player;
+                for (const money of result.updatedMoney) {
+                  send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+                }
+                if (result.updatedItems.length > 0) {
+                  send(
+                    COMMAND.ITEM_UPDATE_NTF,
+                    0,
+                    makeItemUpdateNotification(result.updatedItems),
+                  );
+                }
+                send(
+                  COMMAND.TASK_VALUE_RSP,
+                  0,
+                  makeTaskValueSync(result.player.taskValues),
+                );
+                // tbItem tells the patched IBLogic:ResponseTradeNo that the pack
+                // is paid: it opens the reward window instead of the payment SDK.
+                sendRechargeCallback({
+                  Type: 1,
+                  Id: doRechargeCall.id,
+                  Error: 0,
+                  tbItem: result.contents,
+                });
+                logger.info("ib_shop.yen_pack.bought", {
+                  peer,
+                  account: context.account,
+                  packId: doRechargeCall.id,
+                  cost: result.pack.cost,
+                  yen: result.yen,
+                  purchaseCount: result.purchaseCount,
+                });
+              } catch (error) {
+                if (!(error instanceof IBShopError)) throw error;
+                sendRechargeCallback({
+                  Type: 1,
+                  Id: doRechargeCall.id,
+                  Error: error.clientError,
+                });
+                logger.warn("ib_shop.yen_pack.rejected", {
+                  peer,
+                  account: context.account,
+                  packId: doRechargeCall.id,
                   reason: error.reason,
                   clientError: error.clientError,
                 });
