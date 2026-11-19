@@ -3,7 +3,7 @@
 ## 当前完成度
 
 普通日常任务的状态、04:00 日界、单项领奖、活跃宝箱和一键领取均已闭环。
-已有玩法会在成功业务事务中推进任务；协同出击和好友赠送电力因对应
+已有玩法会在成功业务事务中推进任务；协同出击、好友赠送电力因对应
 玩法尚未实现，任务定义和领奖规则已存在，但暂时没有进度来源。
 
 ## 客户端配置与协议
@@ -46,12 +46,18 @@
 | 105 | 摸头             |    5 |     15 | `HeadTouched` 成功回调 |
 | 106 | 特训             |    1 |     15 | 非幂等的成功开始特训   |
 | 107 | 强化角色卡或武器 |    1 |     10 | 两类强化成功事务       |
-| 108 | 商店购物         |    1 |     20 | 商店购买成功事务       |
+| 108 | 商店购物         |    1 |     20 | 商店及 IB 成功购买事务 |
 | 109 | 消耗电力         |  100 |     20 | 主线、悬赏结算扣体力   |
 | 110 | 制作咖啡         |    1 |     15 | 制作咖啡成功事务       |
 
 进度在目标值封顶。任务奖励 `15-9-1-1-N` 是虚拟活跃度，不进入背包；领奖时直接
 累加 `30000`。
+
+Shopping progress is committed with a successful normal-shop purchase, café
+furniture batch purchase, IB free-pack claim or IB month-card purchase. Browsing,
+refreshing, rejected purchases and retries do not create additional progress.
+The gateway sends `TASK_VALUE_RSP` before the purchase callback so the task page
+updates immediately. The same 04:00 operational-day reset applies to purchases.
 
 ## 活跃宝箱
 

@@ -1,5 +1,41 @@
 # Cafe and house
 
+## Release starter layout (0.1.4)
+
+Release welcome-gift policy also initializes an unfurnished cafe using the
+original CafeDefault theme (table 1), with safe owned object IDs, its exact
+nine item poses and four real dining positions. Sixty starting cups match an
+eligible customer's preference so sales can fund the next batch and earn cafe
+coins. No recurring free stock or changed sale rates are introduced.
+
+Login repairs older empty accounts once. Existing owned furniture, including
+stored collections and acquisition items, prevents the layout grant. A durable
+starter version prevents repeated grants after furniture is recycled. This
+does not alter progression, money, pets, staff or customized layouts.
+
+### Staff restoration repair (0.1.5)
+
+Native `NCafeDataController.GetGirlinWhichArea` requires Cafe, Rest and Dorm
+area records (IDs 1, 2 and 6) before it checks any staff dictionary. The 0.1.4
+starter mistakenly persisted only area 1, so the assignment UI reported staff
+as unassigned despite the saved Lua113/112 staff lists. House downloads now
+complete missing structural area records, and login repairs starter saves
+without replacing their layout or granting more stock. Locked bedrooms remain
+locked by the normal cafe-level rules. Staff assignment also updates native
+room membership; starting training removes the girl from that membership.
+
+### Earning cafe coins
+
+Place dining furniture with usable customer positions and make coffee. Match
+the recipe's taste grade to a preference listed under Today's Customers.
+Staff can be assigned through the cafe assignment screen. A basic cup takes
+240 seconds to finish. Completed matching sales automatically credit wallet 7;
+there is no extra claim step. Offline sales use only real stock and saved seats.
+An unmatched sale can earn gold without cafe coins. The level-1 coin holding cap
+is 10,000 and rises with cafe upgrades (up to 300,000); the configured daily
+earning limit also applies. The sales report displays earnings already credited,
+so reopening or claiming a report cannot pay twice.
+
 ## Current scope
 
 Core cafe implementation (2026-11-06), phone playtest passed.

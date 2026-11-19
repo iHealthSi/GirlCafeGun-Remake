@@ -11,6 +11,7 @@ import type {
   HouseRoomState,
   HouseThemeState,
 } from "../game-data/house-data.js";
+import { completeHouseRooms } from "../game-data/house-data.js";
 import type { AppConfig } from "../config.js";
 import type { CafePet } from "../game-data/cafe-pets.js";
 import { weaponPassiveSkills } from "../game-data/weapon-skill-data.js";
@@ -119,10 +120,13 @@ export function makeHouseInfoResponse(
     fieldVarint(1, roleId),
     ...furniture.map((item) => fieldBytes(2, makeCafeFurniture(item))),
     ...themes.map((theme) => fieldBytes(3, makeHouseTheme(theme))),
-    // Preserve the existing empty-house wire shape for profiles without layouts.
-    ...(rooms === undefined
-      ? [1, 2, 6].map((roomId) => fieldBytes(4, fieldVarint(1, roomId)))
-      : rooms.map((room) => fieldBytes(4, makeHouseRoom(room)))),
+    // Locked areas must still exist: native staff lookup requires all three.
+    ...completeHouseRooms(rooms).map((room) =>
+      fieldBytes(
+        4,
+        rooms === undefined ? fieldVarint(1, room.roomId) : makeHouseRoom(room),
+      ),
+    ),
     ...pets.map((pet) => fieldBytes(5, makeCafePet(pet))),
   ]);
   return Buffer.concat([

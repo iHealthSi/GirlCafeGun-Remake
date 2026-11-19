@@ -92,6 +92,28 @@ describe("native house protocol", () => {
     expect(parseHouseInfoRequest(Buffer.alloc(0))).toEqual({ roleId: 0 });
     expect(parseHouseInfoRequest(fieldVarint(1, 9))).toEqual({ roleId: 9 });
   });
+  it("restores locked bedroom records for a legacy one-area café without changing its layout or staff", () => {
+    const cache = decodeFields(
+      message(makeHouseInfoResponse(7, [furniture], [room]), 2),
+    );
+    const areas = cache
+      .filter((field) => field.fieldNumber === 4)
+      .map((field) => decodeFields(field.value as Buffer));
+    expect(areas.map((area) => firstNumber(area, 1))).toEqual([1, 2, 6]);
+    expect(
+      areas[0]!
+        .filter((field) => field.fieldNumber === 2)
+        .map((field) => Number(field.value)),
+    ).toEqual([7, 9]);
+    expect(
+      areas[0]!
+        .filter((field) => field.fieldNumber === 5)
+        .map((field) => Number(field.value)),
+    ).toEqual([1, 10000]);
+    expect(
+      areas.slice(1).every((area) => !area.some((field) => field.fieldNumber === 2)),
+    ).toBe(true);
+  });
   it("round-trips every furniture, pose, room and theme field at native tags", () => {
     const payload = makeUpdateHouseResponse(7, data);
     expect(parseUpdateHouseRequest(payload)).toEqual({ roleId: 7, ...data });

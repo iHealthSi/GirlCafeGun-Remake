@@ -16,6 +16,11 @@ import {
   MONTH_CARD_ITEM_ID,
 } from "../src/game-data/ib-shop-data.js";
 import type { Logger } from "../src/logger.js";
+import {
+  makeDailyMissionTaskId,
+  dailyMissionProgress,
+  dailyMissionOperationalDate,
+} from "../src/game-data/daily-mission-data.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
   IBShopError,
@@ -70,6 +75,28 @@ const NOW = new Date("2026-08-16T12:00:00+08:00").getTime();
 const NEXT_DAY = new Date("2026-08-17T12:00:00+08:00").getTime();
 
 describe("ib shop free pack persistence", () => {
+  it("counts successful free-pack and IB-item purchases for the current daily quest", async () => {
+    const repository = await createRepository();
+    const key = String(makeDailyMissionTaskId(108));
+    await expect(repository.claimIBItemFree("tester", 999, NOW)).rejects.toThrow(
+      IBShopError,
+    );
+    expect(dailyMissionProgress(repository.get("tester")!.taskValues[key] ?? 0)).toBe(
+      0,
+    );
+    const pack = await repository.claimIBShopFreePack("tester", NOW);
+    expect(dailyMissionProgress(pack.player.taskValues[key] ?? 0)).toBe(1);
+    const item = await repository.claimIBItemFree(
+      "tester",
+      MONTH_CARD_ITEM_ID,
+      NEXT_DAY,
+    );
+    expect(dailyMissionProgress(item.player.taskValues[key] ?? 0)).toBe(1);
+    expect(item.player.dailyMissions?.operationalDate).toBe(
+      dailyMissionOperationalDate(NEXT_DAY),
+    );
+  });
+
   it("grants the pack item and records the purchase count", async () => {
     const repository = await createRepository();
     const result = await repository.claimIBShopFreePack("tester", NOW);

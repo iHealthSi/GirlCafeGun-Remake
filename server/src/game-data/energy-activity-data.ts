@@ -1,103 +1,102 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { DAILY_SIGN_UP_TASK_GROUP } from "./daily-sign-up-data.js";
+import { dailySignUpOperationalDate } from "./daily-sign-up-data.js";
+import type { Player } from "../persistence/player-repository.js";
 
-/**
- * 限时领体力（ActivityList id 8 `activity.power`，Template 4，面板
- * UI_EnergyGet）。领取窗口与体力数值来自 NormalActivity/EnergyActivity.txt。
- */
 export const ENERGY_ACTIVITY_ID = 8;
-/** UI_EnergyGet.lua:80 与每日签到同在任务组 20。 */
-export const ENERGY_ACTIVITY_TASK_GROUP = DAILY_SIGN_UP_TASK_GROUP;
-/** UI_EnergyGet.lua:80: me:GetTaskValue(20, 10000 + tbConfig.nId). */
-export const ENERGY_ACTIVITY_TASK_BASE = 10_000;
-
-export interface EnergyActivitySlot {
+export interface EnergyActivityState {
+  operationalDate: string;
+}
+export interface EnergyWindow {
   id: number;
-  /** HHMM, local time. */
-  beginTime: number;
-  /** HHMM, local time. */
-  endTime: number;
+  beginMinute: number;
+  endMinute: number;
   energy: number;
 }
+let cached: readonly EnergyWindow[] | undefined;
 
-type Row = Record<string, string>;
-
-/** LoadTabFile(path, 3): 3 header rows, the 3rd one holds the column names. */
-function parseTable(text: string): Row[] {
-  const rows = text
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .filter((line) => line.trim() !== "")
-    .map((line) => line.split("\t"));
-  if (rows.length < 4) throw new Error("EnergyActivity table is missing rows");
-  const header = rows[2] ?? [];
-  return rows.slice(3).map((cells) => {
-    const row: Row = {};
-    header.forEach((name, index) => {
-      row[name] = cells[index] ?? "";
-    });
-    return row;
-  });
-}
-
-function integer(text: string | undefined): number {
-  if (text === undefined) return 0;
-  const value = Number(text.trim());
-  if (text.trim() !== "" && Number.isSafeInteger(value)) return value;
-  return 0;
-}
-
-let cachedSlots: readonly EnergyActivitySlot[] | undefined;
-
-/** Claim windows and vigour per row of NormalActivity/EnergyActivity.txt. */
-export function loadEnergyActivitySlots(): readonly EnergyActivitySlot[] {
-  if (cachedSlots) return cachedSlots;
-  const text = readFileSync(
-    path.resolve(process.cwd(), "resources/activity", "energyactivity.txt"),
+/** Exact NormalActivity/EnergyActivity table used by UI_EnergyGet. */
+export function energyActivityWindows(): readonly EnergyWindow[] {
+  if (cached) return cached;
+  const lines = readFileSync(
+    path.resolve(process.cwd(), "resources/activity/energyactivity.txt"),
     "utf8",
+  ).split(/\r?\n/);
+  const columns = lines[2]!.split("\t");
+  const minute = (value: string): number => {
+    const hhmm = Number(value);
+    if (!Number.isInteger(hhmm) || hhmm < 0 || hhmm > 2400 || hhmm % 100 >= 60)
+      throw new Error("Invalid energy activity time");
+    return Math.floor(hhmm / 100) * 60 + (hhmm % 100);
+  };
+  const rows = lines
+    .slice(3)
+    .filter((line) => line.trim())
+    .map((line) => {
+      const cells = line.split("\t");
+      const row = Object.fromEntries(
+        columns.map((column, index) => [column, cells[index]!]),
+      );
+      return {
+        id: Number(row.Id),
+        beginMinute: minute(row.BeginTime!),
+        endMinute: minute(row.EndTime!),
+        energy: Number(row.Energy),
+      };
+    });
+  if (
+    !rows.length ||
+    new Set(rows.map((row) => row.id)).size !== rows.length ||
+    rows.some(
+      (row) =>
+        !Number.isSafeInteger(row.id) ||
+        row.id <= 0 ||
+        row.id > 100 ||
+        !Number.isSafeInteger(row.energy) ||
+        row.energy <= 0 ||
+        row.beginMinute === row.endMinute,
+    )
+  )
+    throw new Error("Invalid energy activity table");
+  return (cached = Object.freeze(rows.map((row) => Object.freeze(row))));
+}
+export function energyActivityTaskId(id: number): number {
+  return (20 << 16) | (10_000 + id);
+}
+export function isEnergyActivityTaskId(id: number): boolean {
+  return energyActivityWindows().some(
+    (window) => energyActivityTaskId(window.id) === id,
   );
-  cachedSlots = parseTable(text)
-    .map((row) => ({
-      id: integer(row.Id),
-      beginTime: integer(row.BeginTime),
-      endTime: integer(row.EndTime),
-      energy: integer(row.Energy),
-    }))
-    .filter((slot) => slot.id > 0);
-  return cachedSlots;
 }
-
-export function makeEnergyActivityTaskId(slotId: number): number {
-  return (ENERGY_ACTIVITY_TASK_GROUP << 16) | (ENERGY_ACTIVITY_TASK_BASE + slotId);
+export function reconcileEnergyActivity(player: Player, now: number): boolean {
+  const date = dailySignUpOperationalDate(now);
+  if (!player.energyActivity) {
+    player.energyActivity = { operationalDate: date };
+    return false; // Preserve any legitimate legacy claim flags for this day.
+  }
+  if (typeof player.energyActivity.operationalDate !== "string") {
+    // Save made by the earlier phone build: { lastDate } in local time. Keep
+    // the claim flags only when that day is still the current operational day.
+    const legacy = player.energyActivity as { lastDate?: string | null };
+    player.energyActivity.operationalDate = legacy.lastDate === date ? date : "";
+    delete legacy.lastDate;
+  }
+  if (player.energyActivity.operationalDate >= date) return false;
+  player.energyActivity.operationalDate = date;
+  let changed = false;
+  for (const window of energyActivityWindows()) {
+    const key = String(energyActivityTaskId(window.id));
+    changed ||= (player.taskValues[key] ?? 0) !== 0;
+    player.taskValues[key] = 0;
+  }
+  return changed;
 }
-
-/** Local HHMM (UI_EnergyGet.lua:44 `Game.Utils.DateTime('HHmm')`). */
-function localHHmm(now: number): number {
-  const date = new Date(now);
-  return date.getHours() * 100 + date.getMinutes();
-}
-
-/**
- * The row whose window contains the local time, mirroring
- * UI_EnergyGet.lua:49-60, including windows that span midnight. The server
- * runs on the same device/clock as the client, so local time is authoritative.
- */
-export function currentEnergyActivitySlot(now = Date.now()): EnergyActivitySlot | null {
-  const nowTime = localHHmm(now);
-  return (
-    loadEnergyActivitySlots().find((slot) =>
-      slot.beginTime <= slot.endTime
-        ? slot.beginTime <= nowTime && nowTime < slot.endTime
-        : nowTime >= slot.beginTime || nowTime < slot.endTime,
-    ) ?? null
+export function currentEnergyWindow(now: number): EnergyWindow | undefined {
+  const local = new Date(now + 8 * 3_600_000); // Native server zone is UTC+8.
+  const minute = local.getUTCHours() * 60 + local.getUTCMinutes();
+  return energyActivityWindows().find((window) =>
+    window.beginMinute < window.endMinute
+      ? minute >= window.beginMinute && minute < window.endMinute
+      : minute >= window.beginMinute || minute < window.endMinute,
   );
-}
-
-/** Local calendar date (YYYY-MM-DD), the energy-claim day. */
-export function energyActivityDate(now: number): string {
-  const date = new Date(now);
-  const month = `${date.getMonth() + 1}`.padStart(2, "0");
-  const day = `${date.getDate()}`.padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
 }

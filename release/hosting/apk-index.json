@@ -1,19 +1,19 @@
 {
   "schemaVersion": 1,
   "apks": {
-    "0.1.2/GCG-Offline-v0.1.2.apk": {
-      "size": 405419597,
-      "sha256": "b6752500aee658be8f1ab9ac6b4280bfac7cfd6e72c86a5cbaa82bcf83bc2a47",
+    "0.1.5/GCG-Offline-v0.1.5.apk": {
+      "size": 405497421,
+      "sha256": "b94fa5be9f074754dde6ee2e0877c12c805294a0e83da4a7b48eed5c3f0c0294",
       "parts": [
         {
-          "key": "_apk/0.1.2/b6752500aee658be8f1ab9ac6b4280bfac7cfd6e72c86a5cbaa82bcf83bc2a47/part-000.bin",
+          "key": "_apk/0.1.5/b94fa5be9f074754dde6ee2e0877c12c805294a0e83da4a7b48eed5c3f0c0294/part-000.bin",
           "size": 209715200,
-          "sha256": "2c6c52940a5bb4f2f315eee2029a09c97be7cda59306d65745a1ea7fe41fe8c1"
+          "sha256": "78da8b064ae37bbe23d64126537f231b74d54dbae834c89aee33bcb43437f5c7"
         },
         {
-          "key": "_apk/0.1.2/b6752500aee658be8f1ab9ac6b4280bfac7cfd6e72c86a5cbaa82bcf83bc2a47/part-001.bin",
-          "size": 195704397,
-          "sha256": "5ae944581599e93c40ce711e365e496ee74674566a8db19b0e3d1ba4b210f8ed"
+          "key": "_apk/0.1.5/b94fa5be9f074754dde6ee2e0877c12c805294a0e83da4a7b48eed5c3f0c0294/part-001.bin",
+          "size": 195782221,
+          "sha256": "45f15a0e43af87123a971bd1cae932d4322ebcef22f0db7a46734fd9bb51856a"
         }
       ]
     }

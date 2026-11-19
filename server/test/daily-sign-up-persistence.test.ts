@@ -11,15 +11,12 @@ import {
   DAILY_SIGN_UP_TOTAL_TASK,
   makeDailySignUpTaskId,
 } from "../src/game-data/daily-sign-up-data.js";
-import { makeEnergyActivityTaskId } from "../src/game-data/energy-activity-data.js";
 import { makeMonthCardTaskId } from "../src/game-data/ib-shop-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
   makeInitialState,
-  MONEY_VIGOUR,
   PlayerRepository,
-  type Player,
 } from "../src/persistence/player-repository.js";
 
 const logger: Logger = {
@@ -216,71 +213,6 @@ it("signs the month card part when the card is bought after signing", async () =
         String(makeDailySignUpTaskId(DAILY_SIGN_UP_MONTH_ENERGY_TASK))
       ],
     ).toBe(1);
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-});
-
-it("grants the time-limited power once per window and local date", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "gcg2-energy-activity-"));
-  try {
-    const store = new JsonStore({
-      filePath: path.join(directory, "state.json"),
-      initialState: makeInitialState(),
-      logger,
-    });
-    await store.initialize();
-    const repository = new PlayerRepository({
-      store,
-      defaults: {
-        name: "",
-        level: 1,
-        exp: 0,
-        fightPower: 0,
-        serverZone: 8,
-        firstLevelComplete: false,
-      },
-      logger,
-    });
-    await repository.getOrCreate("tester");
-    const at = (day: number, hour: number, minute = 0) =>
-      new Date(2026, 10, day, hour, minute, 0).getTime();
-    const vigourOf = (player: Player) =>
-      player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
-    const slotValue = (player: Player, slotId: number): number =>
-      player.taskValues[String(makeEnergyActivityTaskId(slotId))] ?? 0;
-    const vigourBefore = vigourOf(repository.get("tester")!);
-
-    const first = await repository.claimEnergyActivity("tester", at(16, 12));
-    expect(first.claimed).toBe(true);
-    expect(first.energy).toBe(30);
-    expect(vigourOf(first.player)).toBe(vigourBefore + 30);
-    expect(slotValue(first.player, 1)).toBe(1);
-    expect(slotValue(first.player, 2)).toBe(0);
-    expect(first.updatedMoney).toEqual([
-      { id: MONEY_VIGOUR, count: vigourBefore + 30 },
-    ]);
-
-    const duplicate = await repository.claimEnergyActivity("tester", at(16, 12, 30));
-    expect(duplicate.claimed).toBe(false);
-    expect(duplicate.reason).toBe("already_claimed");
-    expect(vigourOf(duplicate.player)).toBe(vigourBefore + 30);
-
-    const outside = await repository.claimEnergyActivity("tester", at(16, 15));
-    expect(outside.claimed).toBe(false);
-    expect(outside.reason).toBe("outside_window");
-    expect(vigourOf(outside.player)).toBe(vigourBefore + 30);
-
-    const evening = await repository.claimEnergyActivity("tester", at(16, 19));
-    expect(evening.claimed).toBe(true);
-    expect(vigourOf(evening.player)).toBe(vigourBefore + 60);
-    expect(slotValue(evening.player, 2)).toBe(1);
-
-    const nextDay = await repository.claimEnergyActivity("tester", at(17, 12));
-    expect(nextDay.claimed).toBe(true);
-    expect(vigourOf(nextDay.player)).toBe(vigourBefore + 90);
-    expect(slotValue(nextDay.player, 1)).toBe(1);
-    expect(slotValue(nextDay.player, 2)).toBe(0);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

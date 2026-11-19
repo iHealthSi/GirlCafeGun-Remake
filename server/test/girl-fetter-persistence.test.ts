@@ -5,7 +5,11 @@ import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { GIRL_FETTER_EVENT_OFFSET } from "../src/game-data/girl-fetter-data.js";
+import {
+  GIRL_FETTER_EVENT_OFFSET,
+  GIRL_MAIN_STORY_OFFSET,
+  GirlFetterCatalog,
+} from "../src/game-data/girl-fetter-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
@@ -37,11 +41,13 @@ afterEach(async () => {
 async function createRepository(): Promise<{
   repository: PlayerRepository;
   store: JsonStore<PersistedState>;
+  filePath: string;
 }> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "gcg2-girl-fetter-"));
   directories.push(directory);
+  const filePath = path.join(directory, "state.json");
   const store = new JsonStore({
-    filePath: path.join(directory, "state.json"),
+    filePath,
     initialState: makeInitialState(),
     logger,
   });
@@ -59,8 +65,11 @@ async function createRepository(): Promise<{
     logger,
   });
   await repository.getOrCreate("tester");
-  return { repository, store };
+  return { repository, store, filePath };
 }
+
+const mainStoryKey = (girlId: number) =>
+  String((3 << 16) | ((girlId - 1) * 2000 + GIRL_MAIN_STORY_OFFSET));
 
 function fetterTaskKey(girlId: number, index: number): string {
   return String(
@@ -146,6 +155,130 @@ describe("girl fetter unlock reconciliation", () => {
 });
 
 describe("view girl story", () => {
+  it("advances the first three main chapters of every stock girl using their native ordinal and survives reload", async () => {
+    const { repository, store, filePath } = await createRepository();
+    const catalog = GirlFetterCatalog.loadDefault();
+    await store.update((state) => {
+      const player = state.players.tester!,
+        template = player.girls[0]!;
+      player.girls = Array.from({ length: 16 }, (_, i) => ({
+        ...template,
+        girlId: i + 1,
+        level: 20,
+      }));
+    });
+    await repository.reconcileGirlFetter("tester");
+    for (let girlId = 1; girlId <= 16; girlId++) {
+      const main = catalog.mainStories(girlId);
+      await expect(
+        repository.setGirlMainStoryProgress("tester", girlId, 3),
+      ).rejects.toMatchObject({ reason: "story_locked" });
+      for (let ordinal = 1; ordinal <= 3; ordinal++) {
+        expect(main[ordinal - 1]!.requiredLevel).toBeLessThanOrEqual(20);
+        await repository.setGirlMainStoryProgress("tester", girlId, ordinal);
+        await repository.viewGirlStory("tester", girlId, 1, main[ordinal - 1]!.index);
+      }
+      expect(repository.get("tester")!.taskValues[mainStoryKey(girlId)]).toBe(3);
+    }
+    await store.flush();
+    const reloaded = new JsonStore({
+      filePath,
+      initialState: makeInitialState(),
+      logger,
+    });
+    await reloaded.initialize();
+    for (let girlId = 1; girlId <= 16; girlId++)
+      expect(reloaded.snapshot().players.tester!.taskValues[mainStoryKey(girlId)]).toBe(
+        3,
+      );
+  }, 15000);
+
+  it("repairs legacy main-story cursors for all 16 stock girls without replaying awards", async () => {
+    const { repository, store, filePath } = await createRepository();
+    const catalog = GirlFetterCatalog.loadDefault();
+    await store.update((state) => {
+      const player = state.players.tester!;
+      const template = player.girls[0]!;
+      player.girls = Array.from({ length: 16 }, (_, index) => ({
+        ...template,
+        girlId: index + 1,
+        level: 100,
+      }));
+      for (const girl of player.girls) {
+        const main = catalog.mainStories(girl.girlId);
+        expect(main.length).toBeGreaterThan(2);
+        for (const node of main.slice(0, 2))
+          player.taskValues[fetterTaskKey(girl.girlId, node.index)] = 2;
+        delete player.taskValues[mainStoryKey(girl.girlId)];
+      }
+    });
+    const before = repository.get("tester")!;
+    const repaired = await repository.markLogin("tester");
+    for (const girl of repaired.girls)
+      expect(repaired.taskValues[mainStoryKey(girl.girlId)]).toBe(2);
+    expect(repaired.inventory).toEqual(before.inventory);
+    expect(repaired.money).toEqual(before.money);
+    await store.flush();
+    const reloaded = new JsonStore({
+      filePath,
+      initialState: makeInitialState(),
+      logger,
+    });
+    await reloaded.initialize();
+    for (let girlId = 1; girlId <= 16; girlId++)
+      expect(reloaded.snapshot().players.tester!.taskValues[mainStoryKey(girlId)]).toBe(
+        2,
+      );
+  });
+
+  it("records the stock main-story receipt, preserves read progress and enforces level/order gates", async () => {
+    const { repository, store } = await createRepository();
+    await expect(
+      repository.setGirlMainStoryProgress("tester", 2, 2),
+    ).rejects.toMatchObject({ reason: "story_locked" });
+    let player = await repository.setGirlMainStoryProgress("tester", 2, 1);
+    expect(player.taskValues[mainStoryKey(2)]).toBe(1);
+    const read = await repository.viewGirlStory("tester", 2, 1, 1);
+    expect(read.alreadyRead).toBe(false);
+    expect(read.player.taskValues[mainStoryKey(2)]).toBe(1);
+    await setGirlLevel(store, 2, 10);
+    await repository.reconcileGirlFetter("tester");
+    player = await repository.setGirlMainStoryProgress("tester", 2, 2);
+    expect(player.taskValues[mainStoryKey(2)]).toBe(2);
+    player = await repository.setGirlMainStoryProgress("tester", 2, 1);
+    expect(player.taskValues[mainStoryKey(2)]).toBe(2);
+    const repeat = await repository.viewGirlStory("tester", 2, 1, 1);
+    expect(repeat.alreadyRead).toBe(true);
+    expect(repeat.awards).toEqual([]);
+    await expect(
+      repository.setGirlMainStoryProgress("tester", 2, 3),
+    ).rejects.toMatchObject({ reason: "story_locked" });
+    await expect(
+      repository.setGirlMainStoryProgress("tester", 27, 1),
+    ).rejects.toMatchObject({ reason: "girl_not_owned" });
+    await expect(
+      repository.setGirlMainStoryProgress("tester", 2, 999),
+    ).rejects.toMatchObject({ reason: "story_not_found" });
+    player = await repository.setTaskValues("tester", [
+      { id: Number(mainStoryKey(2)), value: 0 },
+    ]);
+    expect(player.taskValues[mainStoryKey(2)]).toBe(2);
+  });
+
+  it("recovers a completed first story without treating a read side story as the next main chapter", async () => {
+    const { repository, store } = await createRepository();
+    await setGirlLevel(store, 2, 10);
+    await store.update((state) => {
+      state.players.tester!.taskValues[fetterTaskKey(2, 1)] = 2;
+      state.players.tester!.taskValues[fetterTaskKey(2, 2)] = 2;
+    });
+    const player = await repository.markLogin("tester");
+    expect(player.taskValues[mainStoryKey(2)]).toBe(1);
+    await expect(
+      repository.setGirlMainStoryProgress("tester", 2, 2),
+    ).resolves.toBeDefined();
+  });
+
   it("grants the node award once and marks the node read", async () => {
     const { repository, store } = await createRepository();
     await setGirlLevel(store, 2, 5);
@@ -189,36 +322,5 @@ describe("view girl story", () => {
     expect(result.awards).toEqual([]);
     const key = String((3 << 16) | ((2 - 1) * 2_000 + 400 + 1 - 1));
     expect(result.player.taskValues[key]).toBe(2);
-  });
-});
-
-describe("set girl main story id", () => {
-  const mainStoryKey = (girlId: number) =>
-    String((3 << 16) | ((girlId - 1) * 2_000 + 14));
-
-  it("stores on an owned girl, refuses skips and lower values, and ignores unowned girls", async () => {
-    const { repository } = await createRepository();
-
-    // value 1 on an owned girl stores 1
-    const first = await repository.setGirlMainStoryId("tester", 2, 1);
-    expect(first.changed).toBe(true);
-    expect(first.player.taskValues[mainStoryKey(2)]).toBe(1);
-
-    // value 3 (skip) is refused
-    const skip = await repository.setGirlMainStoryId("tester", 2, 3);
-    expect(skip.changed).toBe(false);
-    expect(skip.player.taskValues[mainStoryKey(2)]).toBe(1);
-
-    // the next story in sequence is accepted, then a lower value does not lower it
-    const second = await repository.setGirlMainStoryId("tester", 2, 2);
-    expect(second.changed).toBe(true);
-    const lower = await repository.setGirlMainStoryId("tester", 2, 1);
-    expect(lower.changed).toBe(false);
-    expect(lower.player.taskValues[mainStoryKey(2)]).toBe(2);
-
-    // a girl not owned is refused
-    const unowned = await repository.setGirlMainStoryId("tester", 1, 1);
-    expect(unowned.changed).toBe(false);
-    expect(unowned.player.taskValues[mainStoryKey(1)] ?? 0).toBe(0);
   });
 });

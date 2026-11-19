@@ -119,6 +119,23 @@ CardGroup，再通过命令 `21/22/23` 的编队保存落盘，因此最小装�
 
 ## 验证
 
+### Affection main-story progress
+
+Stock `UI_GirlLove` uses two distinct state fields: `ELevel` at offset
+`300 + storyIndex - 1` records unread/read rewards, while `MainStoryId` at offset
+14 stores the main-story ordinal. The ordinary girls' main stories are sorted
+by affection level; their sparse story indices are not the ordinal.
+
+`LuaCall` command 256 now acknowledges a main story starting, saves the cursor
+monotonically and synchronizes task values before its callback. Requests must
+name an owned girl, an existing ordinal, a reached affection level and at most
+the next main chapter. `ViewStory` still pays each completed node only once.
+Login/reconciliation repairs old saves' missing cursor from consecutive read
+main-story bits without paying rewards again. Generic task writes cannot reset
+this server-owned cursor. Link girls' separate bitmask and Neptune are unaffected.
+Regression tests cover all 16 stock girls through the level-10/20 chapters,
+old saves, replay/reload, rejected requests and actual TCP callback ordering.
+
 - `test/girl-training-data.test.ts` 覆盖训练配置和非法位置；
 - `test/girl-training-end-persistence.test.ts` 覆盖特训结算、升级秘密解锁、
   满级零收益和未在训/未完成的拒绝路径；

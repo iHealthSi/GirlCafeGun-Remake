@@ -866,6 +866,8 @@ export function createGatewayServer({
       const result = await updateMailbox({ kind: "list" }, now);
       context.player = result.player;
       if (socket.destroyed) return;
+      if (result.taskValuesChanged)
+        send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(result.player.taskValues));
       const messages = result.player.mail?.messages ?? [];
       if (!mailDate) {
         send(COMMAND.GET_MAIL_RSP, 0, makeMailListResponse(messages));
@@ -1714,6 +1716,26 @@ export function createGatewayServer({
               : {};
           const activityId = Number(parameters.nActivityId);
           const achievementId = Number(parameters.nId);
+          if (activityId === ENERGY_ACTIVITY_ID) {
+            const result = await players.claimEnergyActivity(context.account);
+            sendPromiseUpdates(result, true);
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("NormalActivityMsg", {
+                nType: 4,
+                nEnergy: result.energy,
+                bFullAdd: result.claimed,
+              }),
+            );
+            logger.info("activity.energy_claim", {
+              account: context.account,
+              claimed: result.claimed,
+              energy: result.energy,
+              reason: result.reason,
+            });
+            return;
+          }
           if (activityId === EIGHT_DAY_SIGN_UP_ACTIVITY_ID) {
             try {
               const result = await players.claimEightDaySignUpAward(
@@ -1770,46 +1792,6 @@ export function createGatewayServer({
                 activityId,
                 achievementId,
                 reason: error.reason,
-              });
-            }
-            return;
-          }
-          if (activityId === ENERGY_ACTIVITY_ID) {
-            const result = await players.claimEnergyActivity(context.account);
-            context.player = result.player;
-            send(
-              COMMAND.TASK_VALUE_RSP,
-              0,
-              makeTaskValueSync(result.player.taskValues),
-            );
-            for (const money of result.updatedMoney) {
-              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
-            }
-            if (result.claimed) {
-              send(
-                COMMAND.NTF_S2C_CALL,
-                0,
-                makeServerLuaCall("NormalActivityMsg", {
-                  nType: 4,
-                  nEnergy: result.energy,
-                  bFullAdd: result.bFullAdd,
-                }),
-              );
-              logger.info("lua.callback", {
-                peer,
-                account: context.account,
-                method: "NormalActivityMsg",
-                feature: "energy_activity.claim",
-                activityId,
-                energy: result.energy,
-                bFullAdd: result.bFullAdd,
-              });
-            } else {
-              logger.warn("energy_activity.claim_rejected", {
-                peer,
-                account: context.account,
-                activityId,
-                reason: result.reason,
               });
             }
             return;
@@ -2881,25 +2863,6 @@ export function createGatewayServer({
           return;
         }
 
-        if (luaCommand === 256) {
-          const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
-          const girlId = Number(wrapped.tbParam?.nId);
-          const value = Number(wrapped.tbParam?.nValue);
-          const result = await players.setGirlMainStoryId(
-            context.account,
-            girlId,
-            value,
-          );
-          context.player = result.player;
-          if (result.changed) {
-            send(
-              COMMAND.TASK_VALUE_RSP,
-              0,
-              makeTaskValueSync(result.player.taskValues),
-            );
-          }
-          return;
-        }
         if (luaCommand === 540) {
           const wrapped = call?.parameters as { tbParam?: Record<string, unknown> };
           const chapter = Number(wrapped.tbParam?.Chapter);
@@ -3062,6 +3025,48 @@ export function createGatewayServer({
               account: context.account,
               guids,
               guid: error.guid,
+              reason: error.reason,
+            });
+          }
+          return;
+        }
+        if (luaCommand === 256) {
+          const envelope = call?.parameters as
+            { tbParam?: Record<string, unknown> } | undefined;
+          const girlId = Number(envelope?.tbParam?.nId);
+          const ordinal = Number(envelope?.tbParam?.nValue);
+          try {
+            const player = await players.setGirlMainStoryProgress(
+              context.account,
+              girlId,
+              ordinal,
+            );
+            context.player = player;
+            send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(player.taskValues));
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: 256,
+                tbParam: {
+                  nId: girlId,
+                  nValue:
+                    player.taskValues[String((3 << 16) | ((girlId - 1) * 2000 + 14))] ??
+                    0,
+                },
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof GirlViewStoryError)) throw error;
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("CallClientTip", ["Error.1"]),
+            );
+            logger.warn("girl.main_story.rejected", {
+              account: context.account,
+              girlId,
+              ordinal,
               reason: error.reason,
             });
           }
@@ -3567,20 +3572,17 @@ export function createGatewayServer({
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
             }
             context.player = players.get(context.account);
-            if (updatedFurniture.length && context.player)
-              send(
-                COMMAND.ADD_FURNITURE_RSP,
-                0,
-                makeAddFurnitureResponse(context.player.roleId, updatedFurniture),
-              );
-            // Daily mission 108 (buy in the shop) and, for furniture, the type 137
-            // event page achievements move inside the purchase; an award can also
-            // write a task value (head frame, skin).
             if (taskValuesChanged && context.player)
               send(
                 COMMAND.TASK_VALUE_RSP,
                 0,
                 makeTaskValueSync(context.player.taskValues),
+              );
+            if (updatedFurniture.length && context.player)
+              send(
+                COMMAND.ADD_FURNITURE_RSP,
+                0,
+                makeAddFurnitureResponse(context.player.roleId, updatedFurniture),
               );
             send(
               COMMAND.NTF_S2C_CALL,

@@ -113,10 +113,7 @@ it("persists player and task changes atomically", async () => {
       { id: 3, count: 0 },
     ]);
     expect(player.inventory).toHaveLength(3);
-    // A new café starts with the original default furniture (NCafeDefautItems);
-    // an empty café has no seats and can never earn coffee coin.
-    expect(player.cafe).toMatchObject({ coffees: [], defaultFurnitureSeeded: true });
-    expect(player.cafe.furniture).toHaveLength(13);
+    expect(player.cafe).toEqual({ coffees: [] });
     expect(player.phone).toEqual({ letters: [] });
     expect(player.bounty).toMatchObject({ completionCounts: {} });
     const loggedInPlayer = await repository.markLogin("tester");
@@ -156,9 +153,9 @@ it("persists player and task changes atomically", async () => {
     expect(repeatedTraining.endTime).toBe(1_785_267_200);
     await repository.setTaskValues("tester", [{ id: 123, value: 9 }]);
     const cafePlayer = await repository.makeCoffee("tester", 3, 240);
-    // Only the coffee stock changes; the seeded default furniture stays as it was.
-    expect(cafePlayer.cafe.coffees).toEqual([{ coffeetype: 3, count: 240 }]);
-    expect(cafePlayer.cafe.furniture).toEqual(player.cafe.furniture);
+    expect(cafePlayer.cafe).toEqual({
+      coffees: [{ coffeetype: 3, count: 240 }],
+    });
     const settlement = await repository.settleLevel(
       "tester",
       1,
@@ -262,12 +259,9 @@ it("persists player and task changes atomically", async () => {
       { id: 2, count: 500 },
       { id: 3, count: 0 },
     ]);
-    // The save also holds the seeded default furniture (13 items) and its marker.
-    expect(persisted.players.tester.cafe).toMatchObject({
+    expect(persisted.players.tester.cafe).toEqual({
       coffees: [{ coffeetype: 3, count: 240 }],
-      defaultFurnitureSeeded: true,
     });
-    expect(persisted.players.tester.cafe.furniture).toHaveLength(13);
     expect(persisted.players.tester.phone.letters).toMatchObject([
       { topicId: 1, initiator: 111, replyIds: [] },
     ]);

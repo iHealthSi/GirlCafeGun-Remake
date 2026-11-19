@@ -88,14 +88,14 @@ apply an update: uninstalling can remove the local profile. Updates preserve the
 profile, verify their publisher and content, and recover interrupted resource
 transactions before the game starts.
 
-### Updating to 0.1.2
+### Updating to 0.1.5
 
 Use the signed `.gcgupdate` package matching your installed data release. The
-0.1.1 login updater can discover its 0.1.1-to-0.1.2 package with **Check online**.
-The 0.1.2 updater also selects a direct package for 0.1.0 data automatically.
+login updater can discover its matching package with **Check online**. The
+current updater selects direct packages for installed 0.1.0 through 0.1.4 data.
 
 If you still use the original 0.1.0 app, either import its existing 0.1.0-to-0.1.1
-bridge first, or install the full 0.1.2 APK over the app and then use **Update →
+bridge first, or install the full 0.1.5 APK over the app and then use **Update →
 Check online** to apply its matching data. Keep the app installed and preserve
 its data throughout. Installing an APK alone does not replace resources already
 cached in `files/`.

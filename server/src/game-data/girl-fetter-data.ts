@@ -10,6 +10,18 @@ export const GIRL_FETTER_EVENT_OFFSET = 300;
 // GirlCommon.lua RegisterGirlVar('ECard', 400, 100)：卡面剧情已读位
 // （UI_GirlLoveAlbum，ViewStory nType=3）。
 export const GIRL_CARD_STORY_EVENT_OFFSET = 400;
+// UI_GirlLove gates main chapters using this ordinal, separately from ELevel.
+export const GIRL_MAIN_STORY_OFFSET = 14;
+
+export function isGirlMainStoryTaskId(id: number): boolean {
+  const offset = id & 0xffff;
+  return (
+    Number.isSafeInteger(id) &&
+    id >>> 16 === 3 &&
+    offset < 16 * 2000 &&
+    offset % 2000 === GIRL_MAIN_STORY_OFFSET
+  );
+}
 
 export interface GirlFetterCond {
   chapter: number;
@@ -20,8 +32,7 @@ export interface GirlFetterCond {
 export interface GirlFetterNode {
   index: number;
   requiredLevel: number;
-  // Fetter.txt 的 Main 列（大剧情节点）。
-  isMain: boolean;
+  main: boolean;
   // SubCond[1] == -1 表示官方未开放，永不解锁。
   unavailable: boolean;
   cond: GirlFetterCond | null;
@@ -95,7 +106,7 @@ export class GirlFetterCatalog {
         nodes.push({
           index: mainIndex,
           requiredLevel: rowLevel,
-          isMain: true,
+          main: true,
           unavailable: false,
           cond: null,
           awards: parseAwards(values[3]),
@@ -109,7 +120,7 @@ export class GirlFetterCatalog {
         nodes.push({
           index: subIndex,
           requiredLevel,
-          isMain: false,
+          main: false,
           unavailable,
           cond,
           awards: parseAwards(values[4 + (sub - 1) * 4 + 2]),
@@ -132,6 +143,13 @@ export class GirlFetterCatalog {
 
   node(girlId: number, index: number): GirlFetterNode | null {
     return this.nodes(girlId).find((node) => node.index === index) ?? null;
+  }
+
+  // The client sorts affection levels, then retains table order within a level.
+  mainStories(girlId: number): readonly GirlFetterNode[] {
+    return this.nodes(girlId)
+      .filter((node) => node.main)
+      .sort((a, b) => a.requiredLevel - b.requiredLevel);
   }
 
   get size(): number {

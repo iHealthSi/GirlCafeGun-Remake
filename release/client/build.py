@@ -17,6 +17,8 @@ import test_card_display
 import test_gacha
 import test_gamepad
 import patch_selectors
+import patch_prose_punctuation
+import patch_combat_labels
 import test_selectors
 import test_title
 import test_offline_web
@@ -31,6 +33,8 @@ def main():
     ap.add_argument('--source-cache',type=Path,default=ROOT/'client/GCG-Neptune-Nep-Note-Sequence-Fix-Test.cache.zip')
     ap.add_argument('--art',type=Path,default=ROOT/'release/work/card-art/neptune-card-source.jpg')
     ap.add_argument('--output-dir',type=Path,default=ROOT/'release/work/client')
+    ap.add_argument('--combat-source-zip',type=Path,required=True,help='Owned full source data ZIP containing files/at/mat.u and files/ui_tx/ui_fight.u')
+    ap.add_argument('--combat-donor-obb',type=Path,required=True,help='Owned EN 1.0.9 base OBB; the exact donor members are hash-pinned')
     args=ap.parse_args();out=args.output_dir.resolve()
     assert not (out/'apk-overlay.json').exists() and not (out/'files').exists(),'Refuse overwriting frozen client output'
     assert sha(args.source_apk.read_bytes())==SOURCE_SHA
@@ -56,6 +60,7 @@ def main():
         print('Verified release login, title screens, controller layer, offline web and removed developer Lua',flush=True)
         changed['setting.u'],plain,proofs['settings']=patch_settings.build(apk.read('assets/setting.u'))
         changed['lang.u'],proofs['selectorLanguage']=patch_selectors.build_language(apk.read('assets/lang.u'))
+        changed['lang.u'],proofs['prosePunctuation']=patch_prose_punctuation.build_language(changed['lang.u'])
         replacements['assets/setting_decrypted.u']=write('assets/setting_decrypted.u',plain)
         print('Verified rarity, card layout, lobby schedule, native MagicTb loader',flush=True)
         changed['npc/neptune_roster.u'],proofs['card'],crop=patch_card.build(apk.read('assets/npc/neptune_roster.u'),args.art)
@@ -72,6 +77,17 @@ def main():
         proofs['runtimeVfxGuard']=validate_assetfile(vfx_asset)
         paired={name:write('assets/'+name,body) for name,body in changed.items()}
         replacements.update({'assets/'+n:p for n,p in paired.items()})
+        with zipfile.ZipFile(args.combat_source_zip) as source_data,zipfile.ZipFile(args.combat_donor_obb) as english_data:
+            combat,proofs['combatLabels']=patch_combat_labels.build(
+                source_data.read('files/at/mat.u'),
+                english_data.read('assets/at/mat1.u'),
+                english_data.read('assets/at/mat2.u'),
+                source_data.read('files/ui_tx/ui_fight.u'),
+                english_data.read('assets/ui_tx/ui_fight.u'))
+        assert set(combat)=={'at/mat.u','ui_tx/ui_fight.u'}
+        assert not set(combat)&set(paired)
+        paired.update({name:write('external/'+name,body) for name,body in combat.items()})
+        print('Verified English combat-label textures and combo counter',flush=True)
         indexes.ASSETS={}
         bin_index,proofs['apkBinaryIndex']=indexes.append_binary(apk.read('assets/version.data'),paired)
         json_index,proofs['apkJsonIndex']=indexes.append_json(apk.read('assets/version.zip'),paired)
@@ -84,8 +100,8 @@ def main():
         replacements['assets/version.data']=write('assets/version.data',bin_index)
         replacements['assets/version.zip']=write('assets/version.zip',json_index)
         external_paths={**paired,'version.data':write('external/version.data',external_index)}
-        # Changed cache members must be an explicit small subset of the current
-        # paired cache; the data builder merges these into the complete stock set.
+        # Base-cache edits and the two explicitly checked data-only bundles are
+        # merged into the full data set; combat textures are not APK additions.
         assert set(changed)<=set(old_external)
         proofs['preservedBaselineResources']={n:sha(b) for n,b in old_external.items() if n not in set(changed)|{'version.data'}}
         proofs['cubismLibrariesExact']={abi:sha(apk.read('lib/'+abi+'/libLive2DCubismCore.so')) for abi in ('arm64-v8a','armeabi-v7a')}

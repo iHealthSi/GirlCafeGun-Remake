@@ -5,7 +5,8 @@ import { createConnection, type Server, type Socket } from "node:net";
 import os from "node:os";
 import path from "node:path";
 
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+import { energyActivityTaskId } from "../src/game-data/energy-activity-data.js";
 
 import { loadConfig } from "../src/config.js";
 import {
@@ -195,6 +196,49 @@ it("answers event page and achievement panel claims on the wire", async () => {
     // UI_Achievement: MissionManager:SendToServer('AchievementGetAward', nId).
     const panel = await claim("AchievementGetAward", { nId: 2, nType: 0 });
     expect(callback(panel.at(-1)!)?.parameters).toEqual({ nError: 1, nMission: 0 });
+
+    // Exact UI_EnergyGet request: no nType or nId is sent by the button.
+    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 10, 17, 3));
+    try {
+      const energyBefore = players
+        .get(account)!
+        .money.find((money) => money.id === 1)!.count;
+      const power = () =>
+        request(
+          socket!,
+          COMMAND.C2S_CALL_REQ,
+          ++serial,
+          makeServerLuaCall("NormalActivityGetAward", { nActivityId: 8 }),
+          (packet) => callback(packet)?.method === "NormalActivityMsg",
+        );
+      const claimed = await power();
+      expect(callback(claimed.at(-1)!)?.parameters).toEqual({
+        nType: 4,
+        nEnergy: 30,
+        bFullAdd: true,
+      });
+      expect(tasksOf(claimed).get(energyActivityTaskId(1))).toBe(1);
+      const commands = claimed.map((packet) => packet.command);
+      expect(commands.indexOf(COMMAND.MONEY_UPDATE_NTF)).toBeLessThan(
+        commands.indexOf(COMMAND.NTF_S2C_CALL),
+      );
+      expect(commands.indexOf(COMMAND.TASK_VALUE_RSP)).toBeLessThan(
+        commands.indexOf(COMMAND.NTF_S2C_CALL),
+      );
+      expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
+        energyBefore + 30,
+      );
+      expect(callback((await power()).at(-1)!)?.parameters).toEqual({
+        nType: 4,
+        nEnergy: 0,
+        bFullAdd: false,
+      });
+      expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
+        energyBefore + 30,
+      );
+    } finally {
+      clock.mockRestore();
+    }
   } finally {
     if (socket) {
       const closed = once(socket, "close");

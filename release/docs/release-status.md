@@ -1,5 +1,92 @@
 # Release validation
 
+## Release 0.1.5
+
+Repairs cafe staff lookup for existing 0.1.4 starter layouts by restoring the
+three required native area records, including locked bedrooms. Furniture,
+staff, stock, currencies and progression are retained. Assignments synchronize
+native room membership as well as the cafe business list.
+
+The Recharge Power page's exact request (`NormalActivityGetAward` with only
+`nActivityId: 8`) now has a handler. The original client table grants 30 power
+once in each 11:00-14:00 and 18:00-20:00 window in the in-game server clock
+(UTC+8). Claim flags persist, resist repeated/client-edited requests, reset at
+the 04:00 daily boundary, and synchronize before the UI callback. Missed windows
+do not grant automatic rewards.
+
+All 486 server tests passed across 85 files, including real TCP callbacks,
+restart persistence, staff room membership, concurrent power claims and daily
+reset. TypeScript and affected ESLint checks passed. The client evidence was
+read back from the exact 0.1.4 APK; the native staff lookup bytes match the
+reviewed disassembly. No phone playtest is claimed.
+
+Game assets and all 34 data-pack URLs are unchanged. The 0.1.4-to-0.1.5 signed
+update is 3,821,288 bytes and includes the server fix and exact APK delta.
+No new game-data packs are uploaded. The pre-upload object inventory was
+6,903,581,074 bytes; the projected upload peak is 7,536,177,073 bytes, below the
+9 GB threshold that reserves 1 GB of the 10 GB hosting budget.
+
+The complete hosted APK, all five update packages and public manifest/signature
+matched their local SHA-256 hashes. All 34 reused pack routes returned their
+signed sizes; APK resume ranges across the private-part boundary matched and
+private-part URLs remained inaccessible. Coffee reward values and rules are
+unchanged; client/server coffee, preference and coin-cap tables agree.
+
+## Release 0.1.4
+
+Includes the six collaborator contributions merged into main, affection-story
+sequence persistence and recovery for all 16 stock girls, daily shopping quest
+credit for regular and IB shops, normalized English narrative punctuation, and
+official English combat-status and KILL counter artwork. Neptune is excluded
+from the stock affection-story repair.
+
+Release accounts now receive the original nine-piece CafeDefault layout from
+the shipped table, including four usable dining seats, and 60 starting cups.
+The initial recipe matches an eligible guest preference. A one-time login
+repair provides the same setup to existing accounts without owned furniture;
+stored/acquired collections and existing layouts are preserved. The grant does
+not repeat after storing or recycling furniture. Normal coffee costs, sales,
+coin limits, staff and upgrades remain in use.
+
+All 482 server tests passed across 84 files, including TCP contracts, save
+persistence, the empty-cafe migration, earning cafe coins and financing a new
+coffee batch after restart. TypeScript and ESLint passed. The 25 production
+Java updater checks, 14 Python release tests and 13 download Worker tests passed.
+The primary APK delta reconstructs the exact signed target; older deltas are
+composed through the verified 0.1.3 chain and checked against that target.
+
+The clean APK retains the release signing certificate, API 24 minimum and both
+ARM variants, and contains no player saves. Updated combat resources have
+matching binary/JSON index sizes and CRCs. The full data set reuses 30 unchanged
+0.1.2 packs and publishes four changed packs under 0.1.4. The 0.1.2 pack prefix
+is still required and must not be deleted.
+
+Public-host checks verified the entire APK, all four signed update packages,
+full manifest/signature and download-page metadata against their local SHA-256
+hashes. All four changed packs passed complete hash readback; all 34 required
+pack routes returned their signed sizes. APK ranges across the storage-part
+boundary matched, private part URLs returned 404, and older installer links
+redirected to 0.1.4.
+
+LDPlayer 9.5.15.1 investigation and compatibility changes remain paused at the
+maintainer's request. No emulator fix or completed phone playtest is claimed.
+
+## Release 0.1.3
+
+The signed update channel now advances to 0.1.3 and offers base-specific deltas
+from 0.1.0, 0.1.1 and 0.1.2. It uses the public 0.1.2 APK hash as the 0.1.2
+base. The complete APK is available through the same HTTPS download Worker.
+
+The release reuses the signed 0.1.2 resource set. All 34 public data-pack routes
+returned sizes matching the signed manifest. The 0.1.2 manifest and the 0.1.3
+manifest/channel signatures verified; the public 0.1.2-to-0.1.3 delta matched
+its signed SHA-256. Full APK headers and ranges at the split boundary matched
+the local APK. The full server suite passed all 410 tests, including the
+Railgun, selector, welcome-mail, MOD and weapon progression flows. Old APK
+chunks and superseded 0.1.2 deltas were removed from R2;
+the data packs needed by 0.1.3 remain under the 0.1.2 prefix. A complete phone
+playtest of applying this new update remains pending.
+
 ## Release 0.1.2
 
 New players receive 200 character draws and 200 weapon draws in the existing

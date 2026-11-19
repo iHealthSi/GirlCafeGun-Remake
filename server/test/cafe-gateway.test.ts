@@ -23,6 +23,7 @@ import {
 } from "../src/persistence/player-repository.js";
 import { COMMAND } from "../src/protocol/commands.js";
 import { makeServerLuaCall, parseTaskChanges } from "../src/protocol/messages.js";
+import { makeDailyMissionTaskId } from "../src/game-data/daily-mission-data.js";
 import {
   HEADER_SIZE,
   makePacket,
@@ -367,6 +368,69 @@ describe("cafe actual TCP persistence", () => {
     }
   }, 20_000);
 
+  it("persists the stock main-story start receipt and synchronizes its cursor before the callback", async () => {
+    const f = await fixture();
+    const key = (3 << 16) | (2000 + 14);
+    try {
+      const packets = await f.call(256, { nId: 2, nValue: 1 });
+      const sync = packets.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const ack = packets.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 256,
+      );
+      expect(sync).toBeGreaterThanOrEqual(0);
+      expect(sync).toBeLessThan(ack);
+      expect(parseTaskChanges(packets[sync]!.payload)).toContainEqual({
+        id: key,
+        value: 1,
+      });
+      expect(luaValue(packets, 256)).toEqual({ nId: 2, nValue: 1 });
+      await f.players.viewGirlStory(account, 2, 1, 1);
+      await f.store.update((state) => {
+        state.players[account]!.girls.find((girl) => girl.girlId === 2)!.level = 10;
+      });
+      const second = await f.call(256, { nId: 2, nValue: 2 });
+      expect(luaValue(second, 256)).toEqual({ nId: 2, nValue: 2 });
+      await f.reload();
+      expect(f.players.get(account)!.taskValues[String(key)]).toBe(2);
+      expect(
+        f.loginPackets
+          .filter((packet) => packet.command === COMMAND.TASK_VALUE_RSP)
+          .flatMap((packet) => parseTaskChanges(packet.payload)),
+      ).toContainEqual({ id: key, value: 2 });
+    } finally {
+      await f.cleanup();
+    }
+  }, 20000);
+
+  it("synchronizes the daily shopping task before the IB shop callback", async () => {
+    const f = await fixture();
+    try {
+      const packets = await f.call(10000, { Type: 1, Id: 12 });
+      expect(luaValue(packets, 10000)).toMatchObject({ Error: 0 });
+      const sync = packets.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const ack = packets.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 10000,
+      );
+      expect(sync).toBeGreaterThanOrEqual(0);
+      expect(sync).toBeLessThan(ack);
+      expect(parseTaskChanges(packets[sync]!.payload)).toContainEqual({
+        id: makeDailyMissionTaskId(108),
+        value: 2,
+      });
+      const repeated = await f.call(10000, { Type: 1, Id: 12 });
+      expect(luaValue(repeated, 10000)).toMatchObject({ Error: 20075 });
+      expect(
+        f.players.get(account)!.taskValues[String(makeDailyMissionTaskId(108))],
+      ).toBe(2);
+    } finally {
+      await f.cleanup();
+    }
+  }, 20000);
+
   it("materializes single and batch furniture purchases immediately, persists them, and recycles without duplicate coins", async () => {
     const f = await fixture();
     try {
@@ -420,6 +484,18 @@ describe("cafe actual TCP persistence", () => {
         purchased.some((packet) => packet.command === COMMAND.ADD_FURNITURE_RSP),
       ).toBe(true);
       expect(wallet()).toBeLessThan(before);
+      const taskIndex = purchased.findIndex(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
+      const callbackIndex = purchased.findIndex(
+        (packet) => callback(packet)?.parameters.sCmd === 13,
+      );
+      expect(taskIndex).toBeGreaterThanOrEqual(0);
+      expect(taskIndex).toBeLessThan(callbackIndex);
+      expect(parseTaskChanges(purchased[taskIndex]!.payload)).toContainEqual({
+        id: makeDailyMissionTaskId(108),
+        value: 2,
+      });
       expect(f.players.get(account)!.cafe.furniture).toHaveLength(3);
       const firstNew = f.players
         .get(account)!
@@ -543,86 +619,6 @@ describe("cafe actual TCP persistence", () => {
     }
   }, 20_000);
 
-  it("sends a new player's default seats in the house reply and a seated guest pays coffee coin", async () => {
-    let time = Date.now();
-    const clock = vi.spyOn(Date, "now").mockImplementation(() => time);
-    let f: Awaited<ReturnType<typeof fixture>> | undefined;
-    try {
-      f = await fixture({ fresh: true });
-      const house = await f.native(
-        COMMAND.GET_HOUSEINFO_REQ,
-        Buffer.alloc(0),
-        COMMAND.GET_HOUSEINFO_RSP,
-      );
-      expect(house.at(-1)!.returnCode).toBe(0);
-      const cache = decodeFields(firstBytes(decodeFields(house.at(-1)!.payload), 2)!);
-      const items = cache
-        .filter((field) => field.fieldNumber === 2 && Buffer.isBuffer(field.value))
-        .map((field) => decodeFields(field.value as Buffer));
-      expect(items).toHaveLength(13);
-      const seatItems = items.filter(
-        (fields) => firstNumber(fields, 1) === 101 && firstNumber(fields, 8) === 1,
-      );
-      expect(seatItems.map((fields) => firstNumber(fields, 2))).toEqual([
-        10_003, 10_004, 10_005, 10_006,
-      ]);
-      for (const fields of seatItems) {
-        expect(firstNumber(fields, 3)).toBe(2);
-        expect(firstNumber(fields, 4)).toBe(1);
-        const pose = decodeFields(firstBytes(fields, 5)!);
-        expect(firstNumber(pose, 1)).toBe(101);
-        expect(firstNumber(pose, 2)).toBe(2);
-      }
-      const rooms = cache
-        .filter((field) => field.fieldNumber === 4 && Buffer.isBuffer(field.value))
-        .map((field) => decodeFields(field.value as Buffer));
-      expect(rooms.map((fields) => firstNumber(fields, 1))).toEqual([1, 2, 6]);
-      // roomData.furnitureIds (field 5), one varint per member.
-      expect(
-        rooms[0]!
-          .filter((field) => field.fieldNumber === 5)
-          .map((field) => Number(field.value)),
-      ).toEqual(Array.from({ length: 9 }, (_, index) => 10_000 + index));
-
-      // Coffee costs gold (5 each); a new player earns gold in the story first.
-      await f.store.update((state) => {
-        state.players[account]!.money.find((money) => money.id === 2)!.count = 100;
-      });
-      // NCafe.FixNoSeatProblem registers objId * 10 + biz point for each seat.
-      await f.call(114, {
-        seatlist: [100_030, 100_040, 100_050, 100_060].map((position) => ({
-          position,
-        })),
-      });
-      expect(
-        luaValue(await f.call(119, { coffeetype: 1, count: 12 }), 119).nError,
-      ).toBeUndefined();
-      time += 11_000;
-      expect(
-        (luaValue(await f.call(115), 115).customerqueue as unknown[]).length,
-      ).toBeGreaterThan(0);
-      const seated = luaValue(await f.call(117), 117);
-      const guest = seated.newguest as { position: number; customeridx: number };
-      expect([100_030, 100_040, 100_050, 100_060]).toContain(guest.position);
-      const coffeeCoin = () =>
-        f!.players.get(account)!.money.find((money) => money.id === 7)?.count ?? 0;
-      expect(coffeeCoin()).toBe(0);
-      time += 241_000;
-      const settled = luaValue(
-        await f.call(116, { customeridx: guest.customeridx }),
-        116,
-      );
-      expect(settled.error).toBe(0);
-      const base = settled.earn_base as number[],
-        extra = settled.earn_ex as number[];
-      expect(base[1]).toBeGreaterThan(0);
-      expect(coffeeCoin()).toBe(base[1]! + extra[1]!);
-    } finally {
-      if (f) await f.cleanup();
-      clock.mockRestore();
-    }
-  }, 20_000);
-
   it("merges actual house deltas, preserves earlier furniture, and reloads the saved layout", async () => {
     const f = await fixture();
     try {
@@ -736,6 +732,23 @@ describe("cafe actual TCP persistence", () => {
       });
       await f.reload();
       expect(luaValue(await f.call(112), 112)).toMatchObject({ roomgirlslist: rows });
+      const packets = await f.native(
+        COMMAND.GET_HOUSEINFO_REQ,
+        Buffer.alloc(0),
+        COMMAND.GET_HOUSEINFO_RSP,
+      );
+      const cache = decodeFields(firstBytes(decodeFields(packets.at(-1)!.payload), 2)!);
+      const areas = cache
+        .filter((field) => field.fieldNumber === 4)
+        .map((field) => decodeFields(field.value as Buffer));
+      expect(areas.map((area) => firstNumber(area, 1))).toEqual([1, 2, 6]);
+      expect(
+        areas.map((area) =>
+          area
+            .filter((field) => field.fieldNumber === 2)
+            .map((field) => Number(field.value)),
+        ),
+      ).toEqual([[2], [7], [9]]);
     } finally {
       await f.cleanup();
     }
