@@ -52,16 +52,20 @@ async function fixture(
   const players = create(store);
   await players.getOrCreate("energy", at(17, 10));
   try {
-    await run(players, async () => {
-      await store.flush();
-      const next = new JsonStore({
-        filePath,
-        initialState: makeInitialState(),
-        logger,
-      });
-      await next.initialize();
-      return create(next);
-    }, store);
+    await run(
+      players,
+      async () => {
+        await store.flush();
+        const next = new JsonStore({
+          filePath,
+          initialState: makeInitialState(),
+          logger,
+        });
+        await next.initialize();
+        return create(next);
+      },
+      store,
+    );
   } finally {
     await store.flush();
     await rm(directory, { recursive: true, force: true });

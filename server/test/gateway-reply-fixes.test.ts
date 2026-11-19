@@ -264,7 +264,9 @@ it("pushes the task values after a shop purchase so daily mission 108 reaches th
           (entry) => entry.parameters.sCmd === LUA_COMMAND_SHOP_BUY_GOODS,
         ),
       ).toHaveLength(1);
-      const syncs = packets.filter((packet) => packet.command === COMMAND.TASK_VALUE_RSP);
+      const syncs = packets.filter(
+        (packet) => packet.command === COMMAND.TASK_VALUE_RSP,
+      );
       expect(syncs).toHaveLength(1);
       const value = parseTaskChanges(syncs[0]!.payload).find(({ id }) => id === taskId);
       expect(value, "daily mission 108 is missing from TASK_VALUE_RSP").toBeDefined();
@@ -328,7 +330,12 @@ it("lets the first 10-pull re-roll for free, spends the permit once on save, and
   const pool = pools.get(666)!;
   expect(pool.judgeType).toBe(2);
   const permit = pool.costTen!;
-  const isPermit = (item: { genre: number; detail: number; particular: number; templateLevel: number }) =>
+  const isPermit = (item: {
+    genre: number;
+    detail: number;
+    particular: number;
+    templateLevel: number;
+  }) =>
     item.genre === permit[0] &&
     item.detail === permit[1] &&
     item.particular === permit[2] &&
@@ -364,7 +371,9 @@ it("lets the first 10-pull re-roll for free, spends the permit once on save, and
         expect(player.money).toEqual(start.money);
         expect(player.gacha.pending?.poolId).toBe(666);
       }
-      const accepted = structuredClone(store.snapshot().players[account]!.gacha.pending!);
+      const accepted = structuredClone(
+        store.snapshot().players[account]!.gacha.pending!,
+      );
 
       const saved = clientCalls(await call("GetLastGacha", true));
       expect(saved.at(-1)!.method).toBe("GetLastGacha");
@@ -372,7 +381,9 @@ it("lets the first 10-pull re-roll for free, spends the permit once on save, and
       expect(saved.at(-1)!.parameters.tbAwards).toEqual(accepted.awards);
       const after = store.snapshot().players[account]!;
       expect(after.gacha.pending).toBeNull();
-      expect(after.inventory.filter(isPermit).reduce((sum, item) => sum + item.count, 0)).toBe(0);
+      expect(
+        after.inventory.filter(isPermit).reduce((sum, item) => sum + item.count, 0),
+      ).toBe(0);
       for (const award of accepted.awards) {
         const [genre, detail, particular, templateLevel] = award.tbGDPL;
         expect(
@@ -405,7 +416,10 @@ it("answers a free month-card claim while a card is active with DoRecharge Error
     async (call, store) => {
       const recharge = { sCmd: 10000, tbParam: { Type: 2, Id: 1 } };
       const first = clientCalls(await call("LuaCall", recharge));
-      expect(first).toContainEqual({ method: "BuyMonth", parameters: { nType: 2, bMonth: 1, nId: 1 } });
+      expect(first).toContainEqual({
+        method: "BuyMonth",
+        parameters: { nType: 2, bMonth: 1, nId: 1 },
+      });
 
       const before = structuredClone(store.snapshot().players[account]!);
       const second = clientCalls(await call("LuaCall", recharge));

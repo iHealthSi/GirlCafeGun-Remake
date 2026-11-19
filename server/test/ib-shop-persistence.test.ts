@@ -186,7 +186,11 @@ describe("ib item month card persistence", () => {
     const repository = await createRepository();
     const first = await repository.claimIBItemFree("tester", MONTH_CARD_ITEM_ID, NOW);
     const later = NOW + MONTH_CARD_DAYS * 86_400_000;
-    const second = await repository.claimIBItemFree("tester", MONTH_CARD_ITEM_ID, later);
+    const second = await repository.claimIBItemFree(
+      "tester",
+      MONTH_CARD_ITEM_ID,
+      later,
+    );
     expect(first.monthCardEndTime).toBe(Math.floor(later / 1000));
     expect(second.purchaseCount).toBe(2);
     expect(second.monthCardEndTime).toBe(

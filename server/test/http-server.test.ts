@@ -219,6 +219,8 @@ it("shows the daily reset on the device's clock in the served notices", async ()
   await withServer({}, async (base) => {
     const text = await (await fetch(`${base}/notice.txt`)).text();
     expect(text).not.toContain(DAILY_RESET_PLACEHOLDER);
-    expect(text).toContain(`reset every day at ${localDailyResetTime()} (your device's time)`);
+    expect(text).toContain(
+      `reset every day at ${localDailyResetTime()} (your device's time)`,
+    );
   });
 });
