@@ -22,11 +22,7 @@ import {
   readPacket,
   type GamePacket,
 } from "../src/protocol/packet.js";
-import {
-  decodeFields,
-  fieldBytes,
-  firstString,
-} from "../src/protocol/protobuf.js";
+import { decodeFields, fieldBytes, firstString } from "../src/protocol/protobuf.js";
 import { createGatewayServer } from "../src/servers/gateway-server.js";
 
 const account = "unknown-level:local-test";
@@ -65,10 +61,7 @@ function request(
     let pending = Buffer.alloc(0);
     const packets: GamePacket[] = [];
     const timeout = setTimeout(
-      () =>
-        finish(
-          new Error(`Timed out waiting for request ${command}/${serial}`),
-        ),
+      () => finish(new Error(`Timed out waiting for request ${command}/${serial}`)),
       5_000,
     );
     function finish(error?: Error): void {
@@ -117,9 +110,7 @@ interface Fixture {
 }
 
 async function fixture(): Promise<Fixture> {
-  const directory = await mkdtemp(
-    path.join(os.tmpdir(), "gcg2-chapter-unknown-"),
-  );
+  const directory = await mkdtemp(path.join(os.tmpdir(), "gcg2-chapter-unknown-"));
   const logger: Logger = {
     debug() {},
     info() {},
@@ -195,9 +186,7 @@ describe("chapter calls for levels missing from the catalog", () => {
         }),
         (packet) => commandCallback(packet, 540),
       );
-      const storyReplies = story.filter((packet) =>
-        commandCallback(packet, 540),
-      );
+      const storyReplies = story.filter((packet) => commandCallback(packet, 540));
       expect(storyReplies).toHaveLength(1);
       expect(callback(storyReplies.at(-1)!)!.parameters).toEqual({
         sCmd: 540,
@@ -224,8 +213,8 @@ describe("chapter calls for levels missing from the catalog", () => {
         }),
         (packet) => callback(packet)?.method === "ChapterMsg",
       );
-      const settlementReplies = settlement.filter((packet) =>
-        callback(packet)?.method === "ChapterMsg",
+      const settlementReplies = settlement.filter(
+        (packet) => callback(packet)?.method === "ChapterMsg",
       );
       expect(settlementReplies).toHaveLength(1);
       expect(callback(settlementReplies.at(-1)!)!.parameters).toEqual({

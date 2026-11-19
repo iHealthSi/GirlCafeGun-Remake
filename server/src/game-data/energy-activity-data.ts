@@ -83,16 +83,13 @@ function localHHmm(now: number): number {
  * UI_EnergyGet.lua:49-60, including windows that span midnight. The server
  * runs on the same device/clock as the client, so local time is authoritative.
  */
-export function currentEnergyActivitySlot(
-  now = Date.now(),
-): EnergyActivitySlot | null {
+export function currentEnergyActivitySlot(now = Date.now()): EnergyActivitySlot | null {
   const nowTime = localHHmm(now);
   return (
-    loadEnergyActivitySlots().find(
-      (slot) =>
-        slot.beginTime <= slot.endTime
-          ? slot.beginTime <= nowTime && nowTime < slot.endTime
-          : nowTime >= slot.beginTime || nowTime < slot.endTime,
+    loadEnergyActivitySlots().find((slot) =>
+      slot.beginTime <= slot.endTime
+        ? slot.beginTime <= nowTime && nowTime < slot.endTime
+        : nowTime >= slot.beginTime || nowTime < slot.endTime,
     ) ?? null
   );
 }

@@ -7005,15 +7005,13 @@ export class PlayerRepository {
       // task instead of becoming a stack: pay them like every other claim.
       grantAwards(
         player,
-        awards.map(
-          ([genre, detail, particular, templateLevel, count]): BaseAward => [
-            genre,
-            detail,
-            particular,
-            templateLevel,
-            count,
-          ],
-        ),
+        awards.map(([genre, detail, particular, templateLevel, count]): BaseAward => [
+          genre,
+          detail,
+          particular,
+          templateLevel,
+          count,
+        ]),
         updatedItemGuids,
         updatedMoneyIds,
       );

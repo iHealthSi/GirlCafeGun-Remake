@@ -261,10 +261,7 @@ it("grants the time-limited power once per window and local date", async () => {
       { id: MONEY_VIGOUR, count: vigourBefore + 30 },
     ]);
 
-    const duplicate = await repository.claimEnergyActivity(
-      "tester",
-      at(16, 12, 30),
-    );
+    const duplicate = await repository.claimEnergyActivity("tester", at(16, 12, 30));
     expect(duplicate.claimed).toBe(false);
     expect(duplicate.reason).toBe("already_claimed");
     expect(vigourOf(duplicate.player)).toBe(vigourBefore + 30);

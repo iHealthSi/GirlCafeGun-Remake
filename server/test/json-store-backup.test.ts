@@ -192,9 +192,7 @@ describe("save writes", () => {
       expect(close).toBeLessThan(renamed);
     }
     expect(JSON.parse(await readFile(filePath, "utf8")).nextRoleId).toBe(42);
-    expect(await readFile(backupTarget, "utf8")).toBe(
-      await readFile(filePath, "utf8"),
-    );
+    expect(await readFile(backupTarget, "utf8")).toBe(await readFile(filePath, "utf8"));
   });
 });
 

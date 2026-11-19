@@ -1,12 +1,4 @@
-import {
-  copyFile,
-  mkdir,
-  open,
-  readdir,
-  readFile,
-  rename,
-  rm,
-} from "node:fs/promises";
+import { copyFile, mkdir, open, readdir, readFile, rename, rm } from "node:fs/promises";
 import path from "node:path";
 
 import type { Logger } from "../logger.js";
@@ -94,10 +86,7 @@ export function rankBackups(names: readonly string[], today: string): string[] {
  * Writes the body and forces it to disk before closing, so a power loss
  * cannot leave a zero-length file where a save was renamed.
  */
-export async function writeFileDurably(
-  filePath: string,
-  body: string,
-): Promise<void> {
+export async function writeFileDurably(filePath: string, body: string): Promise<void> {
   const handle = await open(filePath, "w");
   try {
     await handle.writeFile(body, "utf8");
@@ -208,10 +197,7 @@ export class JsonStore<T extends PersistedDocument> {
   async #recoverFromBackup(preservedPath: string, now: number): Promise<boolean> {
     const backups = this.#backups;
     if (!backups) return false;
-    const names = rankBackups(
-      await listBackups(backups.directory),
-      compactDate(now),
-    );
+    const names = rankBackups(await listBackups(backups.directory), compactDate(now));
     for (const name of names) {
       const backupPath = path.join(backups.directory, name);
       let document: unknown;

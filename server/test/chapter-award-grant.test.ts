@@ -57,13 +57,24 @@ describe("chapter settlement awards", () => {
     // entry 8012, and Riki.lua shows the entry when task 53/8012 is 1.
     const level = ChapterCatalog.loadDefault().get(1, 5, 1)!;
     const awards = rollChapterAwards(level, true, "tester:1-5-1:0");
-    expect(awards.some(([g, d, p, l]) => g === 17 && d === 1 && p === 12 && l === 1)).toBe(
-      true,
-    );
+    expect(
+      awards.some(([g, d, p, l]) => g === 17 && d === 1 && p === 12 && l === 1),
+    ).toBe(true);
 
     await withRepository(async (repository) => {
-      const settlement = await repository.settleLevel("tester", 1, 5, 1, 3, 0, awards, 0);
-      expect(settlement.player.taskValues[String((RIKI_TASK_GROUP << 16) | 8_012)]).toBe(1);
+      const settlement = await repository.settleLevel(
+        "tester",
+        1,
+        5,
+        1,
+        3,
+        0,
+        awards,
+        0,
+      );
+      expect(
+        settlement.player.taskValues[String((RIKI_TASK_GROUP << 16) | 8_012)],
+      ).toBe(1);
       expect(settlement.player.inventory.some(({ genre }) => genre === 17)).toBe(false);
     });
   });

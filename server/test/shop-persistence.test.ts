@@ -239,9 +239,7 @@ describe("shop buy", () => {
     await repository.buyShopGoods("tester", catalog, 20_010, 10, 1, NOW);
     const player = repository.get("tester")!;
     expect(
-      dailyMissionProgress(
-        player.taskValues[String(makeDailyMissionTaskId(108))] ?? 0,
-      ),
+      dailyMissionProgress(player.taskValues[String(makeDailyMissionTaskId(108))] ?? 0),
     ).toBe(1);
   });
 
