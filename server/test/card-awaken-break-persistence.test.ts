@@ -106,6 +106,12 @@ function inventoryOf(repository: PlayerRepository, guid: number) {
     .inventory.find((candidate) => candidate.guid === guid)!;
 }
 
+function hasItem(repository: PlayerRepository, guid: number): boolean {
+  return repository
+    .get(account)!
+    .inventory.some((candidate) => candidate.guid === guid);
+}
+
 describe("card awakening with materials", () => {
   it("removes a same-card duplicate and raises skills by 3 points plus its own levels", async () => {
     const { repository } = await fixture([
@@ -130,7 +136,8 @@ describe("card awakening with materials", () => {
     expect(result.consumedItems).toMatchObject([{ guid: 101, count: 0 }]);
     expect(result.coinCost).toBe(500);
     expect(result.updatedMoney).toEqual([{ id: 2, count: 999_500 }]);
-    expect(inventoryOf(repository, 101).count).toBe(0);
+    // The consumed copy leaves the save, so it no longer counts as owned.
+    expect(hasItem(repository, 101)).toBe(false);
   });
 
   it("adds experience for a different card and removes it", async () => {
