@@ -465,9 +465,9 @@ export interface TowerSkill {
   costs: readonly number[];
 }
 
-type Row = Record<string, string>;
+export type Row = Record<string, string>;
 
-function parseTable(text: string): Row[] {
+export function parseTable(text: string): Row[] {
   const lines = text.split(/\r?\n/);
   const columns = (lines[2] ?? "").split("\t");
   const rows: Row[] = [];
@@ -483,7 +483,7 @@ function parseTable(text: string): Row[] {
   return rows;
 }
 
-function int(value: string | undefined, fallback = 0): number {
+export function int(value: string | undefined, fallback = 0): number {
   const text = (value ?? "").trim();
   if (text === "") return fallback;
   const parsed = Number(text);
@@ -491,7 +491,7 @@ function int(value: string | undefined, fallback = 0): number {
 }
 
 /** "[15-6-1-1-9-10000,7-9-1-1-1-10000]": G-D-P-L-N with an optional weight. */
-function parseWeighted(
+export function parseWeighted(
   text: string | undefined,
 ): { award: BaseAward; weight?: number }[] {
   const result: { award: BaseAward; weight?: number }[] = [];
@@ -505,11 +505,11 @@ function parseWeighted(
   return result;
 }
 
-function parseAwards(text: string | undefined): BaseAward[] {
+export function parseAwards(text: string | undefined): BaseAward[] {
   return parseWeighted(text).map(({ award }) => award);
 }
 
-function numbers(text: string | undefined): number[] {
+export function numbers(text: string | undefined): number[] {
   return [...(text ?? "").matchAll(/\d+/g)].map((match) => Number(match[0]));
 }
 
@@ -921,7 +921,7 @@ export function rollTowerAwards(
 // ================================================================ requests
 
 /** The client's JSON encoder writes a Lua array with holes as [..., null, ...]. */
-function positional(value: unknown): unknown[] | null {
+export function positional(value: unknown): unknown[] | null {
   if (Array.isArray(value)) return value;
   if (typeof value !== "object" || value === null) return null;
   // An object with numeric keys "1".."n" is read the same way.
@@ -933,7 +933,7 @@ function positional(value: unknown): unknown[] | null {
   return list;
 }
 
-function whole(value: unknown): number | null {
+export function whole(value: unknown): number | null {
   if (value === null || value === undefined || typeof value === "boolean") return null;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) ? parsed : null;

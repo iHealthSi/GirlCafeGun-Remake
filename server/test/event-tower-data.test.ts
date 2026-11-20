@@ -54,8 +54,10 @@ describe("event tower tables", () => {
       expect(createHash("sha256").update(data).digest("hex"), name).toBe(
         provenance.files[name]!.sha256,
       );
-      expect(provenance.files[name]!.source).toBe(
-        `setting.u:assets/_game/settinggen/activities/smalltower/${name}`,
+      // Slice 1 and 2 tables come from smalltower/; the named-field families have their own folders.
+      const base = "setting.u:assets/_game/settinggen/activities/";
+      expect([`${base}smalltower/${name}`, `${base}${name}`]).toContain(
+        provenance.files[name]!.source,
       );
     }
   });
