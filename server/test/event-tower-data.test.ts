@@ -95,6 +95,43 @@ describe("event tower tables", () => {
     expect(makeTowerTaskId(96, 1301)).toBe((96 << 16) | 1301);
   });
 
+  it("share task slots between towers of one class, and the ninth and thirteenth", () => {
+    // The task keys hold no tower id, so every tower of a class writes the same records.
+    const owners = new Map<string, Set<number>>();
+    const add = (group: number, key: number, tower: number): void => {
+      const id = `${group}:${key}`;
+      owners.set(id, (owners.get(id) ?? new Set<number>()).add(tower));
+    };
+    for (const level of catalog.levels.values()) {
+      const tower = catalog.towers.get(level.tower)!;
+      const { group, goalBase } = tower.layout;
+      add(group, catalog.levelKey(tower, level.levelId), tower.id);
+      if (level.type === 3 && goalBase > 0) {
+        add(group, goalBase + level.levelId, tower.id);
+        for (const goal of catalog.goals.get(`${tower.id}:${level.levelId}`) ?? [])
+          add(group, goalBase + level.levelId * 100 + goal.id, tower.id);
+      }
+    }
+    for (const tower of catalog.towers.values())
+      if (tower.layout.scoreTask)
+        add(tower.layout.group, tower.layout.scoreTask, tower.id);
+    const shared = new Set<string>();
+    for (const towers of owners.values())
+      if (towers.size > 1) shared.add([...towers].sort((a, b) => a - b).join(","));
+    expect([...shared].sort()).toEqual(
+      [
+        "1,201", // two SmallTower rows, one level table
+        "9,13", // 0.1.3 thirteenth tower script = ninth tower slots
+        "101,102,103,104,105,106,107,303", // the score task 2804 of every variegated tower
+        "101,103,106,107,303",
+        "101,107",
+        "102,104,105",
+        "102,105,106",
+        "103,104,303",
+      ].sort(),
+    );
+  });
+
   it("derive the pond wallet from Money1GDPL, not from a default", () => {
     const money = (tower: number) => catalog.tokens.get(`${tower}:1`)?.moneyId;
     // NodeTowerLogic checks eMoneyType_Lottery, Seventh and Eleventh their own currencies.

@@ -1983,9 +1983,11 @@ function applyEventTowerRequest(
 
   switch (request.command) {
     case LUA_COMMAND_TOWER_GET: {
-      const personal = tower.layout.scoreTask
-        ? towerTask(player, group, tower.layout.scoreTask)
-        : null;
+      // Only SwimwearLogic and AbsorbPeakLogic read the server score from this reply.
+      const personal =
+        tower.layout.scoreTask && catalog.serverAwards.has(tower.id)
+          ? towerTask(player, group, tower.layout.scoreTask)
+          : null;
       outcome.response =
         personal === null
           ? { TowerId: tower.id }

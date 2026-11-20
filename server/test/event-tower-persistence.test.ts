@@ -384,6 +384,12 @@ describe("event tower fights", () => {
     expect(task(player, 64, catalog.levelKey(tower, level.levelId))).toBe(1);
     expect(task(player, 64, 2804)).toBe(earned);
     expect(money(player, 29)).toBe(earned);
+    // VariegatedTowerLogic:OnGetTower is empty: no server score in the reply.
+    const info = await repository.handleEventTowerRequest(
+      account,
+      request(53, [101, 2]),
+    );
+    expect(info.response).toEqual({ TowerId: 101 });
   });
 
   it("records node tower stars, the act score, SP records and finished nodes", async () => {
