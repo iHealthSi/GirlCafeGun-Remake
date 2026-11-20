@@ -161,7 +161,7 @@ async function withGateway(
   }
 }
 
-it("answers a card enhance at the level cap with the Error.1 LuaCall and changes nothing", async () => {
+it("answers a card enhance at the level cap with the UI_Card.MaxLevel errorKey and changes nothing", async () => {
   const account = "reply-fix-cap";
   let guid = 0;
   await withGateway(
@@ -203,7 +203,7 @@ it("answers a card enhance at the level cap with the Error.1 LuaCall and changes
           method: "LuaCall",
           parameters: {
             sCmd: LUA_COMMAND_CARD_LEVEL_UP_COMMON,
-            tbParam: { errorKey: "Error.1" },
+            tbParam: { errorKey: "UI_Card.MaxLevel" },
           },
         },
       ]);

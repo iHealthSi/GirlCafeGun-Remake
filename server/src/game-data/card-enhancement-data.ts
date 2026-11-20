@@ -22,6 +22,14 @@ export interface ExpMaterialDefinition {
   coinCost: number;
 }
 
+export interface SkillMaterialDefinition {
+  genre: number;
+  detail: number;
+  particular: number;
+  templateLevel: number;
+  coinCost: number;
+}
+
 const EXP_CARD_PARTICULARS = [1, 2, 3, 5, 6, 4] as const;
 const EXP_CARD_BASE_EXPERIENCE = [500, 2_500, 10_000, 50_000] as const;
 const CLIENT_SELECTABLE_EXP_RATE = 1.5;
@@ -50,6 +58,23 @@ export const CARD_EXP_MATERIALS: ReadonlyMap<number, ExpMaterialDefinition> = ne
   ),
 );
 
+/**
+ * CardCommon.tbExpCard has 24 entries; the two indexes after them are the
+ * skill items 7-4-1-3 and 7-4-1-4 (CardCommon:GetEnhanceCardGDPL). Each item
+ * raises one skill level and costs its ItemList ExtParam2 in gold.
+ */
+export const CARD_SKILL_MATERIALS: ReadonlyMap<number, SkillMaterialDefinition> =
+  new Map([
+    [
+      CARD_EXP_MATERIALS.size + 1,
+      { genre: 7, detail: 4, particular: 1, templateLevel: 3, coinCost: 1_500 },
+    ],
+    [
+      CARD_EXP_MATERIALS.size + 2,
+      { genre: 7, detail: 4, particular: 1, templateLevel: 4, coinCost: 3_500 },
+    ],
+  ]);
+
 export const CARD_EXP_TO_NEXT_LEVEL = [
   133, 187, 263, 406, 562, 730, 907, 1_092, 1_286, 1_485, 1_691, 1_904, 2_121, 2_345,
   2_573, 2_806, 3_043, 3_285, 3_532, 3_782, 4_035, 4_294, 4_554, 4_820, 5_088, 5_359,
@@ -59,7 +84,7 @@ export const CARD_EXP_TO_NEXT_LEVEL = [
   33_695, 34_990, 36_312, 37_661, 39_040, 40_445, 41_879, 43_341, 44_832, 46_351,
 ] as const;
 
-/** addCardExperience can never return a level above this value. */
+/** The last row of the experience table; break rows lower the cap per card. */
 export const CARD_MAXIMUM_ENHANCE_LEVEL = CARD_EXP_TO_NEXT_LEVEL.length + 1;
 
 export function parseCardEnhancementRequest(
@@ -109,18 +134,47 @@ export function parseCardEnhancementRequest(
   return { guid, clientLevel, clientSkillLevel, materials };
 }
 
+/**
+ * Adds experience up to maximumLevel. A card already at or above the cap keeps
+ * its level and gets no more experience; experience left over when the cap is
+ * reached stays on the card, as CardTable.ApplyExp does.
+ */
 export function addCardExperience(
   level: number,
   currentExperience: number,
   addedExperience: number,
+  maximumLevel: number = CARD_MAXIMUM_ENHANCE_LEVEL,
 ): { level: number; experience: number } {
+  if (level >= maximumLevel) return { level, experience: currentExperience };
   let nextLevel = level;
   let experience = currentExperience + addedExperience;
-  while (nextLevel <= CARD_EXP_TO_NEXT_LEVEL.length) {
+  while (nextLevel < maximumLevel) {
     const required = CARD_EXP_TO_NEXT_LEVEL[nextLevel - 1];
     if (required === undefined || experience < required) break;
     experience -= required;
     nextLevel += 1;
   }
   return { level: nextLevel, experience };
+}
+
+/** Error keys are looked up as ui.<key> in the text table. */
+export const CARD_ERROR_GENERIC = "Error.1";
+export const CARD_ERROR_NOT_ENOUGH = "UI_WeaponStrong.NotEnough";
+export const CARD_ERROR_NOT_ENOUGH_BREAK_ITEMS = "Error.20011";
+export const CARD_ERROR_NOT_ENOUGH_BREAK_GOLD = "UI_WeaponStrong.GetGold";
+export const CARD_ERROR_IN_FORMATION = "Card.Tip01";
+export const CARD_ERROR_LOCKED = "Card.Tip02";
+export const CARD_ERROR_SKILL_MAXED = "UI_Card.fullskill";
+export const CARD_ERROR_MAXIMUM_LEVEL = "UI_Card.MaxLevel";
+export const CARD_ERROR_MAXIMUM_BREAK = "Error.breaktime";
+
+export class CardEnhancementError extends Error {
+  constructor(
+    readonly reason: string,
+    readonly errorKey: string,
+    readonly guid = 0,
+  ) {
+    super(`Card enhancement rejected: ${reason}`);
+    this.name = "CardEnhancementError";
+  }
 }

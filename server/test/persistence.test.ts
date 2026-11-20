@@ -353,13 +353,15 @@ it("rejects card enhancement at the maximum level without spending anything", as
     const enhanced = await repository.enhanceCard("tester", card.guid, [
       { kind: 1, reference: 24, count: 20 },
     ]);
-    expect(enhanced.card.enhanceLevel).toBe(CARD_MAXIMUM_ENHANCE_LEVEL);
+    // Break 0 caps the card at MaxLevel0 of its CharacterCardBreak row (40).
+    expect(enhanced.card.enhanceLevel).toBe(40);
+    expect(enhanced.card.enhanceLevel).toBeLessThan(CARD_MAXIMUM_ENHANCE_LEVEL);
     const before = repository.get("tester")!;
     await expect(
       repository.enhanceCard("tester", card.guid, [
         { kind: 1, reference: 24, count: 1 },
       ]),
-    ).rejects.toThrow(/level cap/);
+    ).rejects.toThrow(/level_cap/);
     expect(repository.get("tester")?.inventory).toEqual(before.inventory);
     expect(repository.get("tester")?.money).toEqual(before.money);
   } finally {
