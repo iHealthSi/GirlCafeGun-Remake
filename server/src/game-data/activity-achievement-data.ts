@@ -338,6 +338,8 @@ export interface ActivityAchievementPlayer extends ActivityPlayerState {
   girls: readonly { level: number }[];
   inventory: readonly { genre: number; enhanceLevel: number; breakLevel: number }[];
   eightDaySignUp: { cumulativeDays: number };
+  /** Set once the player has created a club (offline clubs). */
+  clubEverJoined?: boolean;
 }
 
 const CARD_GENRE = 1;
@@ -399,6 +401,8 @@ export function derivedAchievementProgress(
     case 85:
       if (second === undefined) return null;
       return player.girls.filter(({ level }) => level >= second).length;
+    case 106:
+      return player.clubEverJoined ? 1 : 0;
     default:
       return null;
   }

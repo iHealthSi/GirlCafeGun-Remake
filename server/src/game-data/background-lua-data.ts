@@ -3,7 +3,6 @@ export const LUA_COMMAND_VISITING_CARD_DATA = 94;
 export const LUA_COMMAND_RANDOM_EVENT = 170;
 export const LUA_COMMAND_GIRL_TEST_OPEN_PERIOD = 202;
 export const LUA_COMMAND_ASSIST_LIST = 250;
-export const LUA_COMMAND_CLUB_INFO = 10_002;
 
 const BACKGROUND_COMMANDS = new Set([
   LUA_COMMAND_FRIEND_LIST,
@@ -11,7 +10,6 @@ const BACKGROUND_COMMANDS = new Set([
   LUA_COMMAND_RANDOM_EVENT,
   LUA_COMMAND_GIRL_TEST_OPEN_PERIOD,
   LUA_COMMAND_ASSIST_LIST,
-  LUA_COMMAND_CLUB_INFO,
 ]);
 
 function unwrapLuaParameters(parameters: unknown): unknown {
@@ -61,8 +59,5 @@ export function makeBackgroundLuaResponse(
       // UI_Support explicitly supports an empty result: it shows its
       // no-player state and still lets the pending sortie callback continue.
       return [];
-    case LUA_COMMAND_CLUB_INFO:
-      // ClubCommon treats a response without `primary` as "not in a club".
-      return {};
   }
 }

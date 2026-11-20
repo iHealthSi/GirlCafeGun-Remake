@@ -3,6 +3,16 @@ import { createServer, type Server, type Socket } from "node:net";
 
 import type { AppConfig } from "../config.js";
 import { makeBackgroundLuaResponse } from "../game-data/background-lua-data.js";
+import {
+  CLUB_BOSS_COMMANDS,
+  CLUB_COMMANDS,
+  CLUB_MISSION_CLAIM_METHOD,
+  CLUB_MISSION_REPLY_TYPE,
+  CLUB_TIER_CLAIM_METHOD,
+  CLUB_TIER_REPLY_TYPE,
+  ClubError,
+  clubMissionErrorCode,
+} from "../game-data/club-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
 import { getMomentDefinition } from "../game-data/moments-data.js";
 import { dailyPullMailAwards, type MailAction } from "../game-data/mail-data.js";
@@ -908,6 +918,18 @@ export function createGatewayServer({
     function sendGirlUpdates(girls: readonly GirlState[]): void {
       if (girls.length === 0) return;
       send(COMMAND.GIRL_UPDATE_NTF, 0, makeGirlUpdateNotification(girls));
+    }
+
+    /** Club missions 50008/50009: kill counts of a stage or bounty result. */
+    async function syncClubBattle(parameters: Record<string, unknown>): Promise<void> {
+      const player = await players.recordClubBattle(
+        context.account,
+        Number(parameters.totalkillMonster) || 0,
+        Number(parameters.killElite) || 0,
+      );
+      if (!player) return;
+      context.player = player;
+      send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(player.taskValues));
     }
 
     async function claimAchievementAward(
@@ -1910,6 +1932,80 @@ export function createGatewayServer({
               }),
             );
             logger.warn("guide_mission.claim_rejected", {
+              peer,
+              account: context.account,
+              method: call.method,
+              id,
+              reason: error.reason,
+            });
+          }
+          return;
+        }
+        if (
+          call?.method === CLUB_MISSION_CLAIM_METHOD ||
+          call?.method === CLUB_TIER_CLAIM_METHOD
+        ) {
+          const parameters =
+            call.parameters && typeof call.parameters === "object"
+              ? (call.parameters as Record<string, unknown>)
+              : {};
+          const id = Number(parameters.nId);
+          const missionType =
+            call.method === CLUB_MISSION_CLAIM_METHOD
+              ? CLUB_MISSION_REPLY_TYPE
+              : CLUB_TIER_REPLY_TYPE;
+          try {
+            const result = await players.claimClubMissionAward(
+              context.account,
+              call.method,
+              id,
+            );
+            context.player = result.player;
+            // Claimed bit, tier bits and money first: the client re-reads them
+            // (and asks for the club again) as soon as MissionMgrMsg arrives.
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+            if (result.updatedItems.length > 0) {
+              send(
+                COMMAND.ITEM_UPDATE_NTF,
+                0,
+                makeItemUpdateNotification(result.updatedItems),
+              );
+            }
+            for (const money of result.updatedMoney) {
+              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            }
+            sendGirlUpdates(result.updatedGirls);
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("MissionMgrMsg", { nError: 0, nMission: missionType }),
+            );
+            logger.info("lua.callback", {
+              peer,
+              account: context.account,
+              method: "MissionMgrMsg",
+              feature:
+                missionType === CLUB_MISSION_REPLY_TYPE
+                  ? "club_mission.award"
+                  : "club_tier.award",
+              id,
+              awards: result.awards,
+            });
+          } catch (error) {
+            if (!(error instanceof ClubError)) throw error;
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("MissionMgrMsg", {
+                nError: clubMissionErrorCode(error),
+                nMission: missionType,
+              }),
+            );
+            logger.warn("club_mission.claim_rejected", {
               peer,
               account: context.account,
               method: call.method,
@@ -3101,6 +3197,61 @@ export function createGatewayServer({
           }
           return;
         }
+        if (luaCommand !== null && CLUB_BOSS_COMMANDS.has(luaCommand)) {
+          // ClubBossTime has ended: the client never opens the boss. No reply
+          // is safe (club commands show no mask) and loads no boss map.
+          logger.info("club.boss_ignored", {
+            account: context.account,
+            command: luaCommand,
+          });
+          return;
+        }
+        if (luaCommand !== null && CLUB_COMMANDS.has(luaCommand)) {
+          const result = await players.handleClubRequest(
+            context.account,
+            luaCommand,
+            call?.parameters,
+          );
+          context.player = result.player;
+          for (const money of result.updatedMoney) {
+            send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+          }
+          if (result.updatedItems.length > 0) {
+            send(
+              COMMAND.ITEM_UPDATE_NTF,
+              0,
+              makeItemUpdateNotification(result.updatedItems),
+            );
+          }
+          sendGirlUpdates(result.updatedGirls);
+          // Club mission values, tier bits and the dissolve and quit times.
+          send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(result.player.taskValues));
+          if (result.response !== undefined) {
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: luaCommand,
+                tbParam: result.response,
+              }),
+            );
+          }
+          if (result.tip) {
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("CallClientTip", [result.tip]),
+            );
+          }
+          logger.info("club.callback", {
+            account: context.account,
+            command: luaCommand,
+            replied: result.response !== undefined,
+            tip: result.tip,
+            dissolved: result.dissolved,
+          });
+          return;
+        }
         const backgroundResponse = makeBackgroundLuaResponse(
           luaCommand,
           call?.parameters,
@@ -3922,6 +4073,7 @@ export function createGatewayServer({
               energyCost: settlement.energyCost,
               dailyBonusApplied: active.run.dailyBonusApplied,
             });
+            await syncClubBattle(bountyCall.parameters);
           } catch (error) {
             if (error instanceof InsufficientVigourError) {
               sendBountyCallback({ nError: 5 });
@@ -4152,6 +4304,7 @@ export function createGatewayServer({
                   );
                 }
                 if (firstClear) await syncPhoneEvents();
+                await syncClubBattle(chapterCall.parameters);
               } else {
                 // A failed fight still consumes vigour, matching the original
                 // pre-deduct behaviour.
@@ -4174,6 +4327,7 @@ export function createGatewayServer({
                   0,
                   makeTaskValueSync(context.player.taskValues),
                 );
+                await syncClubBattle(chapterCall.parameters);
               }
             } catch (error) {
               if (!(error instanceof InsufficientVigourError)) throw error;

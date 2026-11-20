@@ -184,6 +184,62 @@ import {
 } from "../game-data/daily-mission-data.js";
 import { AutoUseItemCatalog } from "../game-data/auto-use-item-data.js";
 import {
+  applyClubAwards,
+  changeClubPosition,
+  claimClubDailyAward,
+  claimClubMission,
+  claimClubTier,
+  CLUB_CREATE_FEE,
+  CLUB_MISSION_ACTIVE_100,
+  CLUB_MISSION_BOUNTY,
+  CLUB_MISSION_CARD_DRAWS,
+  CLUB_MISSION_CLAIM_METHOD,
+  CLUB_MISSION_COFFEE,
+  CLUB_MISSION_ELITES,
+  CLUB_MISSION_GIFTS,
+  CLUB_MISSION_KILLS,
+  CLUB_MISSION_VIGOUR,
+  CLUB_MISSION_WEAPON_DRAWS,
+  CLUB_COIN_ITEM_DETAIL,
+  ClubError,
+  clubLogPayload,
+  clubMemberList,
+  clubParameters,
+  clubPayload,
+  clubPrimary,
+  createClubState,
+  kickClubMember,
+  LUA_COMMAND_CLUB_AGREE,
+  LUA_COMMAND_CLUB_APPLY,
+  LUA_COMMAND_CLUB_APPLY_LIST,
+  LUA_COMMAND_CLUB_CANCEL_APPLY,
+  LUA_COMMAND_CLUB_CHANGE_POSITION,
+  LUA_COMMAND_CLUB_CREATE,
+  LUA_COMMAND_CLUB_DAILY_AWARD,
+  LUA_COMMAND_CLUB_DISCOVER,
+  LUA_COMMAND_CLUB_DISSOLVE,
+  LUA_COMMAND_CLUB_FIND,
+  LUA_COMMAND_CLUB_HEADER_CHANGE,
+  LUA_COMMAND_CLUB_IGNORE,
+  LUA_COMMAND_CLUB_INFO,
+  LUA_COMMAND_CLUB_KICK,
+  LUA_COMMAND_CLUB_LOG,
+  LUA_COMMAND_CLUB_MEMBERS,
+  LUA_COMMAND_CLUB_MODIFY_APPLY,
+  LUA_COMMAND_CLUB_NOTICE,
+  LUA_COMMAND_CLUB_QUIT,
+  LUA_COMMAND_CLUB_SEND_MAIL,
+  MONEY_CLUB_COIN,
+  parseCreateClubRequest,
+  reconcileClub,
+  recordClubMissionProgress,
+  requestClubDissolve,
+  setClubApplyLevels,
+  setClubNotice,
+  type ClubSelf,
+  type ClubState,
+} from "../game-data/club-data.js";
+import {
   ACHIEVEMENT_TASK_GROUP,
   achievementProgress,
   ACTIVITY_ACHIEVEMENT_TASK_GROUP,
@@ -492,6 +548,10 @@ export interface Player {
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
   promise?: PromiseState;
+  /** The player's own offline club (absent = no club). */
+  club?: ClubState;
+  /** Set when the player first creates a club: achievement 2050 stays done. */
+  clubEverJoined?: boolean;
 }
 
 export interface PersistedState {
@@ -836,6 +896,51 @@ export interface GuideAwardResult {
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
   updatedGirls: GirlState[];
+}
+
+export interface ClubRequestResult {
+  player: Player;
+  /** The LuaCall tbParam to send; undefined = send no LuaCall reply. */
+  response: unknown;
+  /** Text key for CallClientTip, or null. */
+  tip: string | null;
+  /** The club was dissolved by its timer during this request. */
+  dissolved: boolean;
+  updatedItems: InventoryItemState[];
+  updatedMoney: MoneyState[];
+  updatedGirls: GirlState[];
+}
+
+/** The self row and header of a club reply. */
+function clubSelf(player: Player): ClubSelf {
+  const mainGirlId = player.taskValues[String(MAIN_GIRL_TASK_ID)] ?? 0;
+  return {
+    roleId: player.roleId,
+    name: player.name,
+    level: player.level,
+    girlIconId: mainGirlId > 0 ? mainGirlId : (player.girls[0]?.girlId ?? 1),
+  };
+}
+
+/**
+ * Reply of a refused club command (contract: B commands take `{}`, 10012 with a
+ * club and 10026 without one take no reply at all).
+ */
+function clubRefusalResponse(command: number, player: Player): unknown {
+  if (command === LUA_COMMAND_CLUB_QUIT && player.club) return undefined;
+  if (command === LUA_COMMAND_CLUB_SEND_MAIL && !player.club) return undefined;
+  return {};
+}
+
+/** Achievement 2050 ("create or join any club", achieveType 106) reaches 1. */
+function markClubAchievement(player: Player): void {
+  const key = String(makeAchievementTaskId(ACHIEVEMENT_TASK_GROUP, 2_050));
+  const value = player.taskValues[key] ?? 0;
+  const next = makeAchievementTaskValue(
+    Math.max(achievementProgress(value), 1),
+    hasClaimedAchievement(value),
+  );
+  if (next !== value) player.taskValues[key] = next;
 }
 
 export interface DailyMissionClaimResult {
@@ -1690,7 +1795,9 @@ function awardMoneyId(genre: number, detail: number): number | null {
             ? MONEY_CARD_DECOMPOSITION_TOKEN
             : genre === 15 && detail === 20
               ? MONEY_WEAPON_DECOMPOSITION_TOKEN
-              : null;
+              : genre === 15 && detail === CLUB_COIN_ITEM_DETAIL
+                ? MONEY_CLUB_COIN
+                : null;
 }
 
 /**
@@ -3328,6 +3435,7 @@ export class PlayerRepository {
           girls.add(id);
         },
         coffeeSold: (_id, count) => {
+          recordClubMissionProgress(player, CLUB_MISSION_COFFEE, count, Date.now());
           const mission = guideMission(40_017)!;
           const key = String(makeGuideTaskId(mission.id)),
             value = player.taskValues[key] ?? 0;
@@ -3985,6 +4093,7 @@ export class PlayerRepository {
         (task) => item[3] >= (task.lvlmt ?? 0),
       );
       inventoryItem.count -= count;
+      recordClubMissionProgress(player, CLUB_MISSION_GIFTS, count, now);
       girl.level = gain.newLevel;
       girl.exp = gain.newExperience;
 
@@ -4425,6 +4534,8 @@ export class PlayerRepository {
       if (claimAll) {
         for (const award of claimableDailyMissionActiveAwards(player)) {
           markDailyMissionActiveAwardClaimed(player, award.id);
+          if (award.requiredPoints >= DAILY_MISSION_ACTIVE_POINT_MAX)
+            recordClubMissionProgress(player, CLUB_MISSION_ACTIVE_100, 1, now);
           claimedActiveAwardIds.push(award.id);
           activeAwardItems.push(...activeAwardsWithoutBattlePass(award.awards));
         }
@@ -4487,6 +4598,8 @@ export class PlayerRepository {
       }
 
       markDailyMissionActiveAwardClaimed(player, award.id);
+      if (award.requiredPoints >= DAILY_MISSION_ACTIVE_POINT_MAX)
+        recordClubMissionProgress(player, CLUB_MISSION_ACTIVE_100, 1, now);
       grantAwards(player, activeAwardItems, updatedItemGuids, updatedMoneyIds);
       const girlReconciliation = reconcileGirlAppearanceState(player, updatedItemGuids);
       for (const girlId of girlReconciliation.updatedGirlIds) {
@@ -4912,6 +5025,256 @@ export class PlayerRepository {
     };
   }
 
+  /**
+   * Every LuaCall Club_* command: the club upkeep (weekly reset, dissolve
+   * timer, clubmates' points for today) runs first, in the same save.
+   */
+  async handleClubRequest(
+    account: string,
+    command: number,
+    parameters: unknown,
+    now = Date.now(),
+  ): Promise<ClubRequestResult> {
+    let player: Player | undefined;
+    let response: unknown;
+    let tip: string | null = null;
+    let dissolved = false;
+    const updatedItemGuids = new Set<number>();
+    const updatedMoneyIds = new Set<number>();
+    const updatedGirlIds = new Set<number>();
+    try {
+      await this.#store.update((state) => {
+        player = state.players[account];
+        if (!player) throw new Error(`Unknown player account: ${account}`);
+        dissolved = reconcileClub(player, now) === "dissolved";
+        const outcome = this.#clubCommand(
+          player,
+          command,
+          parameters,
+          now,
+          updatedItemGuids,
+          updatedMoneyIds,
+        );
+        response = outcome.response;
+        tip = outcome.tip;
+        const girlReconciliation = reconcileGirlAppearanceState(
+          player,
+          updatedItemGuids,
+        );
+        for (const girlId of girlReconciliation.updatedGirlIds) {
+          updatedGirlIds.add(girlId);
+        }
+      });
+    } catch (error) {
+      if (!(error instanceof ClubError)) throw error;
+      const current = this.get(account);
+      if (!current) throw error;
+      this.#logger.info("player.club.refused", {
+        account,
+        command,
+        reason: error.reason,
+      });
+      return {
+        player: structuredClone(current),
+        response: clubRefusalResponse(command, current),
+        tip: error.tip,
+        dissolved: false,
+        updatedItems: [],
+        updatedMoney: [],
+        updatedGirls: [],
+      };
+    }
+    if (!player) throw new Error(`Failed to handle club request: ${account}`);
+    const snapshot = structuredClone(player);
+    this.#logger.info("player.club.request", {
+      account,
+      command,
+      club: snapshot.club?.id ?? 0,
+      dissolved,
+    });
+    return {
+      player: snapshot,
+      response,
+      tip,
+      dissolved,
+      updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
+    };
+  }
+
+  #clubCommand(
+    player: Player,
+    command: number,
+    parameters: unknown,
+    now: number,
+    updatedItemGuids: Set<number>,
+    updatedMoneyIds: Set<number>,
+  ): { response: unknown; tip: string | null } {
+    const club = player.club;
+    const reply = (response: unknown, tip: string | null = null) => ({ response, tip });
+    switch (command) {
+      case LUA_COMMAND_CLUB_INFO:
+        return reply(club ? clubPayload(club, clubSelf(player), now) : {});
+      case LUA_COMMAND_CLUB_CREATE: {
+        if (club) throw new ClubError("has_club");
+        const request = parseCreateClubRequest(parameters);
+        try {
+          deductShopMoney(player, MONEY_DIAMOND, CLUB_CREATE_FEE, updatedMoneyIds);
+        } catch (error) {
+          if (!(error instanceof ShopError)) throw error;
+          throw new ClubError("insufficient_diamonds", "ui.Error.20011");
+        }
+        const created = createClubState(player, request, now);
+        player.club = created;
+        player.clubEverJoined = true;
+        markClubAchievement(player);
+        reconcileClub(player, now);
+        return reply(clubPayload(created, clubSelf(player), now));
+      }
+      case LUA_COMMAND_CLUB_DISCOVER:
+        return reply({ applyedlist: [], fx: [] });
+      case LUA_COMMAND_CLUB_FIND:
+        throw new ClubError("offline_search", "ui.Club.NoClubData");
+      case LUA_COMMAND_CLUB_APPLY:
+        throw new ClubError("offline_apply");
+      case LUA_COMMAND_CLUB_CANCEL_APPLY:
+      case LUA_COMMAND_CLUB_AGREE:
+      case LUA_COMMAND_CLUB_IGNORE:
+        throw new ClubError("no_applications", null);
+      case LUA_COMMAND_CLUB_NOTICE:
+        return reply([
+          setClubNotice(player, clubParameters(parameters).newnotice, now),
+        ]);
+      case LUA_COMMAND_CLUB_CHANGE_POSITION:
+        changeClubPosition(player, parameters, now);
+        return reply(clubPayload(player.club!, clubSelf(player), now));
+      case LUA_COMMAND_CLUB_HEADER_CHANGE:
+        throw new ClubError("offline_header_change");
+      case LUA_COMMAND_CLUB_KICK:
+        kickClubMember(player, parameters, now);
+        return reply(clubPayload(player.club!, clubSelf(player), now));
+      case LUA_COMMAND_CLUB_QUIT:
+        if (!club) return reply({});
+        throw new ClubError("chief_cannot_quit");
+      case LUA_COMMAND_CLUB_MODIFY_APPLY:
+        setClubApplyLevels(player, parameters);
+        return reply(clubPrimary(player.club!, clubSelf(player)));
+      case LUA_COMMAND_CLUB_DAILY_AWARD: {
+        const awards = claimClubDailyAward(player, now);
+        if (awards) {
+          grantAwards(
+            player,
+            applyClubAwards(player, awards, now),
+            updatedItemGuids,
+            updatedMoneyIds,
+          );
+        }
+        return reply({});
+      }
+      case LUA_COMMAND_CLUB_DISSOLVE:
+        requestClubDissolve(player, parameters, now);
+        return reply(clubPayload(player.club!, clubSelf(player), now));
+      case LUA_COMMAND_CLUB_SEND_MAIL:
+        throw new ClubError(club ? "offline_mail" : "no_club");
+      case LUA_COMMAND_CLUB_MEMBERS: {
+        if (!club) return reply({});
+        const strType = clubParameters(parameters).strType;
+        const members: Record<string, unknown> = {
+          memberlist: clubMemberList(club, clubSelf(player), now),
+        };
+        if (typeof strType === "string") members.strType = strType;
+        return reply(members);
+      }
+      case LUA_COMMAND_CLUB_APPLY_LIST:
+        return reply(club ? { applylist: [] } : {});
+      case LUA_COMMAND_CLUB_LOG:
+        return reply(club ? { actionloglist: clubLogPayload(club) } : {});
+      default:
+        throw new ClubError("unknown_command", null);
+    }
+  }
+
+  /** ClubMissionGetAward (weekly mission) and ClubProgressGetAward (weekly tier). */
+  async claimClubMissionAward(
+    account: string,
+    method: string,
+    id: number,
+    now = Date.now(),
+  ): Promise<GuideAwardResult> {
+    let player: Player | undefined;
+    let awards: BaseAward[] = [];
+    const updatedItemGuids = new Set<number>();
+    const updatedMoneyIds = new Set<number>();
+    const updatedGirlIds = new Set<number>();
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      reconcileClub(player, now);
+      awards =
+        method === CLUB_MISSION_CLAIM_METHOD
+          ? claimClubMission(player, id, now)
+          : claimClubTier(player, id, now);
+      grantAwards(
+        player,
+        applyClubAwards(player, awards, now),
+        updatedItemGuids,
+        updatedMoneyIds,
+      );
+      const girlReconciliation = reconcileGirlAppearanceState(player, updatedItemGuids);
+      for (const girlId of girlReconciliation.updatedGirlIds) {
+        updatedGirlIds.add(girlId);
+      }
+    });
+    if (!player) throw new Error(`Failed to claim club award: ${account}`);
+    const snapshot = structuredClone(player);
+    this.#logger.info("player.club.award_claimed", { account, method, id, awards });
+    return {
+      player: snapshot,
+      id,
+      awards,
+      updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id: moneyId }) =>
+        updatedMoneyIds.has(moneyId),
+      ),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
+    };
+  }
+
+  /**
+   * Kill counts of a stage or bounty result (totalkillMonster, killElite of
+   * LevelManager:PackKillMonster). Returns null when nothing changed.
+   */
+  async recordClubBattle(
+    account: string,
+    monsters: number,
+    elites: number,
+    now = Date.now(),
+  ): Promise<Player | null> {
+    if (!this.get(account)?.club) return null;
+    if (!(monsters > 0) && !(elites > 0)) return null;
+    let player: Player | undefined;
+    let changed = false;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const killsChanged = recordClubMissionProgress(
+        player,
+        CLUB_MISSION_KILLS,
+        monsters,
+        now,
+      );
+      const elitesChanged = recordClubMissionProgress(
+        player,
+        CLUB_MISSION_ELITES,
+        elites,
+        now,
+      );
+      changed = killsChanged || elitesChanged;
+    });
+    return changed && player ? structuredClone(player) : null;
+  }
+
   async savePendingGacha(
     account: string,
     poolId: number,
@@ -5329,6 +5692,12 @@ export class PlayerRepository {
       const roll =
         typeof resolveRoll === "function" ? resolveRoll(player) : resolveRoll;
 
+      recordClubMissionProgress(
+        player,
+        kind === "weapon" ? CLUB_MISSION_WEAPON_DRAWS : CLUB_MISSION_CARD_DRAWS,
+        ten ? 10 : 1,
+        Date.now(),
+      );
       const pityTask = kind === "weapon" ? 1002 + pool.id : 2 + pool.id;
       player.taskValues[String(makeGachaTaskId(pityTask))] = roll.counters.pity;
       if (kind === "card" && pool.protectUpNum > 0) {
@@ -6460,6 +6829,7 @@ export class PlayerRepository {
         player.money.push({ id: MONEY_VIGOUR, count: -energyCost });
       }
       incrementDailyMissionProgress(player, 109, energyCost);
+      recordClubMissionProgress(player, CLUB_MISSION_VIGOUR, energyCost, Date.now());
     });
     this.#logger.info("player.level.vigour_charged", { account, energyCost });
     if (!player) throw new Error(`Failed to charge level vigour: ${account}`);
@@ -6551,6 +6921,8 @@ export class PlayerRepository {
       incrementDailyMissionProgress(player, 101);
       incrementDailyMissionProgress(player, 103);
       incrementDailyMissionProgress(player, 109, energyCost);
+      recordClubMissionProgress(player, CLUB_MISSION_BOUNTY, 1, Date.now());
+      recordClubMissionProgress(player, CLUB_MISSION_VIGOUR, energyCost, Date.now());
 
       experienceUpdate = applyPlayerExperience(player, level.masterExp);
       if (experienceUpdate.vigourRecovery > 0) {
@@ -6630,6 +7002,7 @@ export class PlayerRepository {
       vigour.count -= energyCost;
       updatedMoneyIds.add(MONEY_VIGOUR);
       incrementDailyMissionProgress(player, 109, energyCost);
+      recordClubMissionProgress(player, CLUB_MISSION_VIGOUR, energyCost, Date.now());
 
       const level = player.levels.find(({ id }) => id === levelId);
       const firstClear = !level || level.star >>> 3 === 0;
