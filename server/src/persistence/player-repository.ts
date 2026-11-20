@@ -39,7 +39,21 @@ import { randomInt, randomUUID } from "node:crypto";
 import {
   BOSS_RUSH_TASK,
   BOSS_RUSH_TEAMS,
+  BUFF_EFFECT,
+  BUFF_SLOTS,
+  CARD_CHOICES,
+  CARD_RESET_VIGOUR,
+  CARD_SLOTS,
+  CARD_STATE,
+  CARD_TASK,
+  CARD_TYPE,
   EventTowerCatalog,
+  LUA_COMMAND_CARD_ACHIEVE_AWARD,
+  LUA_COMMAND_CARD_CHOOSE_CARD,
+  LUA_COMMAND_CARD_CHOOSE_DIFF,
+  LUA_COMMAND_CARD_CLICK_CARD,
+  LUA_COMMAND_CARD_NEXT_STAGE,
+  LUA_COMMAND_CARD_RESET,
   LUA_COMMAND_BOSS_RUSH_FORMATION,
   LUA_COMMAND_BOSS_RUSH_RESET,
   LUA_COMMAND_BOSS_RUSH_RESULT,
@@ -60,8 +74,10 @@ import {
   SKILL_TASK_OFFSET,
   SWIMWEAR_TASK,
   TOWER_ERROR,
+  encodeBuff,
   eventTowerErrorReply,
   makeTowerTaskId,
+  pickCardChoices,
   nextLevelRecord,
   pickPondSlot,
   readEventTowerRun,
@@ -69,7 +85,11 @@ import {
   reportScore,
   rollTowerAwards,
   towerItemTask,
+  type CardTowerBuff,
+  type CardTowerCard,
+  type CardTowerInfo,
   type EventTowerRequest,
+  type EventTowerRunState,
   type EventTowerState,
   type TowerInfo,
 } from "../game-data/event-tower-data.js";
@@ -2004,6 +2024,9 @@ function applyEventTowerRequest(
     girlIds: new Set(),
     experience: null,
   };
+  const cardTower = catalog.cardTowers.get(request.towerId);
+  if (cardTower)
+    return applyCardTowerRequest(player, request, cardTower, catalog, random, outcome);
   const tower = catalog.towers.get(request.towerId);
   if (!tower) throw refuse(TOWER_ERROR.invalid, "unknown_tower");
   const { group, offset } = tower.layout;
@@ -2485,7 +2508,462 @@ function applyEventTowerRequest(
       );
       return outcome;
     }
+
+    default:
+      // The card run (64 to 69) belongs to the card towers only.
+      throw refuse(TOWER_ERROR.invalid, "not_a_tower_call");
   }
+}
+
+/** Award rows as the client lists them (the sixth number is 100, 0 marks a first clear). */
+function towerAwardRows(awards: readonly (readonly number[])[]): number[][] {
+  return awards.map((award) => [...award.slice(0, 5), 100]);
+}
+
+function towerVigour(player: Player): number {
+  return player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
+}
+
+/** Counts a won tower fight for the oath tasks (a refusal there never fails the settlement). */
+function recordTowerFight(player: Player, run: EventTowerRunState): void {
+  if (run.cardGuids.length === 0) return;
+  try {
+    promiseFightProgress(
+      player,
+      {
+        kind: "tower",
+        runId: run.id,
+        formationId: run.formationId,
+        cardGuids: run.cardGuids,
+        activityId: run.activityType,
+      },
+      Date.now(),
+      PromiseCatalog.loadDefault(),
+    );
+  } catch (error) {
+    if (!(error instanceof PromiseOperationError)) throw error;
+  }
+}
+
+/**
+ * The card towers, Animalize (4) and EighthTower (8): AnimalizeLogic.lua and
+ * UI_Roguelike.lua / UI_EighthTower.lua of the 0.1.3 client. The whole run lives in
+ * task values (CARD_TASK), so the screens rebuild themselves from them.
+ *
+ * A round: the opening story of its stage (difficulty 0 levels, LevelId = round), pick a
+ * difficulty (64), then draw three cards at a time: choose one (65), open it (66).
+ * Box and fate cards pay or add a buff and deal again; act and SP cards open a level
+ * that is fought through 54 to 56, and a won act level deals again. Winning the SP
+ * (boss) level ends the round: its difficulty award is paid, the next difficulty opens
+ * and 67 starts the next round. 69 gives the round up for 5 vigour.
+ *
+ * [INFER] Nothing in the client or the tables says when the boss card turns up (see
+ * pickCardChoices); the unlock bit, the story order and the buff turns are read from
+ * what the screens do with the values.
+ */
+function applyCardTowerRequest(
+  player: Player,
+  request: EventTowerRequest,
+  info: CardTowerInfo,
+  catalog: EventTowerCatalog,
+  random: (maxExclusive: number) => number,
+  outcome: TowerOutcome,
+): TowerOutcome {
+  const { group, offset } = info.layout;
+  const get = (field: number): number => towerTask(player, group, offset + field);
+  const set = (field: number, value: number): void =>
+    setTowerTask(player, group, offset + field, value);
+  const cards = catalog.cardCards.get(info.id)!;
+  const buffs = catalog.cardBuffs.get(info.id)!;
+
+  const stage = (): number => Math.max(1, get(CARD_TASK.stage));
+  const diff = (): number => Math.max(1, get(CARD_TASK.diff));
+  const unlocked = (): number => Math.max(1, get(CARD_TASK.unlockDiff) >> 1);
+  const epBit = (level: TowerLevelRef): boolean =>
+    ((get(CARD_TASK.epLevelState + level.diff) >>> level.levelId) & 1) === 1;
+  const setEpBit = (level: TowerLevelRef): void =>
+    set(
+      CARD_TASK.epLevelState + level.diff,
+      get(CARD_TASK.epLevelState + level.diff) | (1 << level.levelId),
+    );
+  const storyDue = (round: number): boolean => {
+    const story = catalog.cardLevel(info.id, 0, round);
+    return story?.type === 2 && !epBit({ diff: 0, levelId: round });
+  };
+
+  const activeBuffs = () => {
+    const list: { slot: number; value: number; buff: CardTowerBuff }[] = [];
+    for (let slot = 0; slot < BUFF_SLOTS; slot++) {
+      const value = get(CARD_TASK.buffs + slot);
+      const buff = buffs.get(value & 0xffff);
+      if (buff) list.push({ slot, value, buff });
+    }
+    return list;
+  };
+  const addBuff = (buffId: number): void => {
+    const buff = buffs.get(buffId);
+    if (!buff) return;
+    for (let slot = 0; slot < BUFF_SLOTS; slot++)
+      if (get(CARD_TASK.buffs + slot) === 0) {
+        set(CARD_TASK.buffs + slot, encodeBuff(buff));
+        return;
+      }
+  };
+  /** Turns of the buffs that last "the next Count draws" (2) or "fights" (3). */
+  const consumeBuffs = (effectTime: number): void => {
+    for (const { slot, value, buff } of activeBuffs()) {
+      if (buff.effectTime !== effectTime) continue;
+      const left = (value >>> 16) - 1;
+      set(CARD_TASK.buffs + slot, left > 0 ? buff.id | (left << 16) : 0);
+    }
+  };
+  const energySale = (): number =>
+    activeBuffs()
+      .filter(({ buff }) => buff.effectType === BUFF_EFFECT.energy)
+      .reduce((total, { buff }) => total + buff.energy, 0);
+
+  const chosen = (): CardTowerCard | null => {
+    for (let index = 0; index < CARD_CHOICES; index++) {
+      const value = get(CARD_TASK.choices + index);
+      if ((value & 1) === 1) return cards.get(value >> 1) ?? null;
+    }
+    return null;
+  };
+  /** Always three entries: the client reads all of them without a nil check. */
+  const choicesJson = (): { CardId: number; Type: number }[] =>
+    Array.from({ length: CARD_CHOICES }, (_, index) => {
+      const value = get(CARD_TASK.choices + index);
+      return { CardId: value >> 1, Type: value & 1 };
+    });
+
+  const deal = (): void => {
+    const draws = get(CARD_TASK.drawCount) + 1;
+    set(CARD_TASK.drawCount, draws);
+    const forceSp = activeBuffs().some(
+      ({ buff }) => buff.effectType === BUFF_EFFECT.forceSp,
+    );
+    const round = diff();
+    const pool = [...cards.values()].filter(
+      (card) =>
+        (card.type !== CARD_TYPE.act && card.type !== CARD_TYPE.sp) ||
+        catalog.cardLevel(info.id, round, card.levelId) !== null,
+    );
+    const picks = pickCardChoices(pool, { draws, forceSp }, random);
+    for (let index = 0; index < CARD_CHOICES; index++)
+      set(CARD_TASK.choices + index, picks[index] ? picks[index]!.id << 1 : 0);
+    consumeBuffs(2);
+    set(CARD_TASK.state, CARD_STATE.randCard);
+  };
+  const clearRun = (): void => {
+    for (let index = 0; index < CARD_CHOICES; index++)
+      set(CARD_TASK.choices + index, 0);
+    for (let slot = 0; slot < CARD_SLOTS; slot++) set(CARD_TASK.cards + slot, 0);
+    for (let slot = 0; slot < BUFF_SLOTS; slot++) set(CARD_TASK.buffs + slot, 0);
+    set(CARD_TASK.drawCount, 0);
+    set(CARD_TASK.energyCount, 0);
+    set(CARD_TASK.moneyCount, 0);
+    set(CARD_TASK.diffAwardFlag, 0);
+    set(CARD_TASK.state, CARD_STATE.diff);
+  };
+  /** The score items of a payout also count as "tokens won this round". */
+  const countMoney = (rows: readonly (readonly number[])[]): void => {
+    const money = info.money1;
+    if (!money) return;
+    const earned = rows
+      .filter((row) => money.every((part, index) => row[index] === part))
+      .reduce((total, row) => total + (row[4] ?? 0), 0);
+    if (earned > 0) set(CARD_TASK.moneyCount, get(CARD_TASK.moneyCount) + earned);
+  };
+  const closeOpenRun = (): void => {
+    const run = readEventTowerRun(player.eventTower);
+    if (run?.active && run.tower === info.id) {
+      run.active = false;
+      run.resultCmd = LUA_COMMAND_TOWER_FAIL;
+      run.reply = {};
+    }
+  };
+  const finishAwards = (): void => {
+    const reconciliation = reconcileGirlAppearanceState(player, outcome.itemGuids);
+    for (const girlId of reconciliation.updatedGirlIds) outcome.girlIds.add(girlId);
+    reconcileGirlFetterUnlocks(player);
+  };
+  /** The boss level is won: pay the difficulty, open the next one, show the round's summary. */
+  const endRound = (playedDiff: number): void => {
+    const award = catalog.cardDiffAwards.get(info.id)?.get(playedDiff) ?? [];
+    grantTowerAwards(player, award, outcome);
+    countMoney(towerAwardRows(award));
+    if (playedDiff >= unlocked() && playedDiff < catalog.cardMaxDiff(info.id))
+      set(CARD_TASK.unlockDiff, (playedDiff + 1) << 1);
+    set(CARD_TASK.diffAwardFlag, 1);
+    set(CARD_TASK.state, CARD_STATE.stageEnd);
+  };
+
+  switch (request.command) {
+    case LUA_COMMAND_TOWER_GET:
+      outcome.response = { TowerId: info.id };
+      return outcome;
+
+    case LUA_COMMAND_TOWER_ENTER: {
+      const level = catalog.cardLevel(info.id, request.node, request.levelId);
+      if (!level) throw refuse(TOWER_ERROR.invalid, "unknown_level");
+      let cardGuids: number[] = [];
+      if (level.type === 2) {
+        // Only the story of the round that is due (the memory screen plays the others itself).
+        if (
+          get(CARD_TASK.state) !== CARD_STATE.ep ||
+          level.node !== 0 ||
+          level.levelId !== stage()
+        )
+          throw refuse(TOWER_ERROR.invalid, "story_not_due");
+      } else {
+        // A fight is reached only through the opened card.
+        const card = chosen();
+        if (
+          get(CARD_TASK.state) !== CARD_STATE.cardDetails ||
+          !card ||
+          card.levelId !== level.levelId ||
+          level.node !== diff()
+        )
+          throw refuse(TOWER_ERROR.invalid, "level_not_drawn");
+        if (
+          request.formationId <= 0 ||
+          !player.formations.some(({ id }) => id === request.formationId)
+        )
+          throw refuse(TOWER_ERROR.formation, "unknown_formation");
+        if (towerVigour(player) < Math.max(0, level.cost - energySale()))
+          throw refuse(TOWER_ERROR.vigour, "insufficient_vigour");
+        cardGuids = fightRoster(player, request.formationId);
+      }
+      const open = readEventTowerRun(player.eventTower);
+      if (
+        !open?.active ||
+        open.tower !== info.id ||
+        open.level !== level.levelId ||
+        open.node !== level.node
+      ) {
+        player.eventTower = {
+          run: {
+            id: randomUUID(),
+            tower: info.id,
+            level: level.levelId,
+            active: true,
+            activityType: request.activityType,
+            node: level.node,
+            formationId: request.formationId,
+            cardGuids,
+            resultCmd: 0,
+            reply: null,
+          },
+        };
+      }
+      outcome.response = {
+        tbData: [request.activityType, info.id, level.node, level.levelId],
+        tbDrop: [],
+        tbDropItems: [],
+      };
+      return outcome;
+    }
+
+    case LUA_COMMAND_TOWER_PASS: {
+      const level = catalog.cardLevel(info.id, request.node, request.levelId);
+      if (!level) throw refuse(TOWER_ERROR.invalid, "unknown_level");
+      const run = readEventTowerRun(player.eventTower);
+      if (
+        !run ||
+        run.tower !== info.id ||
+        run.level !== level.levelId ||
+        run.node !== level.node
+      )
+        throw refuse(TOWER_ERROR.invalid, "no_matching_entry");
+      if (!run.active) {
+        if (run.resultCmd !== LUA_COMMAND_TOWER_PASS || run.reply === null)
+          throw refuse(TOWER_ERROR.invalid, "entry_already_closed");
+        outcome.response = structuredClone(run.reply);
+        return outcome;
+      }
+
+      const awards: number[][] = [];
+      const first = !epBit({ diff: level.node, levelId: level.levelId });
+      if (level.type === 2) {
+        awards.push(...rollTowerAwards(level, first, run.id));
+        grantTowerAwards(player, awards, outcome);
+        setEpBit({ diff: 0, levelId: level.levelId });
+        // The story is seen: the difficulty screen follows.
+        set(CARD_TASK.state, CARD_STATE.diff);
+      } else {
+        const cost = Math.max(0, level.cost - energySale());
+        spendTowerVigour(player, cost, outcome, true);
+        set(CARD_TASK.energyCount, get(CARD_TASK.energyCount) + cost);
+        awards.push(...rollTowerAwards(level, first, run.id));
+        for (const { buff } of activeBuffs())
+          if (buff.effectType === BUFF_EFFECT.items)
+            awards.push(...towerAwardRows(buff.items));
+        grantTowerAwards(player, awards, outcome);
+        countMoney(awards);
+        setEpBit({ diff: level.node, levelId: level.levelId });
+        consumeBuffs(3);
+        recordTowerFight(player, run);
+        if (chosen()?.type === CARD_TYPE.sp) endRound(level.node);
+        else deal();
+      }
+      if (level.masterExp > 0) {
+        outcome.experience = applyPlayerExperience(player, level.masterExp);
+        if (outcome.experience.vigourRecovery > 0) outcome.moneyIds.add(MONEY_VIGOUR);
+      }
+      finishAwards();
+
+      const response = {
+        tbData: awards,
+        nMasterExp: level.masterExp,
+        nCardExp: level.cardExp,
+        newGoalIds: [],
+        nGetScore: 0,
+        nCardAddScore: 0,
+        nPetAddScore: 0,
+      };
+      run.active = false;
+      run.resultCmd = LUA_COMMAND_TOWER_PASS;
+      run.reply = response;
+      outcome.response = response;
+      return outcome;
+    }
+
+    case LUA_COMMAND_TOWER_FAIL: {
+      const run = readEventTowerRun(player.eventTower);
+      const level = catalog.cardLevel(info.id, request.node, request.levelId);
+      if (
+        run?.active &&
+        level &&
+        run.tower === info.id &&
+        run.level === level.levelId &&
+        run.node === level.node
+      ) {
+        const before = towerVigour(player);
+        spendTowerVigour(
+          player,
+          level.type === 2 ? 0 : Math.max(0, level.cost - energySale()),
+          outcome,
+          false,
+        );
+        set(
+          CARD_TASK.energyCount,
+          get(CARD_TASK.energyCount) + before - towerVigour(player),
+        );
+        consumeBuffs(3);
+        run.active = false;
+        run.resultCmd = LUA_COMMAND_TOWER_FAIL;
+        run.reply = {};
+      }
+      outcome.response = {};
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_CHOOSE_DIFF: {
+      if (
+        get(CARD_TASK.state) !== CARD_STATE.diff ||
+        request.diff < 1 ||
+        request.diff > unlocked() ||
+        request.diff > catalog.cardMaxDiff(info.id)
+      )
+        throw refuse(TOWER_ERROR.invalid, "difficulty_not_open");
+      set(CARD_TASK.diff, request.diff);
+      // Picking the newest difficulty shows its unlock as seen.
+      set(CARD_TASK.unlockDiff, (unlocked() << 1) | 1);
+      deal();
+      outcome.response = { Error: 0, Diff: request.diff, tbRandom: choicesJson() };
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_CHOOSE_CARD: {
+      const value = get(CARD_TASK.choices + request.index - 1);
+      if (
+        get(CARD_TASK.state) !== CARD_STATE.randCard ||
+        request.index < 1 ||
+        request.index > CARD_CHOICES ||
+        value >> 1 === 0
+      )
+        throw refuse(TOWER_ERROR.invalid, "no_card_to_choose");
+      set(CARD_TASK.choices + request.index - 1, value | 1);
+      for (let slot = 0; slot < CARD_SLOTS; slot++)
+        if (get(CARD_TASK.cards + slot) === 0) {
+          set(CARD_TASK.cards + slot, value | 1);
+          break;
+        }
+      set(CARD_TASK.state, CARD_STATE.cardDetails);
+      outcome.response = choicesJson();
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_CLICK_CARD: {
+      const card = chosen();
+      if (get(CARD_TASK.state) !== CARD_STATE.cardDetails || !card)
+        throw refuse(TOWER_ERROR.invalid, "no_card_opened");
+      if (card.type === CARD_TYPE.act || card.type === CARD_TYPE.sp) {
+        // The client opens the level panel; the fight goes through 54.
+        outcome.response = { bNextRandom: false, cardId: card.id };
+        return outcome;
+      }
+      const rows: number[][] = [];
+      if (card.type === CARD_TYPE.box && card.award) {
+        grantTowerAwards(player, [card.award], outcome);
+        rows.push(...towerAwardRows([card.award]));
+        countMoney(rows);
+        finishAwards();
+      }
+      if (card.type === CARD_TYPE.fate)
+        for (const buffId of card.buffIds) addBuff(buffId);
+      deal();
+      outcome.response = { bNextRandom: true, tbAward: rows };
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_NEXT_STAGE: {
+      if (get(CARD_TASK.state) !== CARD_STATE.stageEnd)
+        throw refuse(TOWER_ERROR.invalid, "round_not_over");
+      const next = stage() + 1;
+      set(CARD_TASK.stage, next);
+      clearRun();
+      set(CARD_TASK.state, storyDue(next) ? CARD_STATE.ep : CARD_STATE.diff);
+      outcome.response = { nError: 0 };
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_ACHIEVE_AWARD: {
+      // The memory screen's one button. The achievement table of the client is never loaded
+      // (tbAnimalizeAchievement is not assigned), so only the score awards exist.
+      const score = get(CARD_TASK.score);
+      const granted: number[][] = [];
+      for (const entry of catalog.cardScoreAwards.get(info.id) ?? []) {
+        if (score < entry.score || get(CARD_TASK.scoreAward + entry.id) !== 0) continue;
+        grantTowerAwards(player, entry.awards, outcome);
+        set(CARD_TASK.scoreAward + entry.id, 1);
+        granted.push(...towerAwardRows(entry.awards));
+      }
+      if (granted.length === 0) throw refuse(TOWER_ERROR.noAward, "nothing_to_claim");
+      finishAwards();
+      outcome.response = { tbAward: granted };
+      return outcome;
+    }
+
+    case LUA_COMMAND_CARD_RESET: {
+      const state = get(CARD_TASK.state);
+      if (state !== CARD_STATE.randCard && state !== CARD_STATE.cardDetails)
+        throw refuse(TOWER_ERROR.invalid, "no_round_to_give_up");
+      spendTowerVigour(player, CARD_RESET_VIGOUR, outcome, true);
+      closeOpenRun();
+      clearRun();
+      outcome.response = { nError: 0 };
+      return outcome;
+    }
+
+    default:
+      throw refuse(TOWER_ERROR.invalid, "not_a_card_tower_call");
+  }
+}
+
+interface TowerLevelRef {
+  diff: number;
+  levelId: number;
 }
 
 function fullTeamHealth(player: Player, group: number): void {

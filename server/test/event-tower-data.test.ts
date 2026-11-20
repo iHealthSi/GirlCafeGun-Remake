@@ -213,6 +213,8 @@ describe("event tower item rules", () => {
       "15-50-1-1": ["ItemTenTalentExpAuto", 4],
       "15-105-1-1": ["ItemFifteenthTowerExpAuto", 2],
       "15-106-1-1": ["ItemFifteenthTowerExpAuto", 1],
+      "15-25-1-1": ["ItemAnimalizeTowerScoreAuto", null],
+      "15-35-1-1": ["ItemEighthTowerScoreAuto", null],
     };
     const table = readFileSync(path.resolve("resources/item/autouse.txt"), "utf8")
       .split(/\r?\n/)

@@ -39,6 +39,13 @@ export const LUA_COMMAND_BOSS_RUSH_SELECT = 510;
 export const LUA_COMMAND_BOSS_RUSH_FORMATION = 511;
 export const LUA_COMMAND_BOSS_RUSH_RESET = 512;
 export const LUA_COMMAND_BOSS_RUSH_RESULT = 513;
+/** LuaCall.Activities_Animalize*: the card run of the Animalize and EighthTower screens. */
+export const LUA_COMMAND_CARD_CHOOSE_DIFF = 64;
+export const LUA_COMMAND_CARD_CHOOSE_CARD = 65;
+export const LUA_COMMAND_CARD_CLICK_CARD = 66;
+export const LUA_COMMAND_CARD_NEXT_STAGE = 67;
+export const LUA_COMMAND_CARD_ACHIEVE_AWARD = 68;
+export const LUA_COMMAND_CARD_RESET = 69;
 /** LuaCall.DoSettle: GameManager.SendInfoToServer wraps 55 and 56 in it. */
 export const LUA_COMMAND_DO_SETTLE = 252;
 
@@ -230,6 +237,73 @@ export const NODE_TASK = {
 export const SWIMWEAR_TASK = { serverAward: 150, scoreAward: 200 } as const;
 /** nPondSize: a pool has 20 slots. */
 export const POND_SIZE = 20;
+/** Where one card tower (AnimalizeLogic.lua, EighthTowerLogic.lua: the same script twice) keeps its run. */
+export interface CardTowerLayout {
+  group: number;
+  /** nTaskOffset: every field below is relative to it. */
+  offset: number;
+  /** Folder and file prefix of its tables in resources/tower. */
+  directory: string;
+  prefix: string;
+}
+
+export const CARD_TOWER_LAYOUTS: Readonly<Record<string, CardTowerLayout>> = {
+  Animalize: { group: 34, offset: 1000, directory: "animalize", prefix: "animalize" },
+  EighthTower: { group: 34, offset: 3000, directory: "eighthtower", prefix: "eighth" },
+};
+
+/** Task fields of a card tower, relative to CardTowerLayout.offset (the nATI* names of the Lua). */
+export const CARD_TASK = {
+  stage: 4,
+  diff: 5,
+  state: 6,
+  /** value = unlocked difficulty << 1 | seen (bit 0 stays 0 until the player picks that difficulty). */
+  unlockDiff: 7,
+  score: 8,
+  /** Cards dealt in this round. */
+  drawCount: 9,
+  /** 1 = the round's difficulty award was just paid (the client shows it from the table and clears it). */
+  diffAwardFlag: 10,
+  /** Three slots: CardId << 1 | chosen. */
+  choices: 11,
+  /** 20 slots of chosen cards, same encoding. */
+  cards: 14,
+  /** + difficulty: bit LevelId set once that level was cleared (difficulty 0 = stories). */
+  epLevelState: 34,
+  /** Buff slots: id in bits 0-15, turns left above them. */
+  buffs: 54,
+  energyCount: 201,
+  moneyCount: 202,
+  /** + Id of the score award: 1 once paid. */
+  scoreAward: 230,
+} as const;
+/** AnimalizeStateType. */
+export const CARD_STATE = {
+  ep: 0,
+  diff: 1,
+  randCard: 2,
+  cardDetails: 3,
+  stageEnd: 4,
+} as const;
+/** AnimlaizeCardType. */
+export const CARD_TYPE = { box: 1, fate: 2, act: 3, sp: 4 } as const;
+/** AnimalizeCardBuff EffectType. */
+export const BUFF_EFFECT = {
+  skill: 1,
+  energy: 2,
+  items: 3,
+  showCard: 4,
+  forceSp: 5,
+} as const;
+export const CARD_CHOICES = 3;
+export const CARD_SLOTS = 20;
+/** The Lua reads nATIBuff .. nATIBuff + nBuffCount, both included. */
+export const BUFF_SLOTS = 41;
+/** tbLogic.resetEneger. */
+export const CARD_RESET_VIGOUR = 5;
+/** No rule in the client or the tables says when the boss card turns up: [INFER] from draw 8 on. */
+export const CARD_FIRST_SP_DRAW = 8;
+
 /** Tower.txt id of SixteenthTower, the boss rush. */
 export const BOSS_RUSH_TOWER = 16;
 /** SixteenthTowerLogic.lua, group 64 (the layout's group). */
@@ -274,6 +348,9 @@ export const TOWER_ITEM_TASKS: ReadonlyMap<string, { group: number; key: number 
     ["15-50-1-1", { group: 64, key: 2094 }],
     ["15-105-1-1", { group: 64, key: 3693 }],
     ["15-106-1-1", { group: 64, key: 3692 }],
+    // Card tower scores (AnimalizeLogic nATIScore = offset + 8, read by GetSmallTowerMoney).
+    ["15-25-1-1", { group: 34, key: 1008 }],
+    ["15-35-1-1", { group: 34, key: 3008 }],
   ]);
 
 export function towerItemTask(
@@ -343,6 +420,40 @@ export interface TowerScoreAward {
   score: number;
   awards: BaseAward[];
 }
+export interface CardTowerCard {
+  id: number;
+  type: number;
+  /** Box cards: the award. */
+  award: BaseAward | null;
+  /** Act and SP cards: the LevelId in the current difficulty. */
+  levelId: number;
+  /** Fate cards: the buffs. */
+  buffIds: number[];
+}
+export interface CardTowerBuff {
+  id: number;
+  /** 1 the whole round, 2 the next Count draws, 3 the next Count fights. */
+  effectTime: number;
+  count: number;
+  effectType: number;
+  /** Effect 2: vigour saved per fight. */
+  energy: number;
+  /** Effect 3: items added to every won fight. */
+  items: BaseAward[];
+}
+export interface CardTowerInfo {
+  id: number;
+  className: string;
+  layout: CardTowerLayout;
+  /** Tower.txt Money1GDPL, the score item. */
+  money1: readonly [number, number, number, number] | null;
+}
+export interface CardTowerScoreAward {
+  id: number;
+  score: number;
+  awards: BaseAward[];
+}
+
 /** One row of towerskill.txt: the upgrade item and the cost of each next level. */
 export interface TowerSkill {
   /** The table's Id: the client's nId, the key suffix and the reply's skillId. */
@@ -419,6 +530,15 @@ export class EventTowerCatalog {
   readonly serverAwards = new Map<number, TowerScoreAward[]>();
   /** Skills by tower id, then by the table's Id. */
   readonly skills = new Map<number, Map<number, TowerSkill>>();
+  /** Animalize (4) and EighthTower (8): the card towers. */
+  readonly cardTowers = new Map<number, CardTowerInfo>();
+  /** Card tower levels by "tower:difficulty:levelId"; TowerLevel.node holds the difficulty. */
+  readonly cardLevels = new Map<string, TowerLevel>();
+  readonly cardCards = new Map<number, Map<number, CardTowerCard>>();
+  readonly cardBuffs = new Map<number, Map<number, CardTowerBuff>>();
+  /** Award of clearing a round at each difficulty. */
+  readonly cardDiffAwards = new Map<number, Map<number, BaseAward[]>>();
+  readonly cardScoreAwards = new Map<number, CardTowerScoreAward[]>();
   /** SpLevel.txt Idx values: the bosses the player may pick for each SP level of the boss rush. */
   readonly bossRushBosses = new Set<number>();
   /** SwimwearServerScore.txt: the score the client divides the server score by. */
@@ -505,6 +625,7 @@ export class EventTowerCatalog {
 
     for (const tower of catalog.towers.values()) catalog.#loadNodeFamily(tower, read);
     for (const tower of catalog.towers.values()) catalog.#loadSkills(tower, read);
+    catalog.#loadCardTowers(read);
     for (const row of read("sixteenthtower/splevel.txt")) {
       const idx = int(row.Idx);
       if (idx > 0) catalog.bossRushBosses.add(idx);
@@ -598,6 +719,106 @@ export class EventTowerCatalog {
         });
       }
     }
+  }
+
+  #loadCardTowers(read: (file: string) => Row[]): void {
+    for (const row of read("tower.txt")) {
+      const layoutOfClass = CARD_TOWER_LAYOUTS[row.ClassName ?? ""];
+      const id = int(row.Id);
+      if (id <= 0 || !layoutOfClass) continue;
+      const gdpl = numbers(row.Money1GDPL);
+      const { directory, prefix } = layoutOfClass;
+      const file = (name: string): Row[] => read(`${directory}/${prefix}${name}.txt`);
+      this.cardTowers.set(id, {
+        id,
+        className: row.ClassName!,
+        layout: layoutOfClass,
+        money1:
+          gdpl.length === 4
+            ? ([gdpl[0]!, gdpl[1]!, gdpl[2]!, gdpl[3]!] as const)
+            : null,
+      });
+      for (const level of file("level")) {
+        const levelId = int(level.LevelId);
+        if (int(level.ActiveId) !== id || levelId <= 0) continue;
+        const diff = int(level.Diff);
+        const weights = (text: string | undefined, fallback: number) =>
+          parseWeighted(text).map(({ award, weight }) => ({
+            award,
+            weight: weight ?? fallback,
+          }));
+        this.cardLevels.set(`${id}:${diff}:${levelId}`, {
+          tower: id,
+          levelId,
+          type: int(level.LevelType),
+          node: diff,
+          cost: int(level.PreCost),
+          masterExp: int(level.MasterExp),
+          cardExp: int(level.CardExp),
+          randDropNum: int(level.RandDropNum),
+          firstAwards: parseAwards(level.FirstAward),
+          fixedAwards: weights(level.FixAward, 10_000),
+          randomAwards: weights(level.RandomAward, 0),
+        });
+      }
+      const cards = new Map<number, CardTowerCard>();
+      for (const card of file("card")) {
+        const cardId = int(card.Id);
+        if (int(card.ActiveId) !== id || cardId <= 0) continue;
+        const type = int(card.Type);
+        cards.set(cardId, {
+          id: cardId,
+          type,
+          award: type === CARD_TYPE.box ? (parseAwards(card.Award)[0] ?? null) : null,
+          levelId:
+            type === CARD_TYPE.act || type === CARD_TYPE.sp ? int(card.Award) : 0,
+          buffIds: type === CARD_TYPE.fate ? numbers(card.Award) : [],
+        });
+      }
+      this.cardCards.set(id, cards);
+      const buffs = new Map<number, CardTowerBuff>();
+      for (const buff of file("cardbuff")) {
+        const buffId = int(buff.BuffId);
+        if (buffId <= 0) continue;
+        const effectType = int(buff.EffectType);
+        buffs.set(buffId, {
+          id: buffId,
+          effectTime: int(buff.EffectTime, 1),
+          count: int(buff.Count),
+          effectType,
+          energy: effectType === BUFF_EFFECT.energy ? int(buff.Value) : 0,
+          items: effectType === BUFF_EFFECT.items ? parseAwards(buff.Value) : [],
+        });
+      }
+      this.cardBuffs.set(id, buffs);
+      const diffAwards = new Map<number, BaseAward[]>();
+      for (const award of file("diffaward"))
+        if (int(award.ActiveId) === id)
+          diffAwards.set(int(award.Diff), parseAwards(award.Awards));
+      this.cardDiffAwards.set(id, diffAwards);
+      this.cardScoreAwards.set(
+        id,
+        file("scoreaward")
+          .filter((award) => int(award.ActiveId) === id && int(award.Id) > 0)
+          .map((award) => ({
+            id: int(award.Id),
+            score: int(award.Score),
+            awards: parseAwards(award.GDPL),
+          })),
+      );
+    }
+  }
+
+  cardLevel(tower: number, diff: number, levelId: number): TowerLevel | null {
+    return this.cardLevels.get(`${tower}:${diff}:${levelId}`) ?? null;
+  }
+
+  /** Highest difficulty that has levels. */
+  cardMaxDiff(tower: number): number {
+    let max = 0;
+    for (const level of this.cardLevels.values())
+      if (level.tower === tower) max = Math.max(max, level.node);
+    return max;
   }
 
   #loadSkills(tower: TowerInfo, read: (file: string) => Row[]): void {
@@ -760,6 +981,16 @@ export type EventTowerRequest =
       towerId: number;
       skillId: number;
     }
+  | { command: typeof LUA_COMMAND_CARD_CHOOSE_DIFF; towerId: number; diff: number }
+  | { command: typeof LUA_COMMAND_CARD_CHOOSE_CARD; towerId: number; index: number }
+  | {
+      command:
+        | typeof LUA_COMMAND_CARD_CLICK_CARD
+        | typeof LUA_COMMAND_CARD_NEXT_STAGE
+        | typeof LUA_COMMAND_CARD_ACHIEVE_AWARD
+        | typeof LUA_COMMAND_CARD_RESET;
+      towerId: number;
+    }
   | {
       command: typeof LUA_COMMAND_BOSS_RUSH_SELECT;
       towerId: typeof BOSS_RUSH_TOWER;
@@ -815,12 +1046,18 @@ export function parseEventTowerCall(
 
   const wanted = (towerId: number | null): towerId is number =>
     towerId !== null && catalog.towers.has(towerId);
+  const wantedCard = (towerId: number | null): towerId is number =>
+    towerId !== null && catalog.cardTowers.has(towerId);
+  /** 53 to 56 are the shared tower calls: the card towers use them too. */
+  const wantedAny = (towerId: number | null): towerId is number =>
+    wanted(towerId) || wantedCard(towerId);
 
   switch (command) {
     case LUA_COMMAND_TOWER_GET: {
       const args = positional(body);
       const towerId = whole(args?.[0]);
-      if (!wanted(towerId) || whole(args?.[1]) === ACTIVITY_TYPE_CHALLENGE) return null;
+      if (!wantedAny(towerId) || whole(args?.[1]) === ACTIVITY_TYPE_CHALLENGE)
+        return null;
       return { request: { command, towerId }, settled };
     }
     case LUA_COMMAND_TOWER_ENTER:
@@ -832,7 +1069,7 @@ export function parseEventTowerCall(
       const activityType = whole(args?.[0]);
       const towerId = whole(args?.[1]);
       if (
-        !wanted(towerId) ||
+        !wantedAny(towerId) ||
         activityType === null ||
         activityType === ACTIVITY_TYPE_CHALLENGE
       )
@@ -898,6 +1135,31 @@ export function parseEventTowerCall(
             : { command, towerId, pondId },
         settled,
       };
+    }
+    case LUA_COMMAND_CARD_CHOOSE_DIFF:
+    case LUA_COMMAND_CARD_CHOOSE_CARD:
+    case LUA_COMMAND_CARD_CLICK_CARD:
+    case LUA_COMMAND_CARD_NEXT_STAGE:
+    case LUA_COMMAND_CARD_ACHIEVE_AWARD:
+    case LUA_COMMAND_CARD_RESET: {
+      // {TowerId = ..., Diff = ...} / {TowerId, Index} from UI_Roguelike and UI_EighthTower.
+      const fields = (typeof body === "object" && body !== null ? body : {}) as Record<
+        string,
+        unknown
+      >;
+      const towerId = whole(fields.TowerId);
+      if (!wantedCard(towerId)) return null;
+      if (command === LUA_COMMAND_CARD_CHOOSE_DIFF)
+        return {
+          request: { command, towerId, diff: whole(fields.Diff) ?? 0 },
+          settled,
+        };
+      if (command === LUA_COMMAND_CARD_CHOOSE_CARD)
+        return {
+          request: { command, towerId, index: whole(fields.Index) ?? 0 },
+          settled,
+        };
+      return { request: { command, towerId }, settled };
     }
     case LUA_COMMAND_UPGRADE_TOWER_SKILL: {
       // CallServer(UpgradeTowerSkill, {towerId, skillId}), sent by the two skill screens.
@@ -982,6 +1244,17 @@ export function eventTowerErrorReply(
     case LUA_COMMAND_UPGRADE_TOWER_SKILL:
       // OnUpgradeRsp shows UI_Activities.Tips<nError>.
       return { nError: code };
+    case LUA_COMMAND_CARD_CHOOSE_DIFF:
+      // OnClickDiffCallBack shows "locked" when the reply has no tbRandom; Error is 1.
+      return { Error: 1 };
+    case LUA_COMMAND_CARD_RESET:
+      // OnResetStatg knows 1 (not enough vigour) and 2 (invalid) only.
+      return { nError: code === TOWER_ERROR.vigour ? 1 : TOWER_ERROR.invalid };
+    case LUA_COMMAND_CARD_CHOOSE_CARD:
+    case LUA_COMMAND_CARD_CLICK_CARD:
+    case LUA_COMMAND_CARD_NEXT_STAGE:
+    case LUA_COMMAND_CARD_ACHIEVE_AWARD:
+      return { nError: code };
     case LUA_COMMAND_BOSS_RUSH_SELECT:
     case LUA_COMMAND_BOSS_RUSH_FORMATION:
     case LUA_COMMAND_BOSS_RUSH_RESET:
@@ -1020,6 +1293,34 @@ export function reachedGoal(report: unknown, goalId: number): boolean {
   if (typeof report === "object" && report !== null)
     return (report as Record<string, unknown>)[String(goalId)] === true;
   return false;
+}
+
+/** The three cards of a deal: distinct, from the pool, with the SP card when the rules want it. */
+export function pickCardChoices(
+  pool: readonly CardTowerCard[],
+  rules: { draws: number; forceSp: boolean },
+  random: (maxExclusive: number) => number,
+): CardTowerCard[] {
+  const spAllowed = rules.forceSp || rules.draws >= CARD_FIRST_SP_DRAW;
+  const remaining = pool.filter((card) => spAllowed || card.type !== CARD_TYPE.sp);
+  const picks: CardTowerCard[] = [];
+  while (picks.length < CARD_CHOICES && remaining.length > 0)
+    picks.push(...remaining.splice(random(remaining.length), 1));
+  // [INFER] The twentieth draw cannot go without the boss, a "next draw is the boss" buff always brings it.
+  const sp = pool.find((card) => card.type === CARD_TYPE.sp);
+  if (
+    sp &&
+    (rules.forceSp || rules.draws >= CARD_SLOTS) &&
+    picks.length > 0 &&
+    !picks.some((card) => card.type === CARD_TYPE.sp)
+  )
+    picks[0] = sp;
+  return picks;
+}
+
+/** A buff slot: the id and, above bit 15, the draws or fights it still has. */
+export function encodeBuff(buff: CardTowerBuff): number {
+  return buff.effectTime === 1 ? buff.id : buff.id | (Math.max(1, buff.count) << 16);
 }
 
 /** Whole-weight draw over slots with stock left; index of the slot, or -1 when none is left. */
