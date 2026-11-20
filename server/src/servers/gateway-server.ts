@@ -22,6 +22,12 @@ import {
   type BountyRun,
 } from "../game-data/bounty-data.js";
 import {
+  LUA_COMMAND_DO_SETTLE,
+  LUA_COMMAND_SWIMWEAR_SERVER_SCORE,
+  LUA_COMMAND_TOWER_GET,
+  parseEventTowerCall,
+} from "../game-data/event-tower-data.js";
+import {
   LUA_COMMAND_CARD_LEVEL_UP_COMMON,
   parseCardEnhancementRequest,
 } from "../game-data/card-enhancement-data.js";
@@ -3647,6 +3653,70 @@ export function createGatewayServer({
             );
             logger.warn("cafe.pet.rejected", { reason: error.reason });
           }
+          return;
+        }
+        const eventTower =
+          call?.method === "LuaCall" ? parseEventTowerCall(call.parameters) : null;
+        if (eventTower) {
+          const { request, settled } = eventTower;
+          const result = await players.handleEventTowerRequest(
+            context.account,
+            request,
+          );
+          context.player = result.player;
+          // The client's reply handlers re-read money, items and task values, so they go out first.
+          for (const money of result.updatedMoney) {
+            send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+          }
+          if (result.updatedItems.length > 0) {
+            send(
+              COMMAND.ITEM_UPDATE_NTF,
+              0,
+              makeItemUpdateNotification(result.updatedItems),
+            );
+          }
+          sendGirlUpdates(result.updatedGirls);
+          if (
+            !result.rejected &&
+            request.command !== LUA_COMMAND_TOWER_GET &&
+            request.command !== LUA_COMMAND_SWIMWEAR_SERVER_SCORE
+          ) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          if (
+            result.experienceUpdate &&
+            (result.experienceUpdate.addedExperience > 0 ||
+              result.experienceUpdate.levelsGained > 0)
+          ) {
+            send(
+              COMMAND.PLAYER_UPDATE_NTF,
+              0,
+              makePlayerUpdateNotification(result.player),
+            );
+          }
+          // 55 and 56 came inside DoSettle: answer the same way, which also clears the client's resend.
+          const reply = { sCmd: request.command, tbParam: result.response };
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall(
+              "LuaCall",
+              settled ? { sCmd: LUA_COMMAND_DO_SETTLE, tbParam: reply } : reply,
+            ),
+          );
+          logger.info("lua.callback", {
+            peer,
+            account: context.account,
+            method: "LuaCall",
+            command: request.command,
+            feature: "event.tower",
+            tower: request.towerId,
+            rejected: result.rejected?.reason,
+          });
           return;
         }
         const bountyCall = parseBountyCall(call);
