@@ -136,8 +136,8 @@ export const CARD_MAXIMUM_ENHANCE_LEVEL = CARD_EXP_TO_NEXT_LEVEL.length + 1;
 
 /**
  * Adds experience up to maximumLevel. A card already at or above the cap keeps
- * its level and gets no more experience; experience left over when the cap is
- * reached stays on the card, as CardTable.ApplyExp does.
+ * its level and gets no more experience; of the experience left over when the
+ * cap is reached, at most one next-level requirement stays on the card.
  */
 export function addCardExperience(
   level: number,
@@ -153,6 +153,11 @@ export function addCardExperience(
     if (required === undefined || experience < required) break;
     experience -= required;
     nextLevel += 1;
+  }
+  if (nextLevel >= maximumLevel) {
+    // UI_CardMain keeps at most one next-level requirement at the cap
+    // (keepExp = min(overflow, need(cap -> cap+1))), as weapons do.
+    experience = Math.min(experience, CARD_EXP_TO_NEXT_LEVEL[maximumLevel - 1] ?? 0);
   }
   return { level: nextLevel, experience };
 }

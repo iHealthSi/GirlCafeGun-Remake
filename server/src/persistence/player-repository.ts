@@ -5785,6 +5785,7 @@ export class PlayerRepository {
     let addedSkillPoints = 0;
     let coinCost = 0;
     const consumedItemGuids = new Set<number>();
+    const removedCards: InventoryItemState[] = [];
     const updatedGirlIds = new Set<number>();
     await this.#store.update((state) => {
       player = state.players[account];
@@ -5948,14 +5949,13 @@ export class PlayerRepository {
       }
       if (gold) gold.count -= coinCost;
 
-      for (const donorGuid of donors) {
-        const donor = player.inventory.find(
-          (candidate) => candidate.guid === donorGuid,
-        )!;
-        donor.count = 0;
-        consumedItemGuids.add(donorGuid);
+      // Consumed cards leave the inventory, as in card decomposition, so they
+      // no longer count as owned copies; the client gets them at count 0.
+      for (const donor of player.inventory) {
+        if (donors.has(donor.guid)) removedCards.push({ ...donor, count: 0 });
       }
       if (donors.size > 0) {
+        player.inventory = player.inventory.filter(({ guid }) => !donors.has(guid));
         for (const girl of reconcileCustomGirlOutfits(player)) {
           updatedGirlIds.add(girl.girlId);
         }
@@ -6005,9 +6005,12 @@ export class PlayerRepository {
     return {
       player: snapshot,
       card,
-      consumedItems: snapshot.inventory.filter(({ guid: itemGuid }) =>
-        consumedItemGuids.has(itemGuid),
-      ),
+      consumedItems: [
+        ...snapshot.inventory.filter(({ guid: itemGuid }) =>
+          consumedItemGuids.has(itemGuid),
+        ),
+        ...structuredClone(removedCards),
+      ],
       addedExperience,
       addedSkillPoints,
       coinCost,
