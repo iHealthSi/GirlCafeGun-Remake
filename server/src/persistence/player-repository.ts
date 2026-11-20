@@ -5042,11 +5042,17 @@ export class PlayerRepository {
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedGirlIds = new Set<number>();
-    try {
-      await this.#store.update((state) => {
-        player = state.players[account];
-        if (!player) throw new Error(`Unknown player account: ${account}`);
-        dissolved = reconcileClub(player, now) === "dissolved";
+    let refusal: ClubError | null = null;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      dissolved = reconcileClub(player, now) === "dissolved";
+      if (dissolved && command === LUA_COMMAND_CLUB_DISSOLVE) {
+        // 10022 nError 1 = "the club is dissolved": the client shows it and goes home.
+        response = { nError: 1 };
+        return;
+      }
+      try {
         const outcome = this.#clubCommand(
           player,
           command,
@@ -5057,40 +5063,28 @@ export class PlayerRepository {
         );
         response = outcome.response;
         tip = outcome.tip;
-        const girlReconciliation = reconcileGirlAppearanceState(
-          player,
-          updatedItemGuids,
-        );
-        for (const girlId of girlReconciliation.updatedGirlIds) {
-          updatedGirlIds.add(girlId);
-        }
-      });
-    } catch (error) {
-      if (!(error instanceof ClubError)) throw error;
-      const current = this.get(account);
-      if (!current) throw error;
-      this.#logger.info("player.club.refused", {
-        account,
-        command,
-        reason: error.reason,
-      });
-      return {
-        player: structuredClone(current),
-        response: clubRefusalResponse(command, current),
-        tip: error.tip,
-        dissolved: false,
-        updatedItems: [],
-        updatedMoney: [],
-        updatedGirls: [],
-      };
-    }
+      } catch (error) {
+        if (!(error instanceof ClubError)) throw error;
+        // The club functions check before they write, so a refusal changes
+        // nothing; the upkeep above (weekly reset, dissolve) is kept.
+        refusal = error;
+        response = clubRefusalResponse(command, player);
+        tip = error.tip;
+        return;
+      }
+      const girlReconciliation = reconcileGirlAppearanceState(player, updatedItemGuids);
+      for (const girlId of girlReconciliation.updatedGirlIds) {
+        updatedGirlIds.add(girlId);
+      }
+    });
     if (!player) throw new Error(`Failed to handle club request: ${account}`);
     const snapshot = structuredClone(player);
-    this.#logger.info("player.club.request", {
+    this.#logger.info(refusal ? "player.club.refused" : "player.club.request", {
       account,
       command,
       club: snapshot.club?.id ?? 0,
       dissolved,
+      ...(refusal ? { reason: (refusal as ClubError).reason } : {}),
     });
     return {
       player: snapshot,
@@ -5207,14 +5201,22 @@ export class PlayerRepository {
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedGirlIds = new Set<number>();
+    let refusal: ClubError | null = null;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       reconcileClub(player, now);
-      awards =
-        method === CLUB_MISSION_CLAIM_METHOD
-          ? claimClubMission(player, id, now)
-          : claimClubTier(player, id, now);
+      try {
+        awards =
+          method === CLUB_MISSION_CLAIM_METHOD
+            ? claimClubMission(player, id, now)
+            : claimClubTier(player, id, now);
+      } catch (error) {
+        if (!(error instanceof ClubError)) throw error;
+        // Keep the upkeep (a weekly reset clears stale "claimable" marks).
+        refusal = error;
+        return;
+      }
       grantAwards(
         player,
         applyClubAwards(player, awards, now),
@@ -5227,6 +5229,7 @@ export class PlayerRepository {
       }
     });
     if (!player) throw new Error(`Failed to claim club award: ${account}`);
+    if (refusal) throw refusal;
     const snapshot = structuredClone(player);
     this.#logger.info("player.club.award_claimed", { account, method, id, awards });
     return {

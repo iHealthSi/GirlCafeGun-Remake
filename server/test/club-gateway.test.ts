@@ -353,4 +353,47 @@ describe("offline clubs over TCP", () => {
       await f.cleanup();
     }
   });
+
+  it("keeps the upkeep when a command is refused and reports an expired dissolve", async () => {
+    const f = await fixture();
+    try {
+      await f.lua(10_001, CREATE_REQUEST);
+      const week = f.players.get(account)!.club!.week;
+      const nextWeek = Date.now() + 7 * 86_400_000;
+      const refused = await f.players.handleClubRequest(
+        account,
+        10_010,
+        { viceid: 1 },
+        nextWeek,
+      );
+      expect(refused.tip).toBe("ui.NotOpen");
+      expect(refused.response).toEqual({});
+      expect(f.players.get(account)!.club!.week).not.toBe(week);
+
+      await f.players.handleClubRequest(account, 10_022, { dissoslve: 1 }, nextWeek);
+      const expired = await f.players.handleClubRequest(
+        account,
+        10_022,
+        { dissoslve: 0 },
+        nextWeek + 3 * 86_400_000,
+      );
+      expect(expired.response).toEqual({ nError: 1 });
+      expect(expired.dissolved).toBe(true);
+      expect(f.players.get(account)!.club).toBeUndefined();
+    } finally {
+      await f.cleanup();
+    }
+  });
+
+  it("answers a tap on a clubmate's head with a tip", async () => {
+    const f = await fixture();
+    try {
+      await f.lua(10_001, CREATE_REQUEST);
+      const mate = f.players.get(account)!.club!.members[0]!.roleId;
+      const tap = await f.lua(101, { roleid: mate }, "tip");
+      expect(calls(tap, "CallClientTip")).toEqual([["ui.NotOpen"]]);
+    } finally {
+      await f.cleanup();
+    }
+  });
 });

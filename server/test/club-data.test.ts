@@ -29,9 +29,11 @@ import {
   clubMissionProgress,
   clubPayload,
   clubTaskId,
+  clubTaskSyncValues,
   clubWeek,
   createClubState,
   hasClaimedClubMission,
+  isClubmateRoleId,
   kickClubMember,
   parseCreateClubRequest,
   reconcileClub,
@@ -361,5 +363,33 @@ describe("club dissolve", () => {
       time + CLUB_DISSOLVE_WAIT_SECONDS,
     );
     expect(missionValue(p, CLUB_MISSION_VIGOUR)).toBe(0);
+  });
+});
+
+describe("club review fixes", () => {
+  it("does not refill the club while a dissolve is pending, so it can still be cancelled", () => {
+    const p = withClub();
+    for (const member of [...p.club!.members]) {
+      kickClubMember(p, { kickroleid: member.roleId }, MONDAY);
+    }
+    requestClubDissolve(p, { dissoslve: 1 }, MONDAY + 5 * DAY);
+    reconcileClub(p, MONDAY + 7 * DAY);
+    expect(p.club!.members).toHaveLength(0);
+    requestClubDissolve(p, { dissoslve: 0 }, MONDAY + 7 * DAY);
+    reconcileClub(p, MONDAY + 14 * DAY);
+    expect(p.club!.members).toHaveLength(CLUBMATE_COUNT);
+  });
+
+  it("leaves the client's daily-reward day (1, 35) out of club task syncs", () => {
+    const values = { [String((1 << 16) | 35)]: 7, [String(clubTaskId(50_004))]: 4 };
+    expect(clubTaskSyncValues(values)).toEqual({ [String(clubTaskId(50_004))]: 4 });
+    expect(values[String((1 << 16) | 35)]).toBe(7);
+  });
+
+  it("knows a clubmate's role id", () => {
+    const p = withClub();
+    expect(isClubmateRoleId(p, p.club!.members[0]!.roleId)).toBe(true);
+    expect(isClubmateRoleId(p, p.roleId)).toBe(false);
+    expect(isClubmateRoleId(player(), 8_800_001)).toBe(false);
   });
 });

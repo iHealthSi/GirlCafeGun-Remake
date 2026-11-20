@@ -90,6 +90,10 @@ export const CLUB_QUIT_TIME_TASK_ID = (1 << 16) | 28;
 export const CLUB_DISSOLVE_TIME_TASK_ID = (1 << 16) | 40;
 /** Task (1, 552): extra club boss attempts today. */
 export const CLUB_BOSS_TIMES_TASK_ID = (1 << 16) | 552;
+/** Task (1, 35): day of the last daily reward; the client writes it (UI_ClubReward:76). */
+export const CLUB_DAILY_AWARD_DAY_TASK_ID = (1 << 16) | 35;
+/** LuaCall.RequestPlayerInfo: UI_ClubMember sends it when a member's head is tapped. */
+export const LUA_COMMAND_REQUEST_PLAYER_INFO = 101;
 /** Achievement 2050 "create or join any club" (achieveType 106, group 6). */
 export const CLUB_ACHIEVEMENT_TYPE = 106;
 
@@ -583,7 +587,9 @@ function resetClubWeek(
   club.simulatedDates = [];
   for (const member of club.members) member.weekPoints = 0;
   clearClubMissionTasks(player);
-  recruitClubmates(club, time, true);
+  // UI_ClubMember allows dissolve and cancel only for a one-member club: no
+  // refill while a dissolve is pending, or the player could not cancel it.
+  if (club.reqDissolveTime === 0) recruitClubmates(club, time, true);
 }
 
 /**
@@ -1027,6 +1033,29 @@ export function clubPayload(
 }
 
 /** Newest first, as a log book reads. */
+/**
+ * Task values for a club reply, without (1, 35): the client writes that day
+ * itself right after it sends 10020, and the server's older value in the
+ * reply would show the Get button again.
+ */
+export function clubTaskSyncValues(
+  taskValues: Readonly<Record<string, number>>,
+): Record<string, number> {
+  const values = { ...taskValues };
+  delete values[String(CLUB_DAILY_AWARD_DAY_TASK_ID)];
+  return values;
+}
+
+/** A simulated clubmate has no player card to show. */
+export function isClubmateRoleId(
+  player: Pick<ClubPlayer, "club">,
+  roleId: unknown,
+): boolean {
+  return (
+    player.club?.members.some((member) => member.roleId === Number(roleId)) ?? false
+  );
+}
+
 export function clubLogPayload(club: ClubState): Record<string, unknown>[] {
   return [...club.log].reverse().map((entry) => ({
     type: entry.type,

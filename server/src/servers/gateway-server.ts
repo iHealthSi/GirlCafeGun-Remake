@@ -12,6 +12,10 @@ import {
   CLUB_TIER_REPLY_TYPE,
   ClubError,
   clubMissionErrorCode,
+  clubParameters,
+  clubTaskSyncValues,
+  isClubmateRoleId,
+  LUA_COMMAND_REQUEST_PLAYER_INFO,
 } from "../game-data/club-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
 import { getMomentDefinition } from "../game-data/moments-data.js";
@@ -1997,6 +2001,17 @@ export function createGatewayServer({
             });
           } catch (error) {
             if (!(error instanceof ClubError)) throw error;
+            // The upkeep was saved (a weekly reset, for one): sync it so the
+            // task screen stops showing stale claimable missions.
+            const current = players.get(context.account);
+            if (current) {
+              context.player = current;
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(clubTaskSyncValues(current.taskValues)),
+              );
+            }
             send(
               COMMAND.NTF_S2C_CALL,
               0,
@@ -3197,6 +3212,19 @@ export function createGatewayServer({
           }
           return;
         }
+        if (
+          luaCommand === LUA_COMMAND_REQUEST_PLAYER_INFO &&
+          context.player &&
+          isClubmateRoleId(context.player, clubParameters(call?.parameters).roleid)
+        ) {
+          // A clubmate's head in UI_ClubMember: there is no player card to show.
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("CallClientTip", ["ui.NotOpen"]),
+          );
+          return;
+        }
         if (luaCommand !== null && CLUB_BOSS_COMMANDS.has(luaCommand)) {
           // ClubBossTime has ended: the client never opens the boss. No reply
           // is safe (club commands show no mask) and loads no boss map.
@@ -3224,8 +3252,13 @@ export function createGatewayServer({
             );
           }
           sendGirlUpdates(result.updatedGirls);
-          // Club mission values, tier bits and the dissolve and quit times.
-          send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(result.player.taskValues));
+          // Club mission values, tier bits and the dissolve and quit times;
+          // not (1, 35), which the client sets itself after 10020.
+          send(
+            COMMAND.TASK_VALUE_RSP,
+            0,
+            makeTaskValueSync(clubTaskSyncValues(result.player.taskValues)),
+          );
           if (result.response !== undefined) {
             send(
               COMMAND.NTF_S2C_CALL,
