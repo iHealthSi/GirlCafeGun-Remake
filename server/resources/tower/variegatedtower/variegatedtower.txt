@@ -1,0 +1,11 @@
+INT	INT	INT	INT	INT	INT	INT	STR	STR
+期数（同Tower表）	区域1	区域2	区域3	区域4	区域5	界面样式模板	换皮界面 不填默认界面	换皮背景图 不填默认
+TowerId	LevelArea1	LevelArea2	LevelArea3	LevelArea4	LevelArea5	StyleType	Prefabs	BG
+101		[1,2,3,4,5,6,7,8]	[9,10,11,12,13,14,15,16]			[1,1,2,2,2]		
+102				[21,22,23,24,25,26,27,28]	[29,30,31,32,33,34,35,36]	[1,2,2,2,1]		
+103	[1,2,3,4,5,6,7,8]	[9,10,11,12,13,14,15,16]				[1,2,2,2,1]		
+104	[1,2,3,4,5,6,7,8]			[9,10,11,12,13,14,15,16]		[1,2,2,2,1]	UI_MixTowerSP,UI_MixTowerLevelSP,UI_MixTowerLevelInfoSP	BG/bg_mixtowerSP1.png
+105				[9,10,11,12,13,14,15,16]	[1,2,3,4,5,6,7,8]	[1,2,2,2,1]		
+106		[1,2,3,4,5,6,7,8]			[9,10,11,12,13,14,15,16]	[1,2,2,2,1]	UI_MixTowerSP2,UI_MixTowerLevelSP2,UI_MixTowerLevelInfoSP2	BG/bg_childtower.png
+107		[1,2,3,4,5,6,7,8]	[9,10,11,12,13,14,15,16]			[1,2,1,2,1]		
+303	[1,2,3,4,5,6,7,8]	[9,10,11,12,13,14,15,16]				[1,2,2,2,1]	UI_MixTowerAutumn,UI_MixTowerLevelAutumn,UI_MixTowerLevelInfoAutumn	BG/bg_mixtowerautumn.png

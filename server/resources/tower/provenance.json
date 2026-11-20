@@ -1,0 +1,206 @@
+{
+  "sourceSettingSha256": "f0c6351ce9be11296c75c3b7cef1c3775080798219e0fb2b06c722647afe4ab2",
+  "sourceSetting": "assets/setting.u of the GCG Offline 0.1.3 release APK",
+  "files": {
+    "tower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/tower.txt",
+      "sha256": "05b5322021db0a18eb6ddc08ad258d00903d1eed93c728b22188dd3edb38e4fd",
+      "bytes": 8288
+    },
+    "towergoal.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/towergoal.txt",
+      "sha256": "fddf9cdd6080dff0c3dac543997271cce2e3fd9661cc2c22fe639a24094b55a7",
+      "bytes": 10825
+    },
+    "towergoalreward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/towergoalreward.txt",
+      "sha256": "16abff1d060aced8e8be4ecbd6ebd20947021b5219a01c7848cb6a2c903888cd",
+      "bytes": 14498
+    },
+    "smalltower/smalltowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/smalltower/smalltowerlevel.txt",
+      "sha256": "7883489422f38fac429c36b0445818a20e48c1ae5d3905da934b5ae574f2f2d0",
+      "bytes": 11314
+    },
+    "chesstower/chesstowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/chesstower/chesstowerlevel.txt",
+      "sha256": "0886740a19af8f9372c5647e23be7df1b1d384fd9edb9435331fa9bfcb6555e9",
+      "bytes": 5400
+    },
+    "ninthtower/ninthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/ninthtower/ninthtowerlevel.txt",
+      "sha256": "0ab2aa2dd5b0609c901e3d6d519875810bf3e96638f392abd823c33f9a3c462e",
+      "bytes": 5378
+    },
+    "twelfthtower/twelfthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twelfthtower/twelfthtowerlevel.txt",
+      "sha256": "733b90b2a530f4307c83725ea0269058e65f5de90f4c20e580c9d34bbb128baf",
+      "bytes": 5694
+    },
+    "thirteenthtower/thirteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/thirteenthtower/thirteenthtowerlevel.txt",
+      "sha256": "d7360cb0f75f11822dfa24c0582190e8ee03de1f389a211dd179acde5363d499",
+      "bytes": 5324
+    },
+    "fourteenthtower/fourteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/fourteenthtower/fourteenthtowerlevel.txt",
+      "sha256": "032e4581849b82c777a290eae84fc2d626f406378b07e01a4c4cae3df560d056",
+      "bytes": 5348
+    },
+    "seventeenthtower/seventeenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/seventeenthtower/seventeenthtowerlevel.txt",
+      "sha256": "710f5020a83cab5acc36062bbc02b92cbb506f90c3665f8b40f9403c512276ae",
+      "bytes": 5697
+    },
+    "eighteenthtower/eighteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighteenthtower/eighteenthtowerlevel.txt",
+      "sha256": "bdc9388b094c410ce6efe71a7e842346db8caf82a68c0f0b39f6a6890d05f6cb",
+      "bytes": 6136
+    },
+    "nineteenthtower/nineteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/nineteenthtower/nineteenthtowerlevel.txt",
+      "sha256": "909d8299bf0ecb987880ea2d379da2f9d3c0c721ae5161071adcc348cd7588b8",
+      "bytes": 5352
+    },
+    "twentiethtower/twentiethtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentiethtower/twentiethtowerlevel.txt",
+      "sha256": "7a79dc7756a4baea8dc709d0f59e01d710149f9fa9e66c67d068f7f9ffeb7835",
+      "bytes": 5759
+    },
+    "twentiethtower/towerpond.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentiethtower/towerpond.txt",
+      "sha256": "d32fe5a8a868e6263345d7270cbf185506b582bb9ef36a85d9249e55f9cb3701",
+      "bytes": 3374
+    },
+    "twentiethtower/towerpondtoken.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentiethtower/towerpondtoken.txt",
+      "sha256": "273d1874c15eb59339fc8f5a0b33fd302237df03ffd8b51713f1c0d0ecfc556c",
+      "bytes": 163
+    },
+    "tenthtower/tenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/tenthtower/tenthtowerlevel.txt",
+      "sha256": "2bc09449f91f87d311c616e8689370f532c8e4abfa28d36f32e8529eff667774",
+      "bytes": 5428
+    },
+    "fifteenthtower/fifteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/fifteenthtower/fifteenthtowerlevel.txt",
+      "sha256": "224caf701a6c3021271b91d52e8248892cf726e28539aa7e72f4be43d1be3b1e",
+      "bytes": 5951
+    },
+    "sixteenthtower/sixteenthtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/sixteenthtower/sixteenthtowerlevel.txt",
+      "sha256": "0f2a0d489c27383f608c372acf2be54adeefbfcb10a52cbbdb46aeea76fe08fa",
+      "bytes": 2883
+    },
+    "swimwear/swimwearlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/swimwear/swimwearlevel.txt",
+      "sha256": "52c7bd3037793aaa22e593c89c7a30c171f137684f98a8c9ccb3f47cd72d7d27",
+      "bytes": 6776
+    },
+    "swimwear/swimwearscoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/swimwear/swimwearscoreaward.txt",
+      "sha256": "5a8dfd6b919c3987ed96cbaab1a7b4c7e6f163a5146eeb5c0343c370a68df6c6",
+      "bytes": 2595
+    },
+    "swimwear/swimwearallservicescoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/swimwear/swimwearallservicescoreaward.txt",
+      "sha256": "ca43be81909f3fae6efb5a4584aeb93bea919e1eef7812ab971f494c196bd5ca",
+      "bytes": 344
+    },
+    "swimwear/swimwearserverscore.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/swimwear/swimwearserverscore.txt",
+      "sha256": "7fbb5e5368c8426815921b24965e569adcd69e7bcfd4419c8d39d22ae0822ebc",
+      "bytes": 80
+    },
+    "absorbpeak/absorbpeaklevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/absorbpeak/absorbpeaklevel.txt",
+      "sha256": "45b80108ca74e122b69faff4c0ce5d9f8a9bbb974f1c33f2fdf030841a539480",
+      "bytes": 5757
+    },
+    "absorbpeak/absorbpeakscoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/absorbpeak/absorbpeakscoreaward.txt",
+      "sha256": "665e0ab8e3bfaf1482215e5fc42733172cb03bc965eb7b7c72959311a0ff3563",
+      "bytes": 2562
+    },
+    "absorbpeak/absorbpeakallservicescoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/absorbpeak/absorbpeakallservicescoreaward.txt",
+      "sha256": "bb308a768fd5e6360b34d54b02523198d5c949cc897c9ecc1f0bf783dc45af9a",
+      "bytes": 344
+    },
+    "absorbpeak/absorbpeakserverscore.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/absorbpeak/absorbpeakserverscore.txt",
+      "sha256": "fd58bda8be5ce6fff713ace48e4084908a41b6f8595e835c0efa592e0d8b835f",
+      "bytes": 79
+    },
+    "variegatedtower/variegatedtower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/variegatedtower/variegatedtower.txt",
+      "sha256": "a9b3140eee1fd94897ffe472843b317dd3a11c2bb569b7f3ca168753e1c2c4bc",
+      "bytes": 1041
+    },
+    "variegatedtower/variegatedtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/variegatedtower/variegatedtowerlevel.txt",
+      "sha256": "04f01fa45e4fb7a9a0b3885d3abd9b29a1a7fcca023e5a08f20d7a33311da96b",
+      "bytes": 25612
+    },
+    "nodetower/nodetowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/nodetower/nodetowerlevel.txt",
+      "sha256": "0f1d6f40f60c83572b303a12b565eb08a886b0743deeaea63a49bc39ecebc9eb",
+      "bytes": 5738
+    },
+    "nodetower/nodepointreward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/nodetower/nodepointreward.txt",
+      "sha256": "06abfa0bc6fd67093b365343d0cbb3b455b2875df96b2a7bf85bf0a790a58352",
+      "bytes": 871
+    },
+    "nodetower/nodetowerpond.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/nodetower/nodetowerpond.txt",
+      "sha256": "d3186677be900420fcd96c2f259b6338c0bf68d0dc32f3fa528f0fb99c253d2a",
+      "bytes": 3603
+    },
+    "nodetower/nodetowerpondtoken.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/nodetower/nodetowerpondtoken.txt",
+      "sha256": "e6daff4ee070a8f9a0e632d52461b6bddefcc2db16579556754fac8dc9abdb66",
+      "bytes": 178
+    },
+    "seventhtower/seventhtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/seventhtower/seventhtowerlevel.txt",
+      "sha256": "99b7670b72295196bf5e3e87d8a6f6ed30167fafc031fa50663edb5e31d8cce6",
+      "bytes": 5710
+    },
+    "seventhtower/seventhpointreward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/seventhtower/seventhpointreward.txt",
+      "sha256": "c0638d482224ab71dacab20ab030e8e9e1bcc09c544f7f2d4bc155242548270c",
+      "bytes": 892
+    },
+    "seventhtower/seventhtowerpond.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/seventhtower/seventhtowerpond.txt",
+      "sha256": "d693311e81e23761c890e9e6770c40e15fd462efa925ba6d1881159543d7ff7f",
+      "bytes": 3613
+    },
+    "seventhtower/seventhtowerpondtoken.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/seventhtower/seventhtowerpondtoken.txt",
+      "sha256": "d9429af72fdd1621527fcf03f47a76ec817b6f09a75add84ba9dfa0a97b7a775",
+      "bytes": 178
+    },
+    "eleventhtower/eleventhtowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eleventhtower/eleventhtowerlevel.txt",
+      "sha256": "c4472ee2108179fead789eec01e3086b10c7a9d6d24b78203a295c6f5702fbae",
+      "bytes": 5768
+    },
+    "eleventhtower/eleventhpointreward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eleventhtower/eleventhpointreward.txt",
+      "sha256": "fce3b59ca7e122d753e2dfb735080b41858bb71071b9325eb5c01210e81a45af",
+      "bytes": 917
+    },
+    "eleventhtower/eleventhtowerpond.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eleventhtower/eleventhtowerpond.txt",
+      "sha256": "0d6e4eae416d1f975a97aaaffe69ddaad571f5bf4a59c24fce4cc9938191ddd3",
+      "bytes": 3931
+    },
+    "eleventhtower/eleventhtowerpondtoken.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eleventhtower/eleventhtowerpondtoken.txt",
+      "sha256": "69995739fc5ec638aa897f88db71edaa5d8241846700f3bf502026995db4abb7",
+      "bytes": 180
+    }
+  }
+}

@@ -1,0 +1,5 @@
+INT	INT	INT	INT
+类型（1单抽，2十连）	抽奖次数	消耗代币数量	消耗代币类型
+Type	LotteryTimes	CastCount	CostType
+1	1	200	82
+2	10	2000	82

@@ -1,0 +1,15 @@
+INT	INT	INT	NULL	STR	STR	STR	INT	INT	STR	INT	INT	INT	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INT	INTARR	INTARR
+小塔ID（可以理解为某一期）	小关ID	关卡类型0普通 1SP关 2剧情关直接播剧情 3TSP	备注	前缀名（关卡缩写）	名称（关卡描述）	关卡信息描述（本次肝塔不需要）	解锁关卡（完成哪一关后解锁本关 0表示不需要前置关卡）	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	体力消耗	地图ID	推荐等级	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	能量掉落概率≥1 时有起效	怪物属性	推荐属性
+Id	LevelId	LevelType	Content	PreName	Name	LevelInfoDesc	PreLevelId	StoryType	StoryName	PreCost	MapId	Zhanli	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	DropEnRd	MonsterAttr	RecommendAttr
+16	1	2	OP	SixteenthTowerLevel.OpPre	SixteenthTowerLevel.OP		[0]		activitytower16/activitytower1601_op								[15-2-1-1-20]												
+16	2	0	ACT1	SixteenthTowerLevel.ACT1Pre	SixteenthTowerLevel.ACT1		[1]	1	activitytower16/activitytower1602_act1	10	100930	9000	19	904	300	1	[7-1-1-3-2]	[15-109-1-1-18-10000]				[15-109-1-1-18-10000]		10				[2]	[0]
+16	3	0	ACT2	SixteenthTowerLevel.ACT2Pre	SixteenthTowerLevel.ACT2		[2]	1	activitytower16/activitytower1603_act2	15	100931	13500	39	904	300	1	[1-2-12-3-1]	[15-109-1-1-36-10000]				[15-109-1-1-36-10000]		15				[2]	[0]
+16	4	0	ACT3	SixteenthTowerLevel.ACT3Pre	SixteenthTowerLevel.ACT3		[3]	1	activitytower16/activitytower1604_act3	20	100932	18000	60	904	300	1	[7-3-1-3-2]	[15-109-1-1-60-10000]				[15-109-1-1-60-10000]		20				[2]	[0]
+																													
+16	5	1	SP1	SixteenthTowerLevel.SP1Pre	SixteenthTowerLevel.SP1		[4]			0		12000	30	905	300	1	[15-1-1-1-20000]							0					
+16	6	1	SP2	SixteenthTowerLevel.SP2Pre	SixteenthTowerLevel.SP2		[5]			0		16000	51	905	300	1	[2-1-24-1-1]							0					
+16	7	1	SP3	SixteenthTowerLevel.SP3Pre	SixteenthTowerLevel.SP3		[6]			0		20000	68	905	300	1	[7-1-1-4-1]							0					
+16	8	1	SP4	SixteenthTowerLevel.SP4Pre	SixteenthTowerLevel.SP4		[7]			0		24000	84	905	300	1	[7-3-1-4-1]							0					
+16	9	2	ED	SixteenthTowerLevel.EdPre	SixteenthTowerLevel.ED		[8]		activitytower16/activitytower1605_ed								[15-2-1-1-20]												
+																													
+16	10	3	TSP	SixteenthTowerLevel.TSPPre	SixteenthTowerLevel.TSP		[9]			100	100937	24000	84	905	400	1	[8-7-13-4-5]	[15-109-1-1-300-10000]				[15-109-1-1-300-10000]		100		0		[6]	

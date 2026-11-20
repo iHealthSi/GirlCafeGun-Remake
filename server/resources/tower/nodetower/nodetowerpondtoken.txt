@@ -1,0 +1,5 @@
+INT	INT	INT	INT
+塔ID（可以理解为某一期）	类型（1单抽，2十连）	抽奖次数	消耗代币数量
+ActivityId	Type	LotteryTimes	CastCount
+3	1	1	20
+3	2	10	200
