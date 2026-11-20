@@ -2,6 +2,13 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
 
 import type { AppConfig } from "../config.js";
+import {
+  LUA_COMMAND_ASSIST_LIST,
+  LUA_COMMAND_FRIEND_ADD,
+  makeAssistCandidates,
+  parseAssistRequest,
+  type AssistCandidate,
+} from "../game-data/assist-data.js";
 import { makeBackgroundLuaResponse } from "../game-data/background-lua-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
 import { getMomentDefinition } from "../game-data/moments-data.js";
@@ -3099,6 +3106,47 @@ export function createGatewayServer({
             );
             logger.warn("rune.rejected", { command: luaCommand, reason: error.reason });
           }
+          return;
+        }
+        if (luaCommand === LUA_COMMAND_ASSIST_LIST) {
+          // UI_Formation keeps the sortie callback until this reply comes, so
+          // it must always come, as an array (UI_Support walks it with pairs).
+          let candidates: AssistCandidate[] = [];
+          try {
+            const request = parseAssistRequest(call?.parameters);
+            candidates = context.player
+              ? makeAssistCandidates(context.player, request)
+              : [];
+            logger.info("assist.list", {
+              account: context.account,
+              power: request.power,
+              helpers: candidates.map((candidate) => ({
+                girl: candidate.Card[0]?.D,
+                level: candidate.Card[0]?.Enhance,
+              })),
+            });
+          } catch (error) {
+            logger.warn("assist.failed", {
+              account: context.account,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          }
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("LuaCall", { sCmd: luaCommand, tbParam: candidates }),
+          );
+          return;
+        }
+        if (luaCommand === LUA_COMMAND_FRIEND_ADD) {
+          // Offline helpers and friends are not players: say so instead of
+          // leaving the "Send friend request?" button silent.
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("CallClientTip", ["ui.NotOpen"]),
+          );
+          logger.info("friend.add_offline", { account: context.account });
           return;
         }
         const backgroundResponse = makeBackgroundLuaResponse(

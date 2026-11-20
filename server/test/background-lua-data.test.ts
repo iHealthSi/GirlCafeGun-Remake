@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  LUA_COMMAND_ASSIST_LIST,
   LUA_COMMAND_CLUB_INFO,
   LUA_COMMAND_FRIEND_LIST,
   LUA_COMMAND_RANDOM_EVENT,
@@ -27,17 +26,13 @@ describe("background Lua empty-state responses", () => {
 
   it("returns safe empty values for optional systems", () => {
     expect(makeBackgroundLuaResponse(LUA_COMMAND_RANDOM_EVENT, {})).toEqual({});
-    expect(
-      makeBackgroundLuaResponse(LUA_COMMAND_ASSIST_LIST, {
-        Power: 3530,
-        ChapterType: [],
-      }),
-    ).toEqual([]);
     expect(makeBackgroundLuaResponse(LUA_COMMAND_CLUB_INFO, {})).toEqual({});
   });
 
   it("does not claim unrelated commands", () => {
     expect(makeBackgroundLuaResponse(999, {})).toBeUndefined();
+    // The assist list has its own handler (assist-data.ts).
+    expect(makeBackgroundLuaResponse(250, {})).toBeUndefined();
     expect(makeBackgroundLuaResponse(230, {})).toBeUndefined();
     expect(makeBackgroundLuaResponse(231, {})).toBeUndefined();
   });
