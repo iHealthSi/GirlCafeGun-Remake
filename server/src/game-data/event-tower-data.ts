@@ -34,6 +34,11 @@ export const LUA_COMMAND_POND_DRAW = 177;
 export const LUA_COMMAND_POND_RESET = 178;
 /** LuaCall.UpgradeTowerSkill: the twentieth and twenty-first tower skill screens. */
 export const LUA_COMMAND_UPGRADE_TOWER_SKILL = 527;
+/** LuaCall.BossRush_*: the sixteenth tower's SP stage (boss pick, teams, reset, result). */
+export const LUA_COMMAND_BOSS_RUSH_SELECT = 510;
+export const LUA_COMMAND_BOSS_RUSH_FORMATION = 511;
+export const LUA_COMMAND_BOSS_RUSH_RESET = 512;
+export const LUA_COMMAND_BOSS_RUSH_RESULT = 513;
 /** LuaCall.DoSettle: GameManager.SendInfoToServer wraps 55 and 56 in it. */
 export const LUA_COMMAND_DO_SETTLE = 252;
 
@@ -225,6 +230,21 @@ export const NODE_TASK = {
 export const SWIMWEAR_TASK = { serverAward: 150, scoreAward: 200 } as const;
 /** nPondSize: a pool has 20 slots. */
 export const POND_SIZE = 20;
+/** Tower.txt id of SixteenthTower, the boss rush. */
+export const BOSS_RUSH_TOWER = 16;
+/** SixteenthTowerLogic.lua, group 64 (the layout's group). */
+export const BOSS_RUSH_TASK = {
+  /** nTask_SaveFormation: 1 once the five teams are saved. */
+  saved: 60003,
+  /** nTask_PlayerHp / nTask_PlayerShield + team (1..5): percent left. */
+  hp: 60010,
+  shield: 60020,
+  /** nTask_SpLevelId + LevelId: the picked SpLevel.txt Idx. */
+  spLevel: 60200,
+  /** nTask_SpPassTime + LevelId: seconds; 0 = not passed. */
+  spTime: 60300,
+} as const;
+export const BOSS_RUSH_TEAMS = 5;
 /** TwentiethTowerLogic / TwentyFirstTowerLogic nTaskNTSkillLevel = offset + 10; the key is that + the skill's Id. */
 export const SKILL_TASK_OFFSET = 10;
 
@@ -399,6 +419,8 @@ export class EventTowerCatalog {
   readonly serverAwards = new Map<number, TowerScoreAward[]>();
   /** Skills by tower id, then by the table's Id. */
   readonly skills = new Map<number, Map<number, TowerSkill>>();
+  /** SpLevel.txt Idx values: the bosses the player may pick for each SP level of the boss rush. */
+  readonly bossRushBosses = new Set<number>();
   /** SwimwearServerScore.txt: the score the client divides the server score by. */
   readonly allServiceScore = new Map<number, number>();
 
@@ -483,6 +505,10 @@ export class EventTowerCatalog {
 
     for (const tower of catalog.towers.values()) catalog.#loadNodeFamily(tower, read);
     for (const tower of catalog.towers.values()) catalog.#loadSkills(tower, read);
+    for (const row of read("sixteenthtower/splevel.txt")) {
+      const idx = int(row.Idx);
+      if (idx > 0) catalog.bossRushBosses.add(idx);
+    }
     catalog.#loadScoreAwards(read);
     return catalog;
   }
@@ -612,6 +638,13 @@ export class EventTowerCatalog {
     return tower.layout.levelBase + (slot ?? levelId);
   }
 
+  /** The SP levels (LevelType 1) of the boss rush, in level order. */
+  bossRushSpLevels(): TowerLevel[] {
+    return [...this.levels.values()]
+      .filter((l) => l.tower === BOSS_RUSH_TOWER && l.type === 1)
+      .sort((a, b) => a.levelId - b.levelId);
+  }
+
   /** The level rows of one node, for "every level of the node is cleared". */
   nodeLevels(tower: number, node: number): TowerLevel[] {
     return [...this.levels.values()].filter(
@@ -715,6 +748,29 @@ export type EventTowerRequest =
       command: typeof LUA_COMMAND_UPGRADE_TOWER_SKILL;
       towerId: number;
       skillId: number;
+    }
+  | {
+      command: typeof LUA_COMMAND_BOSS_RUSH_SELECT;
+      towerId: typeof BOSS_RUSH_TOWER;
+      levelId: number;
+      boss: number;
+    }
+  | {
+      command:
+        typeof LUA_COMMAND_BOSS_RUSH_FORMATION | typeof LUA_COMMAND_BOSS_RUSH_RESET;
+      towerId: typeof BOSS_RUSH_TOWER;
+    }
+  | {
+      command: typeof LUA_COMMAND_BOSS_RUSH_RESULT;
+      towerId: typeof BOSS_RUSH_TOWER;
+      /** bSave: only a result the player keeps is written. */
+      save: boolean;
+      levelId: number;
+      /** GameUsedTime in seconds, possibly fractional; 0 when missing. */
+      passTime: number;
+      /** Health percent per team index (1..5 on the client); null = that team did not fight. */
+      blood: (number | null)[];
+      shield: number;
     };
 
 export interface EventTowerCall {
@@ -839,6 +895,56 @@ export function parseEventTowerCall(
       if (!wanted(towerId) || !catalog.skills.has(towerId)) return null;
       return { request: { command, towerId, skillId: whole(args?.[1]) ?? 0 }, settled };
     }
+    case LUA_COMMAND_BOSS_RUSH_SELECT: {
+      // CallServer(BossRush_SelectSpBoss, {levelId, i}) from UI_SixteenthTower:ShowSpSelect.
+      const args = positional(body);
+      return {
+        request: {
+          command,
+          towerId: BOSS_RUSH_TOWER,
+          levelId: whole(args?.[0]) ?? 0,
+          boss: whole(args?.[1]) ?? 0,
+        },
+        settled,
+      };
+    }
+    case LUA_COMMAND_BOSS_RUSH_FORMATION:
+    case LUA_COMMAND_BOSS_RUSH_RESET:
+      return { request: { command, towerId: BOSS_RUSH_TOWER }, settled };
+    case LUA_COMMAND_BOSS_RUSH_RESULT: {
+      // CallServer(BossRush_SaveSpResult, {tbResult = {blood, shield, passTime, LevelId, ...}, bSave}).
+      const fields = (typeof body === "object" && body !== null ? body : {}) as Record<
+        string,
+        unknown
+      >;
+      const result = (
+        typeof fields.tbResult === "object" && fields.tbResult !== null
+          ? fields.tbResult
+          : {}
+      ) as Record<string, unknown>;
+      const bloodList = positional(result.blood) ?? [];
+      const decimal = (value: unknown): number | null => {
+        if (value === null || value === undefined || typeof value === "boolean")
+          return null;
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+      };
+      return {
+        request: {
+          command,
+          towerId: BOSS_RUSH_TOWER,
+          save: fields.bSave === true,
+          levelId: whole(result.LevelId) ?? 0,
+          passTime: decimal(result.passTime) ?? 0,
+          // A Lua array with holes arrives with nulls (or as an object keyed "1".."n").
+          blood: Array.from({ length: bloodList.length }, (_, index) =>
+            decimal(bloodList[index]),
+          ),
+          shield: decimal(result.shield) ?? 0,
+        },
+        settled,
+      };
+    }
     default:
       return null;
   }
@@ -865,6 +971,12 @@ export function eventTowerErrorReply(
     case LUA_COMMAND_UPGRADE_TOWER_SKILL:
       // OnUpgradeRsp shows UI_Activities.Tips<nError>.
       return { nError: code };
+    case LUA_COMMAND_BOSS_RUSH_SELECT:
+    case LUA_COMMAND_BOSS_RUSH_FORMATION:
+    case LUA_COMMAND_BOSS_RUSH_RESET:
+    case LUA_COMMAND_BOSS_RUSH_RESULT:
+      // The client only redraws on the reply and has no error branch.
+      return {};
     default:
       return { nTowerId: request.towerId, nError: code };
   }

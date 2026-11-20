@@ -37,7 +37,13 @@ import {
 } from "../game-data/bounty-data.js";
 import { randomInt, randomUUID } from "node:crypto";
 import {
+  BOSS_RUSH_TASK,
+  BOSS_RUSH_TEAMS,
   EventTowerCatalog,
+  LUA_COMMAND_BOSS_RUSH_FORMATION,
+  LUA_COMMAND_BOSS_RUSH_RESET,
+  LUA_COMMAND_BOSS_RUSH_RESULT,
+  LUA_COMMAND_BOSS_RUSH_SELECT,
   LUA_COMMAND_NODE_POINT_REWARD,
   LUA_COMMAND_POND_DRAW,
   LUA_COMMAND_POND_RESET,
@@ -2404,6 +2410,90 @@ function applyEventTowerRequest(
       outcome.response = { isOk: 1, skillId: skill.id };
       return outcome;
     }
+
+    // The boss rush SP stage (SixteenthTowerLogic): the client redraws on an empty reply.
+    case LUA_COMMAND_BOSS_RUSH_SELECT: {
+      const spLevels = catalog.bossRushSpLevels();
+      if (
+        !spLevels.some((entry) => entry.levelId === request.levelId) ||
+        !catalog.bossRushBosses.has(request.boss)
+      )
+        throw refuse(TOWER_ERROR.invalid, "unknown_sp_boss");
+      // The pick is locked once the teams are saved (the screen only offers it before).
+      if (towerTask(player, group, BOSS_RUSH_TASK.saved) === 1)
+        throw refuse(TOWER_ERROR.invalid, "teams_already_saved");
+      setTowerTask(
+        player,
+        group,
+        BOSS_RUSH_TASK.spLevel + request.levelId,
+        request.boss,
+      );
+      return outcome;
+    }
+
+    case LUA_COMMAND_BOSS_RUSH_FORMATION: {
+      const picked = catalog
+        .bossRushSpLevels()
+        .every(
+          (entry) =>
+            towerTask(player, group, BOSS_RUSH_TASK.spLevel + entry.levelId) > 0,
+        );
+      if (!picked) throw refuse(TOWER_ERROR.invalid, "sp_bosses_not_picked");
+      // Saving the teams starts the gauntlet at full health; a resent request keeps the health.
+      if (towerTask(player, group, BOSS_RUSH_TASK.saved) !== 1) {
+        setTowerTask(player, group, BOSS_RUSH_TASK.saved, 1);
+        fullTeamHealth(player, group);
+      }
+      return outcome;
+    }
+
+    case LUA_COMMAND_BOSS_RUSH_RESET: {
+      setTowerTask(player, group, BOSS_RUSH_TASK.saved, 0);
+      fullTeamHealth(player, group);
+      // Only the SP levels: 60310 is the time of the TSP level, which is not part of the reset.
+      for (const entry of catalog.bossRushSpLevels()) {
+        setTowerTask(player, group, BOSS_RUSH_TASK.spLevel + entry.levelId, 0);
+        setTowerTask(player, group, BOSS_RUSH_TASK.spTime + entry.levelId, 0);
+      }
+      return outcome;
+    }
+
+    case LUA_COMMAND_BOSS_RUSH_RESULT: {
+      // SaveSpTeamBlood: the health carries on only when the player keeps the result.
+      if (!request.save) return outcome;
+      if (
+        !catalog.bossRushSpLevels().some((entry) => entry.levelId === request.levelId)
+      )
+        throw refuse(TOWER_ERROR.invalid, "unknown_sp_level");
+      const percent = (value: number): number =>
+        Math.min(100, Math.max(0, Math.round(value)));
+      // blood has one slot per saved team; a team that did not fight is a hole, not 0.
+      request.blood.slice(0, BOSS_RUSH_TEAMS).forEach((blood, index) => {
+        if (blood === null) return;
+        setTowerTask(player, group, BOSS_RUSH_TASK.hp + index + 1, percent(blood));
+        setTowerTask(
+          player,
+          group,
+          BOSS_RUSH_TASK.shield + index + 1,
+          percent(request.shield),
+        );
+      });
+      // 0 means "not passed", so a clear shorter than a second still counts.
+      setTowerTask(
+        player,
+        group,
+        BOSS_RUSH_TASK.spTime + request.levelId,
+        Math.max(1, Math.ceil(request.passTime)),
+      );
+      return outcome;
+    }
+  }
+}
+
+function fullTeamHealth(player: Player, group: number): void {
+  for (let team = 1; team <= BOSS_RUSH_TEAMS; team++) {
+    setTowerTask(player, group, BOSS_RUSH_TASK.hp + team, 100);
+    setTowerTask(player, group, BOSS_RUSH_TASK.shield + team, 100);
   }
 }
 
