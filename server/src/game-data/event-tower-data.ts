@@ -523,18 +523,34 @@ export class EventTowerCatalog {
 
   static #defaultMissing = false;
 
+  /** Why the default tables could not be loaded (set once, by tryLoadDefault); the gateway logs it. */
+  static loadError: unknown = undefined;
+
   /**
-   * The default tables, or null when resources/tower is not there (a phone
-   * package built without it): the tower calls then stay unhandled and every
-   * other call keeps working.
+   * The default tables, or null when they cannot be loaded (resources/tower is
+   * not there in a phone package built without it, or a table is broken): the
+   * tower calls then stay unhandled and every other call keeps working. The
+   * reason is kept in loadError.
    */
   static tryLoadDefault(): EventTowerCatalog | null {
     if (EventTowerCatalog.#defaultMissing) return null;
     try {
       return EventTowerCatalog.loadDefault();
-    } catch {
+    } catch (error) {
       EventTowerCatalog.#defaultMissing = true;
+      EventTowerCatalog.loadError = error;
       return null;
+    }
+  }
+
+  /** Loads a table folder; on failure returns the error instead of throwing. */
+  static tryLoad(
+    directory: string,
+  ): { catalog: EventTowerCatalog } | { error: unknown } {
+    try {
+      return { catalog: EventTowerCatalog.load(directory) };
+    } catch (error) {
+      return { error };
     }
   }
 

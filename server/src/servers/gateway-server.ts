@@ -22,6 +22,7 @@ import {
   type BountyRun,
 } from "../game-data/bounty-data.js";
 import {
+  EventTowerCatalog,
   LUA_COMMAND_DO_SETTLE,
   LUA_COMMAND_SWIMWEAR_SERVER_SCORE,
   LUA_COMMAND_TOWER_GET,
@@ -754,6 +755,10 @@ export function createGatewayServer({
   players,
   pvpSessions: sharedPvpSessions,
 }: GatewayServerOptions): Server {
+  if (!EventTowerCatalog.tryLoadDefault())
+    logger.warn("event_tower.tables_unavailable", {
+      message: String(EventTowerCatalog.loadError),
+    });
   const chapterCatalog = ChapterCatalog.loadDefault();
   const gachaCatalog = GachaCatalog.loadDefault();
   const weaponGachaCatalog = GachaCatalog.loadDefault(0);

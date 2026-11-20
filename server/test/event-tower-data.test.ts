@@ -542,3 +542,15 @@ describe.skipIf(!luaDirectory || !existsSync(luaDirectory))(
     });
   },
 );
+
+describe("event tower table loading", () => {
+  it("returns the error of a missing or broken table folder instead of hiding it", () => {
+    const missing = EventTowerCatalog.tryLoad(path.resolve("resources/no-such-folder"));
+    expect("error" in missing && String(missing.error)).toMatch(/ENOENT/);
+    const good = EventTowerCatalog.tryLoad(path.resolve("resources/tower"));
+    expect("catalog" in good).toBe(true);
+    // The default loader keeps the reason for the gateway's warning (null error while it works).
+    expect(EventTowerCatalog.tryLoadDefault()).not.toBeNull();
+    expect(EventTowerCatalog.loadError).toBeUndefined();
+  });
+});
