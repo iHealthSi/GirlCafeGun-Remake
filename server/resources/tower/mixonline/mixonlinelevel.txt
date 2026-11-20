@@ -1,0 +1,11 @@
+INT	INT	INT	STR	STR	STR	INT	INT	INT	BOOL	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INTARR	INTARR
+活动ID	小关ID	关卡类型0普通 1单机挑战关	名称	关卡信息描述	备注	体力消耗	地图ID	推荐战力	关闭等级压制	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	怪物属性	推荐属性
+Id	LevelId	LevelType	Name	LevelInfoDesc		PreCost	MapId	Zhanli	CloseLevelSuppress	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	MonsterAttr	RecommendAttr
+1	1	0	Xmas.ACT1			10	100921	8400		10	904	300		[11-2-300-1-1]	[15-92-1-1-40-10000]						10			[6]	
+1	2	0	Xmas.ACT2			13	100922	12000		32	904	300		[11-2-299-1-1]	[15-92-1-1-78-10000]						13			[6]	
+1	3	0	Xmas.ACT3			16	100923	16000		52	904	300		[1-4-26-3-1]	[15-92-1-1-128-10000]						16			[6]	
+1	4	1	Xmas.SP			20	100924	20100		70	904	300		[11-2-301-1-1]	[15-92-1-1-200-10000]						20			[5]	
+																									
+2	1	0	3P9C1.ACT1			10	7908	10000		26	904	300		[2-2-10001-1-1]	[15-98-1-1-60-10000]						10			[4]	[3]
+2	2	0	3P9C1.ACT2			15	7909	15000		47	904	300		[7-3-1-4-1]	[15-98-1-1-120-10000]						15			[4]	[3]
+2	3	0	3P9C1.ACT3			20	7910	18000		64	904	300		[7-4-1-3-1]	[15-98-1-1-200-10000]						20			[4]	[3]

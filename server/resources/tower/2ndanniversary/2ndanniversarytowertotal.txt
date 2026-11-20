@@ -1,0 +1,5 @@
+INT		STR	STR	STR	INT	STR	INT	INT	INT	STR	STR	STR
+	备注	开始时间	结束时间	清除数据时间	商店ID	使用的代币	加成buffID	帮助图ID	蛋池Id (角色|武器)	活动界面显示图标	活动界面选中图标	多个同时开时使用的bg
+Id		BeginTime	EndTime	ClearTime	ShopId	MoneyType	CardBuffId	HelpId	GachaId	Icon	IconPress	NormalBg
+1	上半期	2021-11-19-0800	2021-12-23-0400	2021-12-26-0400	30040	83	1301	1301	62|519	Poster/fightmode_mission2ndAnniv1_normal_Mul.png	Poster/fightmode_mission2ndAnniv1_press_Mul.png	Poster/event_tower_02_Mul.png
+2	下半期	2021-12-07-0800	2021-12-23-0400	2021-12-26-0400	30041	84	1302	1302	63|519	Poster/fightmode_mission2ndAnniv2_normal_Mul.png	Poster/fightmode_mission2ndAnniv2_press_Mul.png	Poster/event_tower_01_Mul.png

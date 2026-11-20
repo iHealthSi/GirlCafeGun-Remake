@@ -271,6 +271,126 @@
       "source": "setting.u:assets/_game/settinggen/activities/smalltower/sixteenthtower/splevel.txt",
       "sha256": "18aae439be993a2415c320ca408a46602dde3899057a2f0d051f3a466c571e5c",
       "bytes": 742
+    },
+    "microtower/microtower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/microtower/microtower.txt",
+      "sha256": "3675412bda92b0ff70301110070231f1d713d85772b6053b65827f5d2453eac5",
+      "bytes": 634
+    },
+    "microtower/firsttower/firsttowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/microtower/firsttower/firsttowerlevel.txt",
+      "sha256": "b12caf014d7d68ef3a97a416328ee492042869882dec177f9229e0a5f8095e71",
+      "bytes": 6687
+    },
+    "microtower/microtowergoal.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/microtower/microtowergoal.txt",
+      "sha256": "8315ffa9b7f58fe06c1ae6cf3ec40ce931410288db0decd242900e2c0ab57a75",
+      "bytes": 8163
+    },
+    "coopclient/coopclientactivities.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/coopclient/coopclientactivities.txt",
+      "sha256": "eb8598f454fe679383263554eddf522b827be65834fe8af5c38e3dd84fe00e9c",
+      "bytes": 2193
+    },
+    "coopclient/coopclientlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/coopclient/coopclientlevel.txt",
+      "sha256": "f5479e9bb003826b61fd9925a074906251703000aeed128dff4c1e15174b6f83",
+      "bytes": 7966
+    },
+    "mixonline/mixonlineactivities.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/mixonline/mixonlineactivities.txt",
+      "sha256": "29dd7714e27b656d4bd430d19e4c31d161d1ba75e0272df508ea383e9c2966a9",
+      "bytes": 884
+    },
+    "mixonline/mixonlinelevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/mixonline/mixonlinelevel.txt",
+      "sha256": "7c148d58eb3c560429cc10e8118cff12e0abe4f14a5c8e38133c83d3b22dbd7d",
+      "bytes": 1599
+    },
+    "mixonline/christmasnode.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/mixonline/christmasnode.txt",
+      "sha256": "2b97297da878caf9c5c5e327d6cf5f7a890339adb21b245f8818ca72b2e5f892",
+      "bytes": 1349
+    },
+    "mixonline/3p9cnode.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/mixonline/3p9cnode.txt",
+      "sha256": "00e127c2e696ff492b5424f4ddcb56ed6f570fdefa7a6ffbf34650c34ce33590",
+      "bytes": 533
+    },
+    "mixonline/barragetext.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/mixonline/barragetext.txt",
+      "sha256": "53256e81c9f831a0db2f43b19790c5ee10c80e7c2b2745ae0f614dc989772611",
+      "bytes": 4713
+    },
+    "bufftower/bufftower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bufftower/bufftower.txt",
+      "sha256": "22bec92c8e0f05fa356274f2c7ec03a8db3cef8a7612e0740a48aaa1bd694428",
+      "bytes": 1657
+    },
+    "bufftower/bufftowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bufftower/bufftowerlevel.txt",
+      "sha256": "f267e964a3aab83fdf5b0b75060bd129cec6df0417636a029e0907b322cb52ff",
+      "bytes": 21570
+    },
+    "bufftower/bufftowerbuff.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bufftower/bufftowerbuff.txt",
+      "sha256": "072a134024d6c7a9020af3ff7dea91f1331e1543f68d8e01476c33dd94533670",
+      "bytes": 40125
+    },
+    "bufftower/bufftoweraward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bufftower/bufftoweraward.txt",
+      "sha256": "79d0d03f027d29f549a62ba488533c57f71569e308b24afe9d9473a50b24e21f",
+      "bytes": 6300
+    },
+    "linkageactivity/linkagetower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/linkageactivity/linkagetower.txt",
+      "sha256": "010ad3eb18866c6e0a7685f0545a527747f8a5393ca5528fedb3dc712ba2f4b6",
+      "bytes": 541
+    },
+    "linkageactivity/linkagelevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/linkageactivity/linkagelevel.txt",
+      "sha256": "e804d52eef8cba9d647de351ac6a7d9cb47a87924906814c1340ad8192eaff5d",
+      "bytes": 6561
+    },
+    "linkageactivity/linkagemission.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/linkageactivity/linkagemission.txt",
+      "sha256": "f619ca52a76dfd6b156c330bb7969b38621953bd6d1456964f716e54ac010d2e",
+      "bytes": 402
+    },
+    "linkageactivity/towerpond.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/linkageactivity/towerpond.txt",
+      "sha256": "67a618db57c8ccd56c71b75ed42f6da931e020867e589f3dd97134a8b618948b",
+      "bytes": 1259
+    },
+    "linkageactivity/towerpondtoken.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/linkageactivity/towerpondtoken.txt",
+      "sha256": "8315a6fad2a122e3677c6376d59550220addb911d5b4d6c2e426036c2d16f7c2",
+      "bytes": 147
+    },
+    "2ndanniversary/2ndanniversarytowertotal.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/2ndanniversary/2ndanniversarytowertotal.txt",
+      "sha256": "c6f07eeb477163b9132d71185143e434e62ffb166804e80e1966a926b3cd30db",
+      "bytes": 787
+    },
+    "2ndanniversary/2ndanniversarytowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/2ndanniversary/2ndanniversarytowerlevel.txt",
+      "sha256": "268f5fc665c36133f6819350e777ca8140afaf4d9786bd5471837d869b5d25db",
+      "bytes": 7661
+    },
+    "bosschallenge/bosschallenge.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bosschallenge/bosschallenge.txt",
+      "sha256": "5c2530797aa16feaec813a014312629d68abc56099cab79bcc67aa69ab520164",
+      "bytes": 174
+    },
+    "bosschallenge/bosschallengelevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bosschallenge/bosschallengelevel.txt",
+      "sha256": "a3aa3c4dbeacb99b8e2b9fbbe37ad5fa4eab6f945cba28a3de6cc870f5b31b44",
+      "bytes": 2877
+    },
+    "bosschallenge/bosschallengescore.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/bosschallenge/bosschallengescore.txt",
+      "sha256": "c5bb4bd6e101849236ae0842e1ea3791eaa309972314b8ebbaf94e8140a04047",
+      "bytes": 954
     }
   }
 }

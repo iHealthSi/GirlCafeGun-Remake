@@ -1,0 +1,10 @@
+INT	STR	INT	STR	STR	STR	STR	STR	STR	STR	STR	STR	INTARR	INTARR	INTARR	INT	INTARR
+活动ID	活动名	活动类型(1 3P9C单机版 2 万圣节活动)	开启时间	结束时间	结束领奖时间	活动背景图	活动小图	活动界面显示图标	活动界面选中图标	多个同时开时使用的bg	换皮界面	参数(活动Id(ActivityList), 介绍Id(HelpImage)，商店ID(ShopTabList))	成就列表	积分道具	角色卡加成buffID	代币ID
+Id	Name	Type	BeginTime	EndTime	ClearTime	BG	SmallBG	Icon	IconPress	NormalBg	PrefabName	Param	Achievements	ScoreItem	CardBuffId	MoneyIDs
+1	UI_Activities.Coin	1	{201907130800}	{202001012400}	{202001012400}			Poster/fightmode_missioncat_normal_TC.png	Poster/fightmode_missioncat_press_TC.png	Poster/event_tower_02_Mul.png		[94,501,30011]			1001	35
+2	UI_Activities.Coin	1	{201907130800}	{202001012400}	{202001012400}			Poster/fightmode_missionforneus_normal_Mul.png	Poster/fightmode_missionforneus_press_Mul.png	Poster/event_tower_01_Mul.png	UI_CoopEventInfo3	[104,502,30012]			1002	43
+3	UI_Activities.Coin	1	{202009110800}	{202009250400}	{202009250400}			Poster/fightmode_missionice_normal_Mul.png	Poster/fightmode_missionice_press_Mul.png	Poster/event_tower_01_Mul.png	UI_CoopEventWhite2	[123,503,30015]			1003	47
+4	UI_Activities.Coin	2	{202010300800}	{202011190400}	{202011220400}			Poster/fightmode_missionhalloween_normal_Mul.png	Poster/fightmode_missionhalloween_press_Mul.png	Poster/event_tower_02_Mul.png		[141,504,30019]			1006	50,51
+5	UI_Activities.Coin	1	{202103100800}	{202103310400}	{202104030400}			Poster/fightmode_shoppingtower_normal_Mul.png	Poster/fightmode_shoppingtower_press_Mul.png	Poster/event_tower_03_Mul.png	UI_ShoppingTowerMain	[177,1093,30025]			1093	67,68
+7	UI_Activities.Coin	2	{202111090800}	{202111190400}	{202111220400}			Poster/fightmode_missionhalloween_normal_Mul.png	Poster/fightmode_missionhalloween_press_Mul.png	Poster/event_tower_01_Mul.png		[141,504,30039]				50,51
+8	UI_Activities.Coin	1	{202112230800}	{202201130400}	{202201160400}			Poster/fightmode_missionice2_normal_Mul.png	Poster/fightmode_missionice2_press_Mul.png	Poster/event_tower_02_Mul.png	UI_CoopEventWhite2	[260,507,30043]			2008	47

@@ -1,0 +1,4 @@
+	STR	INT	INT	STR	STR	STR	STR	STR	STR	STR	STR	INT	STR
+小塔id	小塔名字	类型	是否在UI_FightMode显示	活动界面显示图标	活动界面选中图标	背景图	多个同时开时使用的bg	开始时间	结束时间	清除数据时间	描述	任务Id	剧情
+Id	Name	Type	InFightMode	Icon	IconPress	Bg	NormalBg	BeginTime	EndTime	ClearTime	Des	ActivityId	StoryName
+1	Tower.Name1	12	1	Poster/fightmode_missionlegion_normal_Mul.png	Poster/fightmode_missionlegion_press_Mul.png	Npc/body_npc2.png	Poster/event_tower_02_Mul.png	2020-01-20-1200	2020-02-07-0400	2020-02-07-0400	Tower.Des1	61	activitydaily/legion2020_opening.txt

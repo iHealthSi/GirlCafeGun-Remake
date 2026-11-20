@@ -1,0 +1,18 @@
+INT	STR	STR	INT	INTARR	STR	INT	INTARR
+节点ID	备注	节点名	节点类型（1剧情 2单机关卡 3联机关卡）	剧情/关卡Id（单机关卡对应MixOnlineLevel.txt (ID_LevelId)，联机关卡对应Pvp/Levels.txt (Id_Diff)）	显示时间	前置节点	剧情奖励
+NodeId	NULL	Name	Type	Level	ShowTime	PreNode	CartoonReward
+1		Xmas.OP	1	activitytowerchristmas2020/activitytowerchristmas202001_op.txt		0	[15-2-1-1-20]
+2		Xmas.ACT1	2	1_1		1	
+3		Xmas.ACT2	2	1_2		2	
+4		Xmas.ACT3	2	1_3		3	
+5		Xmas.EP	1	activitytowerchristmas2020/activitytowerchristmas202002_ep.txt		4	[15-2-1-1-20]
+6		Xmas.SP	2	1_4		5	
+7		Xmas.ED	1	activitytowerchristmas2020/activitytowerchristmas202008_ed.txt		6	[15-2-1-1-20]
+8		Xmas.TSP	3	16_1		7	
+9		Xmas.TED	1	activitytowerchristmas2020/activitytowerchristmas202008_ted.txt		8	[15-2-1-1-20]
+							
+11		Xmas.M1	1	activitytowerchristmas2020/activitytowerchristmas202003_memory01.txt		0	[15-2-1-1-10]
+12		Xmas.M2	1	activitytowerchristmas2020/activitytowerchristmas202004_memory02.txt		11	[15-2-1-1-10]
+13		Xmas.M3	1	activitytowerchristmas2020/activitytowerchristmas202005_memory03.txt		12	[15-2-1-1-10]
+14		Xmas.M4	1	activitytowerchristmas2020/activitytowerchristmas202006_memory04.txt		13	[15-2-1-1-10]
+15		Xmas.M5	1	activitytowerchristmas2020/activitytowerchristmas202007_memory05.txt		14	[15-2-1-1-10]

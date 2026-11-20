@@ -1,0 +1,12 @@
+INT	INT	INT	STR	STR	STR	INT	STR	STR	STR	INT	INT	STR	INT	INT	INT	BOOL	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INT	INTARR	INTARR
+Id	小关ID	难度	Boss头像	Boss立绘	Boss名字	最大积分	前缀名	名称	关卡信息描述	解锁关卡（完成哪一关后解锁本关 0表示不需要前置关卡）	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	体力消耗	地图ID	推荐战力	关闭等级压制	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	能量掉落概率≥1 时有起效	怪物属性	推荐属性
+Id	LevelId	Diff	BossIcon	BossImg	BossName	MaxScore	PreName	Name	LevelInfoDesc	PreLevelId	StoryType	StoryName	PreCost	MapId	Zhanli	CloseLevelSuppress	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	DropEnRd	MonsterAttr	RecommendAttr
+1	1	1	UI/UI_2ndBossChallenge/2ndboss_main_boss01.png;UI/UI_2ndBossChallenge/2ndboss_main_boss02.png	ChallengeTower/2ndboss_level_boss01.png;ChallengeTower/2ndboss_level_boss02.png	monster.1429;monster.1505	3000	BossChallenge.PreName1	BossChallenge.LevelName1					0	15001	12000	1	28	904	300	1				101				0				[4]	[3]
+1	1	3				6000	BossChallenge.PreName1	BossChallenge.LevelName1					0	15001	18000	1	57	904	300	1				101				0				[4]	[3]
+1	1	5				12000	BossChallenge.PreName1	BossChallenge.LevelName1					0	15001	26000	1	89	904	300	1				101				0				[4]	[3]
+1	2	1	UI/UI_2ndBossChallenge/2ndboss_main_boss03.png;UI/UI_2ndBossChallenge/2ndboss_main_boss04.png	ChallengeTower/2ndboss_level_boss03.png;ChallengeTower/2ndboss_level_boss04.png	monster.1930;monster.1507	3000	BossChallenge.PreName2	BossChallenge.LevelName2					0	15002	12000	1	28	904	300	1				101				0				[3,0]	
+1	2	3				6000	BossChallenge.PreName2	BossChallenge.LevelName2					0	15002	18000	1	57	904	300	1				101				0				[3,0]	
+1	2	5				12000	BossChallenge.PreName2	BossChallenge.LevelName2					0	15002	26000	1	89	904	300	1				101				0				[3,0]	
+1	3	1	UI/UI_2ndBossChallenge/2ndboss_main_boss05.png;UI/UI_2ndBossChallenge/2ndboss_main_boss06.png	ChallengeTower/2ndboss_level_boss05.png;ChallengeTower/2ndboss_level_boss06.png	monster.1508;monster.1518	3000	BossChallenge.PreName3	BossChallenge.LevelName3					0	15003	12000	1	28	904	300	1				101				0				[1,3]	
+1	3	3				6000	BossChallenge.PreName3	BossChallenge.LevelName3					0	15003	18000	1	57	904	300	1				101				0				[1,3]	
+1	3	5				12000	BossChallenge.PreName3	BossChallenge.LevelName3					0	15003	26000	1	89	904	300	1				101				0				[1,3]	

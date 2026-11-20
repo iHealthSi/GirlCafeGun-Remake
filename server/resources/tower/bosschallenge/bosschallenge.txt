@@ -1,0 +1,4 @@
+INT	STR	STR	STR	INT
+id	开始时间	结束时间	清除数据时间	帮助ID
+Id	BeginTime	EndTime	ClearTime	HelpId
+1	2021-11-26-0400	2021-12-23-0400	2021-12-23-0400	8888
