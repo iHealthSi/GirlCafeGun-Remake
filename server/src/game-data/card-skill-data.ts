@@ -94,11 +94,14 @@ export function applyCardSkillPoints(
 }
 
 /**
- * MiniSkill entries of a normal (non-oath) card that has raised skills. Oath
- * cards keep their own projection in oath-card-skill-data.ts.
+ * MiniSkill entries of every normal (non-oath) card, level 1 for a skill that
+ * was never raised. Without them the client reads level 0: a new card shows
+ * "Awakened -3/9" and its first awakening "LV.0 > n". The client's own card
+ * previews (item boxes, missions) also start skills at 1. Oath cards keep
+ * their own projection in oath-card-skill-data.ts.
  */
-export function awakenedCardSkills(card: InventoryEntryState): CardSkillInfo[] {
-  if (card.genre !== 1 || card.particular === 17 || !card.cardSkillLevels) return [];
+export function characterCardSkills(card: InventoryEntryState): CardSkillInfo[] {
+  if (card.genre !== 1 || card.particular === 17) return [];
   const template = CharacterCardCatalog.loadDefault().get(card);
   if (!template) return [];
   return skillSlots(template).map((index) => ({
