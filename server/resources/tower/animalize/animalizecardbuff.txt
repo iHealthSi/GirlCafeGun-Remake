@@ -1,0 +1,15 @@
+INT	STR	STR	INT	INT	INT		STR
+buff ID	注释	Buff图标	作用时段(1本轮常驻 2下x次抽卡 3下x次战斗)	有效次数(针对EffectTime为2、3时时候)	类型(1技能[0所有1主角2怪物-skillId-等级-1增益2减益]; 2体力消耗 3代币产出[g-d-p-l-n] 4明牌 5出SP关	参数	描述
+BuffId	Note	BuffIcon	EffectTime	Count	EffectType	Value	Desc
+1			1	0	2	2	CardTower.Card1
+2			2	1	4		CardTower.Card3
+3			2	1	5		CardTower.Card4
+4			1	0	1	[1-1904-1-1]	
+5			1	0	1	[1-1905-1-1]	
+6			1	0	1	[1-1906-1-1]	
+7			1	0	1	[1-1907-1-1]	
+8			1	0	1	[1-1908-1-1]	
+9			1	0	1	[1-1909-1-2]	
+10			1	0	1	[1-1910-1-2]	
+11			1	0	1	[1-1911-1-2]	
+12			1	0	1	[2-1912-1-2]	

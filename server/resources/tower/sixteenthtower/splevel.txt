@@ -1,0 +1,7 @@
+INT	STR	STR	INT	STR	INT	INTARR	INTARR
+自选Sp关Idx	图标（安洛瑟，列拉金，荷稻，弗内乌斯）	关卡信息描述（BOSS名称）	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	地图ID	怪物属性	推荐属性
+Idx	Icon	LevelInfoDesc	StoryType	StoryName	MapId	MonsterAttr	RecommendAttr
+1	UI/UI_SixteenthTower/sixteenthtower_bossa_01.png	SixteenthTowerLevel.BossA			100933	[3]	[4]
+2	UI/UI_SixteenthTower/sixteenthtower_bossb_01.png	SixteenthTowerLevel.BossB			100934	[0]	[1]
+3	UI/UI_SixteenthTower/sixteenthtower_bossc_01.png	SixteenthTowerLevel.BossC			100935	[0]	[1]
+4	UI/UI_SixteenthTower/sixteenthtower_bossd_01.png	SixteenthTowerLevel.BossD			100936	[2]	[0]

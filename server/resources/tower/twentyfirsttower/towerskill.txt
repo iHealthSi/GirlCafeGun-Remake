@@ -1,0 +1,7 @@
+INT	INT	STR	STR	STR	INT	INTARR	INTARR
+Id	技能Id	名字	注释	未解锁注释	关联类型，1是技能，2是buff	升级道具	升级消耗
+Id	SkillId	SkillName	Note	UnlockNote	BindType	UpgradeItem	UpgradeCost
+1	18055				1	[15-126-1-1]	[100,200,300,400,500]
+2	18056				1	[15-126-1-1]	[100,200,300,400,500]
+3	18057				1	[15-126-1-1]	[100,200,300,400,500]
+4	18060				1	[15-126-1-1]	[100,200,300,400,500]

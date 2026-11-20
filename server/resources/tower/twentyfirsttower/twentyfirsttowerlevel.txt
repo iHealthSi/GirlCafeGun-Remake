@@ -1,0 +1,29 @@
+INT	INT	INT	INT	STR	STR	STR	STR	INT	STR	STR	INT	STR	INT	INT	INT	INT	BOOL	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INT	INTARR	INTARR
+小塔ID（可以理解为某一期）	小关ID	关卡类型0普通 1挑战关 2剧情关直接播剧情 3星级目标奖励	战区	前缀名	名称	关卡信息描述	备注	解锁关卡（完成哪一关后解锁本关 0表示不需要前置关卡）	额外解锁条件(某关达到多少分)	开启时间（有些关卡有自己独立的开启时间）	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	解锁哪一关才显示	体力消耗	地图ID	推荐战力	关闭等级压制	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	能量掉落概率≥1 时有起效	怪物属性	推荐属性
+Id	LevelId	LevelType	Warzone	PreName	Name	LevelInfoDesc		PreLevelId	UnlockCondition	BeginTime	StoryType	StoryName	UnlockShow	PreCost	MapId	Zhanli	CloseLevelSuppress	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	DropEnRd	MonsterAttr	RecommendAttr
+21	1	2	1	TwentyFirstTower.PreName1	TwentyFirstTowerLevel.Name1		EP1	[0]			0	activitytower22/activitytower22_ep1	0									[15-2-1-1-20]												
+21	2	0	1	TwentyFirstTower.PreName2	TwentyFirstTowerLevel.Name6	TwentyFirstTower.LevelDesc1	ACT1	[1]					0	10	7516	7300		8	904	300	1	[7-4-1-3-1]	[15-126-1-1-10-10000,15-127-1-1-15-10000]		101		[15-126-1-1-10,15-127-1-1-15]		10				[0]	[1]
+21	3	0	1	TwentyFirstTower.PreName3	TwentyFirstTowerLevel.Name7	TwentyFirstTower.LevelDesc2	ACT2	[2]					0	10	7517	8400		15	904	300	1	[7-3-1-3-3]	[15-126-1-1-10-10000,15-127-1-1-17-10000]		101		[15-126-1-1-10,15-127-1-1-17]		10				[0]	[1]
+21	4	0	1	TwentyFirstTower.PreName4	TwentyFirstTowerLevel.Name8	TwentyFirstTower.LevelDesc3	ACT3	[3]					0	10	7518	9500		22	904	300	1	[7-1-3-3-3]	[15-126-1-1-10-10000,15-127-1-1-18-10000]		101		[15-126-1-1-10,15-127-1-1-18]		10				[0]	[1]
+																																		
+21	5	2	2	TwentyFirstTower.PreName5	TwentyFirstTowerLevel.Name2		EP2	[4]			0	activitytower22/activitytower22_ep2	0									[15-2-1-1-20]												
+21	6	0	2	TwentyFirstTower.PreName6	TwentyFirstTowerLevel.Name9	TwentyFirstTower.LevelDesc4	ACT4	[5]					0	14	7519	10600		29	904	300	1	[2-2-10001-1-1]	[15-126-1-1-14-10000,15-127-1-1-27-10000]		101		[15-126-1-1-14,15-127-1-1-27]		14				[0]	[1]
+21	7	0	2	TwentyFirstTower.PreName7	TwentyFirstTowerLevel.Name10	TwentyFirstTower.LevelDesc5	ACT5	[6]					0	14	7520	11700		36	904	300	1	[7-3-1-4-1]	[15-126-1-1-14-10000,15-127-1-1-29-10000]		101		[15-126-1-1-14,15-127-1-1-29]		14				[0]	[1]
+21	8	0	2	TwentyFirstTower.PreName8	TwentyFirstTowerLevel.Name11	TwentyFirstTower.LevelDesc6	ACT6	[7]					0	14	7521	12800		42	904	300	1	[7-1-3-4-1]	[15-126-1-1-14-10000,15-127-1-1-32-10000]		101		[15-126-1-1-14,15-127-1-1-32]		14				[0]	[1]
+																																		
+21	9	2	3	TwentyFirstTower.PreName9	TwentyFirstTowerLevel.Name3		EP3	[8]			0	activitytower22/activitytower22_ep3	0									[15-2-1-1-20]												
+21	10	0	3	TwentyFirstTower.PreName10	TwentyFirstTowerLevel.Name12	TwentyFirstTower.LevelDesc7	ACT7	[9]					0	18	7522	13900		48	904	300	1	[10-1-1-2-2]	[15-126-1-1-18-10000,15-127-1-1-43-10000]		101		[15-126-1-1-18,15-127-1-1-43]		18				[0]	[1]
+21	11	0	3	TwentyFirstTower.PreName11	TwentyFirstTowerLevel.Name13	TwentyFirstTower.LevelDesc8	ACT8	[10]					0	18	7523	14900		51	904	300	1	[15-1-1-1-8000]	[15-126-1-1-18-10000,15-127-1-1-46-10000]		101		[15-126-1-1-18,15-127-1-1-46]		18				[0]	[1]
+21	12	0	3	TwentyFirstTower.PreName12	TwentyFirstTowerLevel.Name14	TwentyFirstTower.LevelDesc9	ACT9	[11]					0	18	7524	15900		56	904	300	1	[1-16-34-3-1]	[15-126-1-1-18-10000,15-127-1-1-48-10000]		101		[15-126-1-1-18,15-127-1-1-48]		18				[0]	[1]
+																																		
+21	13	2	4	TwentyFirstTower.PreName13	TwentyFirstTowerLevel.Name4		EP4	[12]			0	activitytower22/activitytower22_ep4	0									[15-2-1-1-20]												
+21	14	0	4	TwentyFirstTower.PreName14	TwentyFirstTowerLevel.Name15	TwentyFirstTower.LevelDesc10	ACT10	[13]					0	20	7525	16700		60	904	300	1	[10-1-1-3-1]	[15-126-1-1-20-10000,15-127-1-1-56-10000]		101		[15-126-1-1-20,15-127-1-1-56]		20				[0]	[1]
+21	15	0	4	TwentyFirstTower.PreName15	TwentyFirstTowerLevel.Name16	TwentyFirstTower.LevelDesc11	ACT11	[14]					0	20	7526	17900		64	904	300	1	[15-1-1-1-10000]	[15-126-1-1-20-10000,15-127-1-1-58-10000]		101		[15-126-1-1-20,15-127-1-1-58]		20				[0]	[1]
+21	16	0	4	TwentyFirstTower.PreName16	TwentyFirstTowerLevel.Name17	TwentyFirstTower.LevelDesc12	ACT12	[15]					0	20	7527	18800		68	904	300	1	[7-8-1-4-1]	[15-126-1-1-20-10000,15-127-1-1-60-10000]		101		[15-126-1-1-20,15-127-1-1-60]		20				[0]	[1]
+																																		
+21	17	2	5	TwentyFirstTower.PreName17	TwentyFirstTowerLevel.Name5		EP5	[16]			0	activitytower22/activitytower22_ep5	0									[15-2-1-1-20]												
+21	18	3	0	TwentyFirstTower.PreName18	TwentyFirstTowerLevel.Name18	TwentyFirstTower.LevelDesc13	SP1	[4]					0		7528	10600		29	904	300							[15-2-1-1-1]						[0]	[1]
+21	19	3	0	TwentyFirstTower.PreName19	TwentyFirstTowerLevel.Name19	TwentyFirstTower.LevelDesc14	SP2	[8]					0		7529	13900		48	904	300							[15-2-1-1-1]						[0]	[1]
+21	20	3	0	TwentyFirstTower.PreName20	TwentyFirstTowerLevel.Name20	TwentyFirstTower.LevelDesc15	SP3	[12]					0		7530	16700		60	904	300							[15-2-1-1-1]						[0]	[1]
+21	21	3	0	TwentyFirstTower.PreName21	TwentyFirstTowerLevel.Name21	TwentyFirstTower.LevelDesc16	SP4	[16]					0		7531	19900		73	904	300							[15-2-1-1-1]						[0]	[1]
+21	22	3	5	TwentyFirstTower.PreName22	TwentyFirstTowerLevel.Name22	TwentyFirstTower.LevelDesc17	SP5	[21]					0		7532	24500		90	904	300							[15-2-1-1-1]						[0]	[1]

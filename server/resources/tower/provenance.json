@@ -201,6 +201,76 @@
       "source": "setting.u:assets/_game/settinggen/activities/smalltower/eleventhtower/eleventhtowerpondtoken.txt",
       "sha256": "69995739fc5ec638aa897f88db71edaa5d8241846700f3bf502026995db4abb7",
       "bytes": 180
+    },
+    "animalize/animalizelevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/animalize/animalizelevel.txt",
+      "sha256": "9d53f9aeee9086cc1bc254ab1ee731550166c3edf993793fcb0f8f1f6bac06f8",
+      "bytes": 8286
+    },
+    "animalize/animalizecard.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/animalize/animalizecard.txt",
+      "sha256": "1b3d405b20dc27c079b9c4f76ae386e5fbf8491846cf2d9e624fed1312e6e710",
+      "bytes": 4240
+    },
+    "animalize/animalizecardbuff.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/animalize/animalizecardbuff.txt",
+      "sha256": "7b43adc29b17dfef2e4b429b74de9883fd77098effb702b4169d4b07d98a982c",
+      "bytes": 677
+    },
+    "animalize/animalizediffaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/animalize/animalizediffaward.txt",
+      "sha256": "e5626eb3ebafbad800f08f973d838141d90590d1dc7dab50c9fccbca42c06ac9",
+      "bytes": 251
+    },
+    "animalize/animalizescoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/animalize/animalizescoreaward.txt",
+      "sha256": "ebf22476b70818bc3660dfdfef3d1ec6ae7a9a46e3795683fc7d3a890caede16",
+      "bytes": 2579
+    },
+    "eighthtower/eighthlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighthtower/eighthlevel.txt",
+      "sha256": "5b6547333ec3e784816b29970751cd226aee65fd8c6fd64725f35da3d169301f",
+      "bytes": 8426
+    },
+    "eighthtower/eighthcard.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighthtower/eighthcard.txt",
+      "sha256": "df68c86b08a37da93eba349c8aaec36204a9bdf1e7cdabd0cb8490d8aea8e08f",
+      "bytes": 4240
+    },
+    "eighthtower/eighthcardbuff.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighthtower/eighthcardbuff.txt",
+      "sha256": "50b9bbb11f448f23f3d72aa65fbc2e0d172155d5457d83f58b6247c86b7c0fe2",
+      "bytes": 683
+    },
+    "eighthtower/eighthdiffaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighthtower/eighthdiffaward.txt",
+      "sha256": "37d41753c7e447d8362aef6569ca5aa6693a8e3b735d468f6a3faeb33736c19c",
+      "bytes": 251
+    },
+    "eighthtower/eighthscoreaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/eighthtower/eighthscoreaward.txt",
+      "sha256": "1200bb2dce5fa95a4b91154eab0b06609ac9156e87790041d7016728892725b4",
+      "bytes": 2529
+    },
+    "twentyfirsttower/twentyfirsttowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentyfirsttower/twentyfirsttowerlevel.txt",
+      "sha256": "c04beeb7ccfd29f1673e56fd73c02f6eeee7815177f902423039e6db6d4f9854",
+      "bytes": 6092
+    },
+    "twentyfirsttower/towerskill.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentyfirsttower/towerskill.txt",
+      "sha256": "21c2e894999ee07148672c31a156b612f7ebcf236a83a212fdf25a79816649bc",
+      "bytes": 412
+    },
+    "twentiethtower/towerskill.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/twentiethtower/towerskill.txt",
+      "sha256": "794e475c5009de36778f8ed4d31d30436e93fda34a621c1821962faebabc1747",
+      "bytes": 689
+    },
+    "sixteenthtower/splevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/smalltower/sixteenthtower/splevel.txt",
+      "sha256": "18aae439be993a2415c320ca408a46602dde3899057a2f0d051f3a466c571e5c",
+      "bytes": 742
     }
   }
 }

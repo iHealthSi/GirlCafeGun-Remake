@@ -1,0 +1,10 @@
+INT	INT	INT	STR	STR	STR	STR	INT	INTARR	INTARR
+Id	技能Id	技能组	组名	名字	注释	未解锁注释	关联类型，1是技能，2是buff	升级道具	升级消耗
+Id	SkillId	GroupId	GroupName	SkillName	Note	UnlockNote	BindType	UpgradeItem	UpgradeCost
+1	18055	1	pet.SkillType20_1				1	[15-121-1-1]	[10,20,30,40,50]
+2	18056	1					1	[15-121-1-1]	[10,20,30,40,50]
+3	18057	1					1	[15-121-1-1]	[10,20,30,40,50]
+4	18053	2	pet.SkillType20_2				1	[15-121-1-1]	[10,20,30,40,50]
+5	18058	2					1	[15-121-1-1]	[10,20,30,40,50]
+6	18054	2					1	[15-121-1-1]	[10,20,30,40,50]
+7	178	3	pet.SkillType20_3	pet.SkillName20_7	pet.SkillDes20_7	pet.SkillDesTip20_7	2	[15-121-1-1]	[10,20,30,40,50]
