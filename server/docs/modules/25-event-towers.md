@@ -29,13 +29,18 @@ Seventh, Fireworks and Twentieth copies), `UI_TowerScoreInfo.lua`,
 | 178 `ResetNodePond`                         | `{TowerId, nPondId}`                                                      | `{nResult, nPondId}` or `{nTowerId, nError}`                                                       |
 
 - `GameManager.SendInfoToServer` wraps 55 and 56 in `LuaCall.DoSettle` (252). The
-  reply goes back the same way, which also clears the stored settlement the
-  client resends after a reconnect.
-- The client's JSON encoder writes a Lua array with holes as `[.., null, ..]`:
-  argument 7 of 55 is nil for most classes (6 and 7 for the sixteenth tower).
+  reply goes back the same way: `DoSettle` clears the stored settlement that the
+  client resends after a reconnect, then dispatches the inner command. Not tried on
+  a phone. Remake's other settlement replies (bounty 51, `ChapterMsg`) are bare; if
+  the wrapped reply misbehaves, answering bare (`{sCmd: 55, tbParam}`) is the
+  fallback and only costs the clearing of the stored settlement.
+- Argument lists arrive as arrays with `null` for nil holes (argument 7 of 55 is
+  nil for most classes, 6 and 7 for the sixteenth tower). This follows from the
+  client's `json.lua` encoder; no packet was captured. An object with the keys
+  "1".."n" is read the same way.
 - `OnGetTower` of 17 classes does nothing and the client does not wait for the 53
   reply (`UpdateGetTower` runs at once); the reply only exists so the call is
-  answered. Swimwear and absorb peak read the server score from it.
+  answered. Only swimwear and absorb peak read the server score from it.
 - Error codes are `ActivitiesLogic.tbErrorCode`: 2 invalid, 5 vigour, 8 points,
   9 pool empty, 10 formation, 12 no award, 13 award already claimed. 176 is
   refused with `{res: false}` because `UI_TowerScoreInfo` reacts to `res == true`
@@ -67,9 +72,15 @@ with the scripts when `GCG_CLIENT_LUA_DIR` points at them.
 - Type 3 levels keep goal points at `goalBase + LevelId` and one flag per goal at
   `goalBase + LevelId * 100 + GoalID`.
 - Variegated levels use the slot `area * 20 + position` (`GetLevelIndex`).
-- The 0.1.3 thirteenth tower script uses the ninth tower's slots (group 9, 2500,
-  60000), not the EN 1.0.9 ones (64, 9100, 40000). The two towers therefore share
-  records on the client.
+- The 0.1.3 thirteenth tower script is the ninth tower's script with other names
+  and paths (`diff` shows nothing else), so it uses the ninth tower's slots
+  (group 9, 2500, 60000), not the EN 1.0.9 ones (64, 9100, 40000).
+- A task key holds no tower id, so towers of one class share every record:
+  towers 1 and 201 (two SmallTower rows, 26 level ids), the ninth and thirteenth,
+  and the eight variegated towers (101-107 and 303; they share the score task 2804
+  and overlapping level slots). The first clear award, goal flags and goal rewards
+  are then paid once for all of them. `event-tower-data.test.ts` lists every
+  shared slot.
 
 ## Server behaviour
 
@@ -81,7 +92,10 @@ with the scripts when `GCG_CLIENT_LUA_DIR` points at them.
   update, so a refusal changes nothing.
 - Settlement: charges the vigour, rolls first clear, `FixAward` (weight out of 10000) and `RandomAward` with `rollChapterAwards`, grants them, writes the level
   record, node progress, goal points and thresholds, adds the master exp and counts
-  the fight for the oath tasks (`TowerFight`). A settlement with no matching open
+  the fight for the oath tasks as a `tower` event with the activity type as
+  `activityId` ([INFER]: `lvpara` is described as the activity type, -1 = any; the
+  only `TowerFight` task wants type 3, which no served tower sends, so only
+  `ArbitraryFight` tasks advance; not covered by a test). A settlement with no matching open
   entry is refused; one for a closed entry replays the stored reply.
 - Failure (56): charges the vigour once and closes the entry.
 - Score and exp items (15-17, 15-18, 15-19, 15-30, 15-31, 15-32, 15-47..50, 15-105,
@@ -91,8 +105,10 @@ with the scripts when `GCG_CLIENT_LUA_DIR` points at them.
 - Lottery: the wallet is the tower's `Money1GDPL` currency (Lottery 14, Seventh 21,
   Eleventh 44, Twentieth 82). A draw takes `LotteryTimes` slots by weight; the
   client disables a draw when fewer are left, and the server refuses it too. A
-  reset needs the key item drawn or the pool emptied; pool 8 has `Loop` 0, so it
-  clears in place and counts the resets (the client shows pool id + resets).
+  reset needs the key item drawn or the pool emptied. `Loop` is "number of resets,
+  0 = unlimited": pools 1-7 move on to the next pool, pool 8 (Loop 0) clears in
+  place and counts the resets, which `UI_Lottery` adds to the pool number in its
+  title. Counting resets only for that pool is [INFER] from the title.
 - Server-wide awards (63): the client shows an award when
   `floor(1000 * serverScore / allServiceScore) >= Score`, with `allServiceScore`
   2000000000 (swimwear) or 200000000 (absorb peak). The server score is the
@@ -105,9 +121,12 @@ The server needs `tower` in its `--resources` list, like `card`.
 
 ## Known gaps
 
-- Sixteenth tower: its boss rush calls `BossRush_ResetSp`, `BossRush_SaveSpResult`,
-  `BossRush_SelectSpBoss` and `BossRush_SaveSpFormation` are not handled (they hang);
-  its HP and shield carry-over tasks are not written.
+- Calls outside this slice that the tower screens send and that still hang:
+  `BossRush_SelectSpBoss` 510, `BossRush_SaveSpFormation` 511, `BossRush_ResetSp` 512
+  and `BossRush_SaveSpResult` 513 (sixteenth tower; its HP, shield and SP tasks
+  60003-60399 are written by them) and `UpgradeTowerSkill` 527 `{20, skillId}`
+  (twentieth tower skills: costs 15-121 items, writes 96/1201 + 10 + skillId).
+- Records are shared between towers of one class (see Task layout).
 - No achievements, mission counters (conditions 99, 105, 108, 110, 181) or daily
   mission counts other than vigour are updated by a tower fight.
 - Card exp is shown (`nCardExp`) but, as for chapters, not applied.
@@ -120,5 +139,7 @@ The server needs `tower` in its `--resources` list, like `card`.
   apart.
 - Items 15-121 and 15-122 (twentieth tower) have no AutoUse rule and stay as stacks;
   the client counts them from the inventory.
-- The client writes task 96/600 itself (`SeventeenthTowerLogic.IsNewUnlock`). This
-  branch has no `TASK_CHANGE_REQ` allowlist; one must allow that value.
+- The client writes task 96/600 itself (`SeventeenthTowerLogic.IsNewUnlock`); no
+  other `SetTaskValue` was found in the tower logic files and tower, lottery and
+  score screens. This branch has no `TASK_CHANGE_REQ` allowlist; one must allow
+  that value.
