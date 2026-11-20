@@ -11,8 +11,8 @@ export const LUA_COMMAND_FRIEND_ADD = 84;
 /** LuaCall.AssistList: UI_Formation:CheckPower asks for helpers before a sortie. */
 export const LUA_COMMAND_ASSIST_LIST = 250;
 
-/** UI_Support lists every entry; offline there are always three to pick from. */
-export const ASSIST_CANDIDATE_COUNT = 3;
+/** UI_Support lists every entry; offline there are always four to pick from. */
+export const ASSIST_CANDIDATE_COUNT = 4;
 /** CharacterCardBreak.txt: every break type caps the level at 40, 50, 60, 70. */
 const BREAK_LEVEL_CAPS = [40, 50, 60, 70] as const;
 /** The last cap: CARD_EXP_TO_NEXT_LEVEL has 69 steps. */
@@ -260,7 +260,7 @@ function playerCardLevel(player: AssistPlayer): number {
 }
 
 /**
- * Three offline helpers: a random main girl (preferring the stage's
+ * Four offline helpers: a random main girl (preferring the stage's
  * recommended attributes) with three random deputy girls, all at the level
  * whose group power reaches a third of the stage's recommended team power.
  */

@@ -86,7 +86,8 @@ describe("offline assist helpers", () => {
     expect(parseAssistRequest([1, 2])).toEqual({ power: 0, recommendedAttributes: [] });
   });
 
-  it("offers three different girls, each with three different deputies", () => {
+  it("offers four different girls, each with three different deputies", () => {
+    expect(ASSIST_CANDIDATE_COUNT).toBe(4);
     for (let seed = 1; seed <= 25; seed++) {
       const candidates = makeAssistCandidates(
         player,
@@ -214,7 +215,7 @@ describe("offline assist helpers", () => {
     );
     expect(
       newPlayer.flatMap((candidate) => candidate.Card.map((card) => card.Enhance)),
-    ).toEqual(Array(12).fill(1));
+    ).toEqual(Array(ASSIST_CANDIDATE_COUNT * 4).fill(1));
   });
 
   it("prefers main girls of the stage's recommended attribute", () => {

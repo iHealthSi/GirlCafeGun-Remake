@@ -192,7 +192,7 @@ function assistList(packets: readonly GamePacket[]): AssistCandidate[] {
 }
 
 describe("offline assist over TCP", () => {
-  it("answers AssistList with three helpers, also without a power", async () => {
+  it("answers AssistList with four helpers, also without a power", async () => {
     const f = await fixture();
     try {
       for (const tbParam of [{ Power: 9_700, ChapterType: [2] }, { Power: 0 }, {}]) {
