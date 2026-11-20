@@ -182,7 +182,7 @@ it("serves event towers over real TCP: CallServer in, DoSettle in and out, repla
       store.snapshot().players[account]!.money.find((m) => m.id === id)!.count;
 
     // Other towers and the ranking tower get no reply (they stay unhandled), a served one does.
-    const stray = await call({ sCmd: 53, tbParam: [4, 9] }, acknowledged);
+    const stray = await call({ sCmd: 53, tbParam: [999, 9] }, acknowledged);
     expect(stray.filter((p) => p.command !== COMMAND.C2S_CALL_RSP)).toEqual([]);
     const ranking = await call({ sCmd: 53, tbParam: [350, 6] }, acknowledged);
     expect(ranking.filter((p) => p.command !== COMMAND.C2S_CALL_RSP)).toEqual([]);

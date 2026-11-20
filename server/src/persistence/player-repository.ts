@@ -48,8 +48,10 @@ import {
   LUA_COMMAND_TOWER_FAIL,
   LUA_COMMAND_TOWER_GET,
   LUA_COMMAND_TOWER_PASS,
+  LUA_COMMAND_UPGRADE_TOWER_SKILL,
   NODE_TASK,
   POND_SIZE,
+  SKILL_TASK_OFFSET,
   SWIMWEAR_TASK,
   TOWER_ERROR,
   effectiveTowerCost,
@@ -1939,6 +1941,34 @@ function refuse(code: number, reason: string): EventTowerError {
   return new EventTowerError(code, reason);
 }
 
+/** Takes count of one item from its plain stacks; false (nothing taken) when the player has fewer. */
+function takeTowerItem(
+  player: Player,
+  gdpl: readonly number[],
+  count: number,
+  outcome: TowerOutcome,
+): boolean {
+  const stacks = player.inventory.filter(
+    (item) =>
+      !isInventoryInstance(item) &&
+      item.genre === gdpl[0] &&
+      item.detail === gdpl[1] &&
+      item.particular === gdpl[2] &&
+      item.templateLevel === gdpl[3] &&
+      item.count > 0,
+  );
+  if (stacks.reduce((total, item) => total + item.count, 0) < count) return false;
+  let remaining = count;
+  for (const item of stacks) {
+    const take = Math.min(item.count, remaining);
+    item.count -= take;
+    remaining -= take;
+    outcome.itemGuids.add(item.guid);
+    if (remaining === 0) break;
+  }
+  return true;
+}
+
 function pondSlotKey(tower: TowerInfo, pondId: number, slot: number): number {
   return tower.layout.offset + NODE_TASK.pondRecord + (pondId - 1) * POND_SIZE + slot;
 }
@@ -2353,6 +2383,25 @@ function applyEventTowerRequest(
       } else {
         outcome.response = { nResult: 1, nPondId: request.pondId };
       }
+      return outcome;
+    }
+
+    case LUA_COMMAND_UPGRADE_TOWER_SKILL: {
+      // The reply is read by OnUpgradeRsp of UI_TwentiethSkill and UI_21sttowerSkill:
+      // nError -> Tips<nError>, isOk 1 refresh, 3 "already at the top".
+      const skill = catalog.skills.get(tower.id)?.get(request.skillId);
+      if (!skill) throw refuse(TOWER_ERROR.invalid, "unknown_skill");
+      const key = offset + SKILL_TASK_OFFSET + skill.id;
+      const level = towerTask(player, group, key);
+      const cost = skill.costs[level];
+      if (cost === undefined) {
+        outcome.response = { isOk: 3, skillId: skill.id };
+        return outcome;
+      }
+      if (!takeTowerItem(player, skill.item, cost, outcome))
+        throw refuse(TOWER_ERROR.point, "not_enough_upgrade_items");
+      setTowerTask(player, group, key, level + 1);
+      outcome.response = { isOk: 1, skillId: skill.id };
       return outcome;
     }
   }

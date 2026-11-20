@@ -32,6 +32,8 @@ export const LUA_COMMAND_SWIMWEAR_SERVER_AWARD = 63;
 export const LUA_COMMAND_NODE_POINT_REWARD = 176;
 export const LUA_COMMAND_POND_DRAW = 177;
 export const LUA_COMMAND_POND_RESET = 178;
+/** LuaCall.UpgradeTowerSkill: the twentieth and twenty-first tower skill screens. */
+export const LUA_COMMAND_UPGRADE_TOWER_SKILL = 527;
 /** LuaCall.DoSettle: GameManager.SendInfoToServer wraps 55 and 56 in it. */
 export const LUA_COMMAND_DO_SETTLE = 252;
 
@@ -67,6 +69,8 @@ export interface TowerLayout {
   pointFile?: string;
   pondFile?: string;
   tokenFile?: string;
+  /** Skill table (twentieth and twenty-first tower); levels are at offset + SKILL_TASK_OFFSET + Id. */
+  skillFile?: string;
   /** Personal score task key (swimwear, absorb peak, variegated). */
   scoreTask?: number;
 }
@@ -126,7 +130,17 @@ export const TOWER_LAYOUTS: Readonly<Record<string, TowerLayout>> = {
       offset: 1201,
       pondFile: "twentiethtower/towerpond.txt",
       tokenFile: "twentiethtower/towerpondtoken.txt",
+      skillFile: "twentiethtower/towerskill.txt",
     },
+  ),
+  /** TwentyFirstTowerLogic: nTaskOffset 1701, nTaskSTLevel = offset + 100, goals 60000; no lottery. */
+  TwentyFirstTower: layout(
+    "twentyfirsttower/twentyfirsttowerlevel.txt",
+    96,
+    1801,
+    60000,
+    "score",
+    { offset: 1701, skillFile: "twentyfirsttower/towerskill.txt" },
   ),
   TenthTower: layout("tenthtower/tenthtowerlevel.txt", 64, 2100, 10000, "passCount"),
   FifteenthTower: layout(
@@ -211,6 +225,8 @@ export const NODE_TASK = {
 export const SWIMWEAR_TASK = { serverAward: 150, scoreAward: 200 } as const;
 /** nPondSize: a pool has 20 slots. */
 export const POND_SIZE = 20;
+/** TwentiethTowerLogic / TwentyFirstTowerLogic nTaskNTSkillLevel = offset + 10; the key is that + the skill's Id. */
+export const SKILL_TASK_OFFSET = 10;
 
 /**
  * Event score and exp items that ItemList marks AutoUse. The original server
@@ -307,6 +323,16 @@ export interface TowerScoreAward {
   score: number;
   awards: BaseAward[];
 }
+/** One row of towerskill.txt: the upgrade item and the cost of each next level. */
+export interface TowerSkill {
+  /** The table's Id: the client's nId, the key suffix and the reply's skillId. */
+  id: number;
+  skillId: number;
+  bindType: number;
+  item: readonly [number, number, number, number];
+  /** costs[level] is the price of level + 1, so the maximum level is costs.length. */
+  costs: readonly number[];
+}
 
 type Row = Record<string, string>;
 
@@ -371,6 +397,8 @@ export class EventTowerCatalog {
   readonly tokens = new Map<string, TowerPondToken>();
   readonly scoreAwards = new Map<number, TowerScoreAward[]>();
   readonly serverAwards = new Map<number, TowerScoreAward[]>();
+  /** Skills by tower id, then by the table's Id. */
+  readonly skills = new Map<number, Map<number, TowerSkill>>();
   /** SwimwearServerScore.txt: the score the client divides the server score by. */
   readonly allServiceScore = new Map<number, number>();
 
@@ -454,6 +482,7 @@ export class EventTowerCatalog {
     }
 
     for (const tower of catalog.towers.values()) catalog.#loadNodeFamily(tower, read);
+    for (const tower of catalog.towers.values()) catalog.#loadSkills(tower, read);
     catalog.#loadScoreAwards(read);
     return catalog;
   }
@@ -527,6 +556,25 @@ export class EventTowerCatalog {
         });
       }
     }
+  }
+
+  #loadSkills(tower: TowerInfo, read: (file: string) => Row[]): void {
+    const { skillFile } = tower.layout;
+    if (!skillFile) return;
+    const skills = new Map<number, TowerSkill>();
+    for (const row of read(skillFile)) {
+      const id = int(row.Id);
+      const item = numbers(row.UpgradeItem);
+      if (id <= 0 || item.length !== 4) continue;
+      skills.set(id, {
+        id,
+        skillId: int(row.SkillId),
+        bindType: int(row.BindType),
+        item: [item[0]!, item[1]!, item[2]!, item[3]!],
+        costs: numbers(row.UpgradeCost),
+      });
+    }
+    this.skills.set(tower.id, skills);
   }
 
   #loadScoreAwards(read: (file: string) => Row[]): void {
@@ -662,7 +710,12 @@ export type EventTowerRequest =
       type: number;
       pondId: number;
     }
-  | { command: typeof LUA_COMMAND_POND_RESET; towerId: number; pondId: number };
+  | { command: typeof LUA_COMMAND_POND_RESET; towerId: number; pondId: number }
+  | {
+      command: typeof LUA_COMMAND_UPGRADE_TOWER_SKILL;
+      towerId: number;
+      skillId: number;
+    };
 
 export interface EventTowerCall {
   request: EventTowerRequest;
@@ -779,6 +832,13 @@ export function parseEventTowerCall(
         settled,
       };
     }
+    case LUA_COMMAND_UPGRADE_TOWER_SKILL: {
+      // CallServer(UpgradeTowerSkill, {towerId, skillId}), sent by the two skill screens.
+      const args = positional(body);
+      const towerId = whole(args?.[0]);
+      if (!wanted(towerId) || !catalog.skills.has(towerId)) return null;
+      return { request: { command, towerId, skillId: whole(args?.[1]) ?? 0 }, settled };
+    }
     default:
       return null;
   }
@@ -802,6 +862,9 @@ export function eventTowerErrorReply(
     case LUA_COMMAND_NODE_POINT_REWARD:
       // UI_TowerScoreInfo only reacts to res == true; it never shows an error.
       return { res: false };
+    case LUA_COMMAND_UPGRADE_TOWER_SKILL:
+      // OnUpgradeRsp shows UI_Activities.Tips<nError>.
+      return { nError: code };
     default:
       return { nTowerId: request.towerId, nError: code };
   }

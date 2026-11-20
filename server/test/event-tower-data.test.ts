@@ -29,8 +29,8 @@ import {
 
 const catalog = EventTowerCatalog.loadDefault();
 const SERVED_IDS = [
-  1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 101, 102, 103, 104,
-  105, 106, 107, 201, 303,
+  1, 2, 3, 5, 6, 7, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 101, 102, 103,
+  104, 105, 106, 107, 201, 303,
 ];
 
 describe("event tower tables", () => {
@@ -61,13 +61,13 @@ describe("event tower tables", () => {
     }
   });
 
-  it("serve the 19 classes: every Tower.txt id of them and no other", () => {
+  it("serve the 20 classes: every Tower.txt id of them and no other", () => {
     expect([...catalog.towers.keys()].sort((a, b) => a - b)).toEqual(SERVED_IDS);
     expect(new Set([...catalog.towers.values()].map((t) => t.className))).toEqual(
       new Set(Object.keys(TOWER_LAYOUTS)),
     );
-    // Animalize (4), EighthTower (8) and TwentyFirstTower (21) stay out.
-    for (const id of [4, 8, 21]) expect(catalog.towers.has(id)).toBe(false);
+    // Animalize (4) and EighthTower (8) are card towers with their own catalog.
+    for (const id of [4, 8]) expect(catalog.towers.has(id)).toBe(false);
   });
 
   it("give every served tower its levels", () => {
@@ -76,7 +76,7 @@ describe("event tower tables", () => {
         [...catalog.levels.values()].filter((l) => l.tower === id).length,
         `tower ${id}`,
       ).toBeGreaterThan(0);
-    expect(catalog.levels.size).toBe(534);
+    expect(catalog.levels.size).toBe(534 + 22);
   });
 
   it("keep every task key inside the 16 bits of a task id", () => {
@@ -242,7 +242,7 @@ describe("event tower item rules", () => {
     expect(TOWER_ITEM_TASKS.get("15-19-1-1")!.key).toBe(103);
   });
 
-  it("leave only two wallet-less event items as plain stacks (known gap)", () => {
+  it("leave only three wallet-less event items as plain stacks (known gap)", () => {
     const walletIds = new Set([1, 2, 4, 10, 11, 20]);
     const stacks = new Set<string>();
     const awards: number[][] = [];
@@ -267,7 +267,7 @@ describe("event tower item rules", () => {
       if (TOWER_ITEM_TASKS.has(award.slice(0, 4).join("-"))) continue;
       stacks.add(award.slice(0, 4).join("-"));
     }
-    expect([...stacks].sort()).toEqual(["15-121-1-1", "15-122-1-1"]);
+    expect([...stacks].sort()).toEqual(["15-121-1-1", "15-122-1-1", "15-126-1-1"]);
   });
 });
 
@@ -286,7 +286,7 @@ describe("event tower request parsing", () => {
     expect(parseEventTowerCall({ sCmd: 53, tbParam: [1] })?.request.towerId).toBe(1);
     expect(parseEventTowerCall({ sCmd: 53, tbParam: [350, 6] })).toBeNull();
     expect(parseEventTowerCall({ sCmd: 53, tbParam: [5, 6] })).toBeNull();
-    for (const id of [4, 8, 21, 999]) {
+    for (const id of [22, 999]) {
       expect(parseEventTowerCall({ sCmd: 53, tbParam: [id, 2] })).toBeNull();
       expect(parseEventTowerCall({ sCmd: 54, tbParam: [9, id, 0, 1, 1] })).toBeNull();
     }
@@ -467,6 +467,7 @@ describe.skipIf(!luaDirectory || !existsSync(luaDirectory))(
       EighteenthTower: "eighteenthtowerlogic",
       NineteenthTower: "nineteenthtowerlogic",
       TwentiethTower: "twentiethtowerlogic",
+      TwentyFirstTower: "twentyfirsttowerlogic",
       TenthTower: "tenthtowerlogic",
       FifteenthTower: "fifteenthtowerlogic",
       SixteenthTower: "sixteenthtowerlogic",
