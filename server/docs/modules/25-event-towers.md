@@ -48,10 +48,13 @@ Seventh, Fireworks and Twentieth copies), `UI_TowerScoreInfo.lua`,
 
 ## Served towers
 
-27 Tower.txt ids of 19 classes: 1, 2, 3, 5, 6, 7, 9-20, 101-107, 201, 303. Not served
-and left on the unhandled path: Animalize (4), EighthTower (8), TwentyFirstTower
-(21), the ranking tower (activity type 6, whatever the id), and every id that is
-not in `resources/tower/tower.txt`.
+28 Tower.txt ids of 20 score, count and node classes: 1, 2, 3, 5, 6, 7, 9-21, 101-107,
+201, 303 (the twenty-first tower is a score tower with offset 1701, group 96, level
+record 1801 and goals 60000), plus the two card towers Animalize (4) and EighthTower
+(8), which have their own catalog (see "Slice 2"). Left on the unhandled path: the
+ranking tower (activity type 6, whatever the id), and every id that is not in
+`resources/tower/tower.txt`. 53 to 56 accept the card towers; 61 to 63, 176 to 178
+and 527 take only the towers that have the matching tables.
 
 ## Task layout
 
@@ -85,7 +88,8 @@ with the scripts when `GCG_CLIENT_LUA_DIR` points at them.
 ## Server behaviour
 
 - Entry: the level must exist, the formation must exist (story levels need none)
-  and vigour must cover the cost (half, rounded up, below commander level 35).
+  and vigour must cover the cost (the full `PreCost` at every commander level, as the
+  level panel shows it; chapters keep their own halving).
   Nothing is charged at entry.
 - The run (tower, level, open flag, stored reply) is kept in the save
   (`Player.eventTower`). Settlement, replay and refusal happen inside one store
@@ -143,3 +147,84 @@ The server needs `tower` in its `--resources` list, like `card`.
   other `SetTaskValue` was found in the tower logic files and tower, lottery and
   score screens. This branch has no `TASK_CHANGE_REQ` allowlist; one must allow
   that value.
+
+## Slice 2: card towers, tower skills, boss rush SP
+
+| LuaCall                                  | Request (`tbParam`)                                    | Reply (`tbParam`)                                                                           |
+| ---------------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| 64 `Activities_AnimalizeChoiseDiff`      | `{TowerId, Diff}`                                      | `{Error: 0, Diff, tbRandom [3 x {CardId, Type}]}` or `{Error: 1}`                           |
+| 65 `Activities_AnimalizeChoiseCard`      | `{TowerId, Index}` (1 to 3)                            | the three `{CardId, Type}` (Type 1 = chosen) or `{nError}`                                  |
+| 66 `Activities_AnimalizeClickCard`       | `{TowerId}`                                            | `{bNextRandom: true, tbAward}`, `{bNextRandom: false, cardId}` (a level card) or `{nError}` |
+| 67 `Activities_AnimalizeNextStage`       | `{TowerId}`                                            | `{nError}` (0 = ok)                                                                         |
+| 68 `Activities_AnimalizeGetAchieveAward` | `{TowerId}`                                            | `{tbAward}` or `{nError: 12}`                                                               |
+| 69 `Activities_AnimalizeReset`           | `{TowerId}`                                            | `{nError}`: 0 ok, 1 not enough vigour, 2 invalid                                            |
+| 54 to 56 for tower 4 and 8               | `[type, tower, difficulty, levelId, formation, ...]`   | as slice 1; the difficulty is argument 3 (`node`), 0 for the stories                        |
+| 527 `UpgradeTowerSkill`                  | `[20 or 21, skillId]` (the table's Id)                 | `{isOk: 1, skillId}`, `{isOk: 3}` at the top level, `{nError: 8}` without items             |
+| 510 `BossRush_SelectSpBoss`              | `[levelId, idx]`                                       | `{}`                                                                                        |
+| 511 `BossRush_SaveSpFormation`           | `{}`                                                   | `{}`                                                                                        |
+| 512 `BossRush_ResetSp`                   | `{}`                                                   | `{}`                                                                                        |
+| 513 `BossRush_SaveSpResult`              | `{tbResult {blood, shield, passTime, LevelId}, bSave}` | `{}`                                                                                        |
+
+The client branches of `luacall.lua` give the reply shapes (its `MODULE_SERVER` branches
+call logic functions that this client does not contain).
+
+### Card towers (Animalize 4 and EighthTower 8)
+
+The two towers are one script (`AnimalizeLogic.lua`, `EighthTowerLogic.lua`) with two
+offsets (1000 and 3000, group 34). `CARD_TASK` lists the fields; the test compares them
+with the Lua. Levels are keyed by tower, difficulty and level id (the ids repeat for every
+difficulty), so they live in `catalog.cardLevels`, not in `catalog.levels`;
+`TowerLevel.node` holds the difficulty.
+
+A round: the story of the stage (difficulty 0 levels; the LevelId is the round: 1, 3, 5,
+10, 13), 64, then draws of three cards. 65 marks one chosen, 66 opens it: box cards pay
+(the score item adds to the score at offset + 8 and to the round's token count at
+
+- 202), fate cards add their buffs, both deal again; act and SP cards answer
+  `bNextRandom: false` and the client opens the level panel, whose entry (54) is accepted
+  only for that card's level at the current difficulty. A won act level deals again, a lost
+  one leaves the card open. Winning the SP level (card 53, level 6) ends the round: the
+  difficulty award is paid, the next difficulty opens and the screen shows the summary
+  (state 4). 67 starts the next round (a story first when the new round has an unplayed
+  one). 69 gives a round up for 5 vigour while cards are drawn. 68 pays every score award
+  that the score reaches (once). Vigour is charged at settlement (54 checks it), less the
+  energy buffs.
+
+Buffs: slot value = id | turns left << 16. `EffectTime` 1 lasts the round, 2 the next
+`Count` draws (the "show cards" and "boss next" buffs), 3 the next `Count` fights (no row
+uses it).
+
+[INFER] and gaps:
+
+- When the boss card turns up (nothing in the client or tables says): never before draw 8,
+  forced on the twentieth draw and by the "boss next" buff, in the first slot.
+- The unlock value is `difficulty << 1 | seen`: a newly opened difficulty is written with
+  bit 0 clear (the screen then plays its unlock animation) and set when the player picks it.
+- The "show cards" buff does nothing: the client never reads it.
+- Achievements: `tbAnimalizeAchievement` is never loaded by the client and the memory
+  screen opens only the stories and the score awards. No table copied, no counters.
+- No mission counters (113, 114 and the others of the C# build).
+- The client writes 34/(offset + 499) (auto fight) and 34/(offset + 10) (clears the award
+  flag) itself; a `TASK_CHANGE_REQ` allowlist must allow both for both towers.
+- The client forces the state back to the difficulty screen and refuses to pick a
+  difficulty when the tower's `EndTime` has passed (towers 4 and 8 ended in 2020): the
+  client page that opens these towers must also move the end time.
+
+### Tower skills (527)
+
+`towerskill.txt` of the twentieth and twenty-first tower: the level is the task at
+`offset + 10 + Id` (1211 + Id and 1711 + Id, group 96); the cost of the next level is
+`UpgradeCost[level]`, paid from plain stacks of `UpgradeItem` (15-121 and 15-126; neither
+has an AutoUse rule). A maxed skill answers `isOk: 3`. The client checks the count first.
+
+### Boss rush SP (510 to 513)
+
+Slots of `SixteenthTowerLogic` (group 64): 60003 teams saved, 60010 + team and 60020 + team
+health and shield percent (teams 1 to 5), 60200 + level the picked boss, 60300 + level the
+clear time. 510 needs one of the four SP levels (5 to 8) and one of the four bosses and is
+refused after the teams are saved; 511 needs all four picked, sets health to 100 and does
+nothing when resent; 512 clears the saved flag, health, picks and times of the SP levels
+only (60310, the time of the TSP level, stays); 513 with `bSave` writes the health of the
+teams that fought (holes in `blood` are skipped, values clamped to 0 to 100) and the clear
+time, rounded up to at least 1 because 0 means "not passed". All four answer `{}`.
+The TSP level's time is not written (its source would be the kill parameter of 55).

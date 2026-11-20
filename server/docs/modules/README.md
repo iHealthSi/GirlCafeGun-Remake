@@ -43,7 +43,7 @@
 
 | [Event page achievements](24-event-page-achievements.md) | Core implementation; automated tests only | Table-driven claims for event pages and the achievement panel, progress from saved state |
 
-| [Event towers](25-event-towers.md) | Core implementation; automated tests only | 19 classes of past event towers: fights, task records, node point rewards, lottery pools, swimwear score awards |
+| [Event towers](25-event-towers.md) | Core implementation; automated tests only | 20 classes of past event towers and the two card towers: fights, task records, node point rewards, lottery pools, swimwear score awards, card runs, tower skills, boss rush SP |
 
 ## 自动化验证现状
 
