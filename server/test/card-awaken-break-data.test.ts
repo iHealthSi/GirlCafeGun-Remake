@@ -16,7 +16,7 @@ import {
 } from "../src/game-data/card-enhancement-data.js";
 import {
   applyCardSkillPoints,
-  awakenedCardSkills,
+  characterCardSkills,
   cardSkillFeedPoints,
   cardSkillPointsRemaining,
 } from "../src/game-data/card-skill-data.js";
@@ -178,14 +178,18 @@ describe("card skills", () => {
     expect(target.cardSkillLevels).toEqual([4, 4, 1, 4]);
   });
 
-  it("sends MiniSkill levels only for a card that has them, never for an oath card", () => {
-    expect(awakenedCardSkills(card(1, 1, 1))).toEqual([]);
-    expect(awakenedCardSkills(card(1, 1, 1, [4, 2, 1, 3]))).toEqual([
+  it("sends MiniSkill levels for every normal card (1 when never raised), never for an oath card", () => {
+    expect(characterCardSkills(card(1, 1, 1))).toEqual([
+      { skillId: 20026, skillLevel: 1, skillType: 3 },
+      { skillId: 30262, skillLevel: 1, skillType: 2 },
+      { skillId: 38143, skillLevel: 1, skillType: 2 },
+    ]);
+    expect(characterCardSkills(card(1, 1, 1, [4, 2, 1, 3]))).toEqual([
       { skillId: 20026, skillLevel: 4, skillType: 3 },
       { skillId: 30262, skillLevel: 2, skillType: 2 },
       { skillId: 38143, skillLevel: 3, skillType: 2 },
     ]);
-    expect(awakenedCardSkills(card(1, 17, 3, [4, 2, 1, 3]))).toEqual([]);
+    expect(characterCardSkills(card(1, 17, 3, [4, 2, 1, 3]))).toEqual([]);
   });
 
   it("maps the two skill items after the 24 experience materials", () => {
