@@ -7,7 +7,8 @@ run_script(fight, choose, towers) replays the Attack menu in Lua with the Tower.
 - the list holds every served class once, oldest first, without Animalize, EighthTower, TwentyFirstTower;
 - UI_CoopChoose builds the page (Unity calls are mocked) and a tap on a tile enters that tower with the
   stock date check passing; a second tap closes the first tower again;
-- UI_CoopChoose opened with stock data still takes its stock path.
+- UI_CoopChoose opened with stock data still takes its stock path;
+- a second family (War Chess, mocked) joins the list by date, a tap opens only its row, a later tap closes it.
 run_bundle(built) reads both scripts from a built lua.u and replays the same scenario.
 Command: python test_event_list.py <release APK or lua.u>
 """
@@ -154,6 +155,49 @@ def tower_rows(text):
     return rows
 
 
+# A second family on the page (War Chess, as a family the server may serve later): its rows join the list by
+# date, a tap opens only that row (the stock lookup takes the first open row from pairs), and a later tap on a
+# tower closes it again.
+FAMILY_SCENARIO = r'''
+WARCHESS = {}
+WarChessTower = {
+  tbTotalConfig = {
+    [1] = { Id = 1, Icon = 'Poster/fightmode_missionWarChess_normal_Mul.png', BeginTime = 1645574400, EndTime = 1647374400, ClearTime = 1647633600 },
+    [2] = { Id = 2, Icon = 'Poster/fightmode_missionWarChess2_normal_Mul.png', BeginTime = 1650988800, EndTime = 1652817600, ClearTime = 1653076800 },
+  },
+  GetOpenConfig = function(self)
+    for _, v in pairs(self.tbTotalConfig) do
+      if v.BeginTime < GetTime() and v.ClearTime > GetTime() then return v end
+    end
+  end,
+  GetTower = function(self) local v = self:GetOpenConfig(); WARCHESS[#WARCHESS + 1] = v and v.Id or 0 end,
+}
+EventList.SERVED.warchess = true
+local list = EventList.Entries()
+local names, chess = {}, nil
+for i, e in ipairs(list) do
+  names[#names + 1] = e.Kind .. ':' .. e.Name
+  if e.Kind == 'warchess' and e.Key == 2 then chess = e end
+end
+EventList.Enter(chess)
+local tower
+for _, e in ipairs(list) do if e.Kind == 'tower' then tower = e end end
+EventList.Enter(tower)
+local row = WarChessTower.tbTotalConfig[2]
+local closedAgain = not (row.BeginTime < GetTime() and row.ClearTime > GetTime())
+return #list, table.concat(names, ','), table.concat(WARCHESS, ','), closedAgain, ENTERED[#ENTERED] == tower.Id
+'''
+
+
+def replay_family(fight, choose, rows):
+    lua = LuaRuntime()
+    lua.execute(HARNESS)
+    lua.execute(towers_lua(rows))
+    lua.execute(fight.decode('utf8') if isinstance(fight, bytes) else fight)
+    lua.execute(choose.decode('utf8') if isinstance(choose, bytes) else choose)
+    return tuple(lua.execute(FAMILY_SCENARIO))
+
+
 def replay(fight, choose, rows):
     lua = LuaRuntime()
     lua.execute(HARNESS)
@@ -177,7 +221,7 @@ def run_script(fight, choose, rows, patched=None):
     assert set(first_ids) <= set(served), (first_ids, served)
     dropped = set(served) - set(first_ids)
     assert all(any(r[0] == d for r in rows) for d in dropped)
-    assert not any(r[1] in ('Animalize', 'EighthTower', 'TwentyFirstTower') and r[0] in first_ids for r in rows)
+    assert not any(r[1] not in g_classes() and r[0] in first_ids for r in rows), 'only served classes'
     begins = {r[0]: r[3] for r in rows}
     assert [begins[i] for i in first_ids] == sorted(begins[i] for i in first_ids), 'oldest first'
     assert entered == 2 and failed == 0, result
@@ -185,8 +229,12 @@ def run_script(fight, choose, rows, patched=None):
     assert entered_ids == '%d,%d' % (first_ids[2], first_ids[4]), (entered_ids, first_ids[:5])
     assert first_closed == 'true', 'the first tapped tower must be closed again after the second tap'
     assert stock_two == '2' and page_after == 'nil', tail
+    total, names, chess, closed_again, tower_entered = replay_family(patched[0], patched[1], rows)
+    assert total == count + 2 and names.count('warchess:') == 2, (total, count, names)
+    assert chess == '2' and closed_again is True and tower_entered is True, (chess, closed_again, tower_entered)
     return {'stockTileOpen': stock[0], 'patchedTileOpen': open_, 'events': count, 'dropped': sorted(dropped),
-            'firstEvents': ids.split(',')[:5], 'entered': entered_ids, 'stockChooserStillWorks': True}
+            'firstEvents': ids.split(',')[:5], 'entered': entered_ids, 'stockChooserStillWorks': True,
+            'secondFamilyEntered': chess, 'secondFamilyClosedAfterOtherTap': closed_again}
 
 
 def g_classes():

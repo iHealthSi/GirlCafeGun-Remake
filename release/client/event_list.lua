@@ -5,14 +5,56 @@
 EventList = EventList or {}
 local M = EventList
 
--- Tower.txt classes that the server answers (LuaCall 53-56). Animalize, EighthTower and TwentyFirstTower
--- keep their own card state and are not served yet, so they stay off the page.
+-- Tower.txt classes that the server answers (LuaCall 53-56 and their own calls).
 M.TOWER_CLASSES = {
 	SmallTower = true, ChessTower = true, NinthTower = true, TwelfthTower = true, ThirteenthTower = true,
 	FourteenthTower = true, SeventeenthTower = true, EighteenthTower = true, NineteenthTower = true,
 	TwentiethTower = true, TenthTower = true, FifteenthTower = true, SixteenthTower = true, Swimwear = true,
 	AbsorbPeak = true, VariegatedTower = true, NodeTower = true, SeventhTower = true, EleventhTower = true,
 }
+
+-- The event families of the stock tile (UI_FightMode:CheckEventOpen), with the same entry call each.
+-- rows: the family's config rows (each has BeginTime, EndTime, ClearTime as seconds); accept: rows that
+-- belong on the page; enter: the stock entry call; label: name when the row has none.
+M.FAMILIES = {
+	{ key = 'tower', label = 'Event',
+		rows = function() return ActivitiesConfig and ActivitiesConfig.tbSmallTowerConfig end,
+		accept = function(tb) return M.TOWER_CLASSES[tb.ClassName] end,
+		enter = function(tb) ActivitiesLogic:GetTower(tb.Id) end },
+	{ key = 'micro', label = 'Micro Tower',
+		rows = function() return MicroClimbTower and MicroClimbTower.tbClimbTowerConfig end,
+		accept = function(tb) return tb.InFightMode == 1 end,
+		enter = function(tb) MicroClimbTower:GetTower(tb.Id) end },
+	{ key = 'coop', label = 'Armed Survey',
+		rows = function() return CoopClientLogic and CoopClientLogic.tbConfig end,
+		enter = function(tb) CoopClientLogic:GetTower(tb.Id) end },
+	{ key = 'music', label = 'Concert',
+		rows = function() return MusicActivityLogic and MusicActivityLogic.tbMusicTowerTotalConfig end,
+		enter = function() MusicActivityLogic:GetTower() end },
+	{ key = 'anniversary', label = 'Anniversary',
+		rows = function() return AnniversaryMainLogic and AnniversaryMainLogic.tbTowerTotalConfig end,
+		enter = function() UI.CloseAndOpen('UI_AnniversaryMain') end },
+	{ key = 'mix', label = 'Joint Event',
+		rows = function() return MixOnlineLogic and MixOnlineLogic.tbActivityConfig end,
+		enter = function() MixOnlineLogic:GetTower() end },
+	{ key = 'buff', label = 'Challenge',
+		rows = function() return BuffTowerLogic and BuffTowerLogic.tbChallengeTowerConfig end,
+		accept = function(tb) return not tb.noEntry and not tb.NoEntry end,
+		enter = function() BuffTowerLogic:GetTower() end },
+	{ key = 'linkage', label = 'Collab',
+		rows = function() return LinkageActivityLogic and LinkageActivityLogic.tbTowerConfig end,
+		enter = function() UI.CloseAndOpen('UI_RailgunMain') end },
+	{ key = 'anniversary2', label = '2nd Anniversary',
+		rows = function() return SecondAnniversaryTower and SecondAnniversaryTower.tbTotalConfig end,
+		enter = function() SecondAnniversaryTower:GetTower() end },
+	{ key = 'warchess', label = 'War Chess',
+		rows = function() return WarChessTower and WarChessTower.tbTotalConfig end,
+		enter = function() WarChessTower:GetTower() end },
+}
+
+-- Families whose server part exists. A family off this list stays off the page: its calls would get no
+-- reply and its screens would wait for ever.
+M.SERVED = { tower = true }
 
 local DAY = 86400
 M.OPEN_DAYS = 30
@@ -28,12 +70,12 @@ local function original(tb)
 	return tb.__gcgDates
 end
 
-local function towerName(tb)
+-- The row's own name when the text table had one (a missing text comes back as its key, "Tower.Name12").
+local function rowName(family, tb, count)
 	local name = tb.Name
-	if type(name) ~= 'string' or name == '' or name:find('^Tower') or name:find('^TowerMix') then
-		return 'Event ' .. tostring(tb.Id)
-	end
-	return name
+	if type(name) == 'string' and name ~= '' and not name:find('^[%w_]+%.[%w_]+$') then return name end
+	if family.key == 'tower' or count > 1 then return family.label .. ' ' .. tostring(tb.Id) end
+	return family.label
 end
 
 local function month(seconds)
@@ -42,53 +84,72 @@ local function month(seconds)
 	return ok and text or ''
 end
 
+local function familyRows(family)
+	local ok, rows = pcall(family.rows)
+	if ok and type(rows) == 'table' then return rows end
+end
+
 -- Every entry of the served families, oldest first. Dates do not matter here: all are past.
--- A row that repeats an earlier one (Tower.txt 201 = 1) is left out.
+-- A row that repeats an earlier one of its family (Tower.txt 201 = 1) is left out.
 function M.Entries()
-	local out, seen = {}, {}
-	local cfg = ActivitiesConfig and ActivitiesConfig.tbSmallTowerConfig
-	if type(cfg) ~= 'table' then return out end
-	local ids = {}
-	for id in pairs(cfg) do ids[#ids + 1] = id end
-	table.sort(ids)
-	for _, id in ipairs(ids) do
-		local tb = cfg[id]
-		if type(tb) == 'table' and M.TOWER_CLASSES[tb.ClassName] then
-			local dates = original(tb)
-			local key = table.concat({ tb.ClassName, tostring(tb.Name), tostring(dates.BeginTime) }, '|')
-			if not seen[key] then
-				seen[key] = true
-				out[#out + 1] = { Id = id, Kind = 'tower', Name = towerName(tb), Icon = tb.Icon,
+	local out = {}
+	for _, family in ipairs(M.FAMILIES) do
+		local rows = M.SERVED[family.key] and familyRows(family)
+		if rows then
+			local ids, seen, picked = {}, {}, {}
+			for id in pairs(rows) do ids[#ids + 1] = id end
+			table.sort(ids, function(a, b)
+				if type(a) == type(b) then return a < b end
+				return tostring(a) < tostring(b)
+			end)
+			for _, id in ipairs(ids) do
+				local tb = rows[id]
+				if type(tb) == 'table' and type(tb.BeginTime) == 'number' and (not family.accept or family.accept(tb)) then
+					local dates = original(tb)
+					local key = table.concat({ tostring(tb.ClassName), tostring(tb.Name), tostring(dates.BeginTime) }, '|')
+					if not seen[key] then
+						seen[key] = true
+						picked[#picked + 1] = { id = id, tb = tb }
+					end
+				end
+			end
+			for _, p in ipairs(picked) do
+				local dates = original(p.tb)
+				out[#out + 1] = { Id = p.tb.Id or p.id, Key = p.id, Kind = family.key, Family = family,
+					Name = rowName(family, p.tb, #picked), Icon = p.tb.Icon,
 					Start = dates.BeginTime or 0, Month = month(dates.BeginTime) }
 			end
 		end
 	end
 	table.sort(out, function(a, b)
 		if a.Start ~= b.Start then return a.Start < b.Start end
-		return a.Id < b.Id
+		if a.Kind ~= b.Kind then return a.Kind < b.Kind end
+		return tostring(a.Key) < tostring(b.Key)
 	end)
 	return out
 end
 
--- Make one tower the only open one of Tower.txt (now - 1 day .. now + OPEN_DAYS) and put every row that
--- an earlier tap opened back to its own dates. Lookups that take "the first open tower" then find this one.
+-- Make one row the only open event of every family (now - 1 day .. now + OPEN_DAYS) and put every row
+-- that an earlier tap opened back to its own dates. Lookups that take "the first open row" then find it.
+M.opened = M.opened or {}
 function M.Activate(entry)
-	local cfg = ActivitiesConfig and ActivitiesConfig.tbSmallTowerConfig
-	local chosen = cfg and cfg[entry.Id]
-	if not chosen then return false end
-	for _, tb in pairs(cfg) do
-		if type(tb) == 'table' and tb.__gcgOpened and tb ~= chosen then
+	local rows = familyRows(entry.Family)
+	local chosen = rows and rows[entry.Key]
+	if type(chosen) ~= 'table' then return false end
+	for i = #M.opened, 1, -1 do
+		local tb = M.opened[i]
+		if tb ~= chosen then
 			local dates = original(tb)
 			tb.BeginTime, tb.EndTime, tb.ClearTime = dates.BeginTime, dates.EndTime, dates.ClearTime
-			tb.__gcgOpened = nil
 		end
+		M.opened[i] = nil
 	end
 	original(chosen)
 	local now = GetTime()
 	chosen.BeginTime = now - DAY
 	chosen.EndTime = now + M.OPEN_DAYS * DAY
 	chosen.ClearTime = chosen.EndTime + 3 * DAY
-	chosen.__gcgOpened = true
+	M.opened[1] = chosen
 	return true
 end
 
@@ -97,8 +158,8 @@ function M.Enter(entry)
 		Game.MessageBox.Simple(UIText('UI_FightMode.tip'))
 		return
 	end
-	log('enter tower ' .. tostring(entry.Id))
-	ActivitiesLogic:GetTower(entry.Id)
+	log('enter ' .. entry.Kind .. ' ' .. tostring(entry.Key))
+	entry.Family.enter(familyRows(entry.Family)[entry.Key])
 end
 
 function M.Open(list)
