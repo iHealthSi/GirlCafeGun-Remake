@@ -198,11 +198,17 @@ describe("event tower fights", () => {
     expect(money(current(repository), 1)).toBe(80);
   });
 
-  it("halves the cost below level 35", async () => {
-    const { repository } = await fixture({ level: 20 });
-    await repository.handleEventTowerRequest(account, enter(2, 1, 2));
+  it("charges the full cost below level 35, as the level panel shows it", async () => {
+    const { repository } = await fixture({ level: 20, vigour: 12 });
+    // Level 2 of the small tower costs 10: half of it would let a level 20 player in with 5.
+    expect(
+      (await repository.handleEventTowerRequest(account, enter(2, 1, 2))).rejected,
+    ).toBeNull();
     await repository.handleEventTowerRequest(account, pass(2, 1, 2, { nScore: 1 }));
-    expect(money(current(repository), 1)).toBe(95);
+    expect(money(current(repository), 1)).toBe(2);
+    const { repository: poor } = await fixture({ level: 20, vigour: 9 });
+    const refused = await poor.handleEventTowerRequest(account, enter(2, 1, 2));
+    expect(refused.rejected?.code).toBe(5);
   });
 
   it("refuses an entry without level, formation or vigour and keeps the save", async () => {

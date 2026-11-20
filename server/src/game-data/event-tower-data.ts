@@ -681,11 +681,6 @@ export function rollTowerAwards(
   return rollChapterAwards(config, firstClear, seed);
 }
 
-/** Commanders below level 35 pay half, rounded up (the same support plan as chapters). */
-export function effectiveTowerCost(cost: number, playerLevel: number): number {
-  return playerLevel < 35 ? Math.ceil(cost / 2) : cost;
-}
-
 // ================================================================ requests
 
 /** The client's JSON encoder writes a Lua array with holes as [..., null, ...]. */

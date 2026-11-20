@@ -16,7 +16,6 @@ import {
   LUA_COMMAND_TOWER_PASS,
   TOWER_ITEM_TASKS,
   TOWER_LAYOUTS,
-  effectiveTowerCost,
   eventTowerErrorReply,
   makeTowerTaskId,
   nextLevelRecord,
@@ -194,12 +193,6 @@ describe("event tower tables", () => {
       fixedAwards: [{ award: [15, 6, 1, 1, 9] as never, weight: 0 }],
     };
     expect(rollTowerAwards(never, false, "seed")).toEqual([]);
-  });
-
-  it("charge half the vigour below commander level 35, rounded up", () => {
-    expect(effectiveTowerCost(15, 34)).toBe(8);
-    expect(effectiveTowerCost(15, 35)).toBe(15);
-    expect(effectiveTowerCost(0, 1)).toBe(0);
   });
 });
 

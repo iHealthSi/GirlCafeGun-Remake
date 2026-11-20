@@ -60,7 +60,6 @@ import {
   SKILL_TASK_OFFSET,
   SWIMWEAR_TASK,
   TOWER_ERROR,
-  effectiveTowerCost,
   eventTowerErrorReply,
   makeTowerTaskId,
   nextLevelRecord,
@@ -2047,7 +2046,7 @@ function applyEventTowerRequest(
           !player.formations.some(({ id }) => id === request.formationId)
         )
           throw refuse(TOWER_ERROR.formation, "unknown_formation");
-        const cost = effectiveTowerCost(level.cost, player.level);
+        const cost = level.cost;
         const available =
           player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
         if (available < cost) throw refuse(TOWER_ERROR.vigour, "insufficient_vigour");
@@ -2093,7 +2092,7 @@ function applyEventTowerRequest(
         return outcome;
       }
 
-      const cost = level.type === 2 ? 0 : effectiveTowerCost(level.cost, player.level);
+      const cost = level.type === 2 ? 0 : level.cost;
       spendTowerVigour(player, cost, outcome, true);
 
       const key = catalog.levelKey(tower, level.levelId);
@@ -2239,8 +2238,7 @@ function applyEventTowerRequest(
         run.tower === tower.id &&
         run.level === level.levelId
       ) {
-        const cost =
-          level.type === 2 ? 0 : effectiveTowerCost(level.cost, player.level);
+        const cost = level.type === 2 ? 0 : level.cost;
         spendTowerVigour(player, cost, outcome, false);
         run.active = false;
         run.resultCmd = LUA_COMMAND_TOWER_FAIL;
