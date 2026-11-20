@@ -35,6 +35,37 @@ import {
   type BountyEventType,
   type BountyLevelConfig,
 } from "../game-data/bounty-data.js";
+import { randomInt, randomUUID } from "node:crypto";
+import {
+  EventTowerCatalog,
+  LUA_COMMAND_NODE_POINT_REWARD,
+  LUA_COMMAND_POND_DRAW,
+  LUA_COMMAND_POND_RESET,
+  LUA_COMMAND_SWIMWEAR_SCORE_AWARD,
+  LUA_COMMAND_SWIMWEAR_SERVER_AWARD,
+  LUA_COMMAND_SWIMWEAR_SERVER_SCORE,
+  LUA_COMMAND_TOWER_ENTER,
+  LUA_COMMAND_TOWER_FAIL,
+  LUA_COMMAND_TOWER_GET,
+  LUA_COMMAND_TOWER_PASS,
+  NODE_TASK,
+  POND_SIZE,
+  SWIMWEAR_TASK,
+  TOWER_ERROR,
+  effectiveTowerCost,
+  eventTowerErrorReply,
+  makeTowerTaskId,
+  nextLevelRecord,
+  pickPondSlot,
+  readEventTowerRun,
+  reachedGoal,
+  reportScore,
+  rollTowerAwards,
+  towerItemTask,
+  type EventTowerRequest,
+  type EventTowerState,
+  type TowerInfo,
+} from "../game-data/event-tower-data.js";
 import {
   characterCardDecompositionReward,
   MAX_CARD_DECOMPOSITION_COUNT,
@@ -492,6 +523,8 @@ export interface Player {
   ibShop?: IBShopState;
   shops?: Record<string, ShopState>;
   promise?: PromiseState;
+  /** The open or last event tower run (resent settlements replay its reply). */
+  eventTower?: EventTowerState;
 }
 
 export interface PersistedState {
@@ -522,6 +555,18 @@ export interface BountySettlement {
   updatedMoney: MoneyState[];
   updatedGirls: GirlState[];
   experienceUpdate: PlayerExperienceUpdate;
+}
+
+export interface EventTowerResult {
+  player: Player;
+  /** The reply body for the client (an error reply when rejected). */
+  response: unknown;
+  updatedItems: InventoryItemState[];
+  updatedMoney: MoneyState[];
+  updatedGirls: GirlState[];
+  experienceUpdate: PlayerExperienceUpdate | null;
+  /** Set when the request was refused; the save is unchanged then. */
+  rejected: { code: number; reason: string } | null;
 }
 
 export interface ChapterStarAwardResult {
@@ -870,6 +915,17 @@ export class InsufficientVigourError extends Error {
   ) {
     super(`Insufficient vigour: required ${required}, available ${available}`);
     this.name = "InsufficientVigourError";
+  }
+}
+
+/** A refused event tower request; code is the client's ActivitiesLogic.tbErrorCode. */
+export class EventTowerError extends Error {
+  constructor(
+    readonly code: number,
+    readonly reason: string,
+  ) {
+    super(`Event tower request refused: ${reason}`);
+    this.name = "EventTowerError";
   }
 }
 
@@ -1785,6 +1841,518 @@ function grantAwards(
       [genre, detail, particular, templateLevel, count],
       updatedItemGuids,
     );
+  }
+}
+
+// ================================================================ event towers
+
+interface TowerOutcome {
+  response: unknown;
+  itemGuids: Set<number>;
+  moneyIds: Set<number>;
+  girlIds: Set<number>;
+  experience: PlayerExperienceUpdate | null;
+}
+
+function towerTask(player: Player, group: number, key: number): number {
+  return player.taskValues[String(makeTowerTaskId(group, key))] ?? 0;
+}
+
+function setTowerTask(player: Player, group: number, key: number, value: number): void {
+  if (key < 0 || key > 0xffff)
+    throw new Error(`Task key out of range: ${group}/${key}`);
+  player.taskValues[String(makeTowerTaskId(group, key))] = Math.min(
+    Math.max(0, Math.trunc(value)),
+    0x7fffffff,
+  );
+}
+
+/**
+ * Awards for an event tower. Score and exp items that ItemList marks AutoUse
+ * add to a task value (TOWER_ITEM_TASKS); everything else is granted as usual.
+ */
+function grantTowerAwards(
+  player: Player,
+  awards: readonly (readonly number[])[],
+  outcome: TowerOutcome,
+): void {
+  for (const award of awards) {
+    const count = Math.max(0, award[4] ?? 0);
+    if (count === 0) continue;
+    const effect = towerItemTask(award);
+    if (effect) {
+      setTowerTask(
+        player,
+        effect.group,
+        effect.key,
+        towerTask(player, effect.group, effect.key) + count,
+      );
+      continue;
+    }
+    grantAwards(
+      player,
+      [[award[0]!, award[1]!, award[2]!, award[3]!, count]],
+      outcome.itemGuids,
+      outcome.moneyIds,
+    );
+  }
+}
+
+function fightRoster(player: Player, formationId: number): number[] {
+  const formation = player.formations.find((entry) => entry.id === formationId);
+  if (!formation) return [];
+  const owned = new Set(
+    player.inventory.filter(isCharacterCard).map((card) => card.guid),
+  );
+  const guids = formation.fightCards
+    .map((card) => card.mainCardGuid)
+    .filter((guid) => guid > 0);
+  if (guids.length === 0 || guids.some((guid) => !owned.has(guid))) return [];
+  return [...new Set(guids)];
+}
+
+function spendTowerVigour(
+  player: Player,
+  cost: number,
+  outcome: TowerOutcome,
+  strict: boolean,
+): void {
+  let amount = cost;
+  if (amount <= 0) return;
+  let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
+  const available = vigour?.count ?? 0;
+  if (available < amount) {
+    if (strict) throw new EventTowerError(TOWER_ERROR.vigour, "insufficient_vigour");
+    amount = available;
+    if (amount <= 0) return;
+  }
+  if (!vigour) {
+    vigour = { id: MONEY_VIGOUR, count: 0 };
+    player.money.push(vigour);
+  }
+  vigour.count -= amount;
+  outcome.moneyIds.add(MONEY_VIGOUR);
+  incrementDailyMissionProgress(player, 109, amount);
+}
+
+function refuse(code: number, reason: string): EventTowerError {
+  return new EventTowerError(code, reason);
+}
+
+function pondSlotKey(tower: TowerInfo, pondId: number, slot: number): number {
+  return tower.layout.offset + NODE_TASK.pondRecord + (pondId - 1) * POND_SIZE + slot;
+}
+
+function currentPond(player: Player, tower: TowerInfo): number {
+  const pond = towerTask(
+    player,
+    tower.layout.group,
+    tower.layout.offset + NODE_TASK.pondId,
+  );
+  return pond === 0 ? 1 : pond;
+}
+
+/**
+ * Applies one event tower request to the player. Throws EventTowerError for a
+ * refusal; the caller's store update then drops every change made here.
+ */
+function applyEventTowerRequest(
+  player: Player,
+  request: EventTowerRequest,
+  catalog: EventTowerCatalog,
+  random: (maxExclusive: number) => number,
+): TowerOutcome {
+  const outcome: TowerOutcome = {
+    response: {},
+    itemGuids: new Set(),
+    moneyIds: new Set(),
+    girlIds: new Set(),
+    experience: null,
+  };
+  const tower = catalog.towers.get(request.towerId);
+  if (!tower) throw refuse(TOWER_ERROR.invalid, "unknown_tower");
+  const { group, offset } = tower.layout;
+
+  const finishAwards = (): void => {
+    const reconciliation = reconcileGirlAppearanceState(player, outcome.itemGuids);
+    for (const girlId of reconciliation.updatedGirlIds) outcome.girlIds.add(girlId);
+    reconcileGirlFetterUnlocks(player);
+  };
+  const awardList = (awards: readonly (readonly number[])[]): number[][] =>
+    awards.map((award) => [...award.slice(0, 5), 100]);
+
+  switch (request.command) {
+    case LUA_COMMAND_TOWER_GET: {
+      const personal = tower.layout.scoreTask
+        ? towerTask(player, group, tower.layout.scoreTask)
+        : null;
+      outcome.response =
+        personal === null
+          ? { TowerId: tower.id }
+          : {
+              TowerId: tower.id,
+              tbExpParam: {
+                nSwimServerScore: personal,
+                nAllSwimServerScore: catalog.allServiceScore.get(tower.id) ?? 0,
+              },
+            };
+      return outcome;
+    }
+
+    case LUA_COMMAND_TOWER_ENTER: {
+      const level = catalog.level(tower.id, request.levelId);
+      if (!level) throw refuse(TOWER_ERROR.invalid, "unknown_level");
+      let cardGuids: number[] = [];
+      if (level.type !== 2) {
+        if (
+          request.formationId <= 0 ||
+          !player.formations.some(({ id }) => id === request.formationId)
+        )
+          throw refuse(TOWER_ERROR.formation, "unknown_formation");
+        const cost = effectiveTowerCost(level.cost, player.level);
+        const available =
+          player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
+        if (available < cost) throw refuse(TOWER_ERROR.vigour, "insufficient_vigour");
+        cardGuids = fightRoster(player, request.formationId);
+      }
+      // A resent request while the same fight is open keeps its run.
+      const open = readEventTowerRun(player.eventTower);
+      if (!open?.active || open.tower !== tower.id || open.level !== level.levelId) {
+        player.eventTower = {
+          run: {
+            id: randomUUID(),
+            tower: tower.id,
+            level: level.levelId,
+            active: true,
+            activityType: request.activityType,
+            node: request.node,
+            formationId: request.formationId,
+            cardGuids,
+            resultCmd: 0,
+            reply: null,
+          },
+        };
+      }
+      outcome.response = {
+        tbData: [request.activityType, tower.id, request.node, level.levelId],
+        tbDrop: [],
+        tbDropItems: [],
+      };
+      return outcome;
+    }
+
+    case LUA_COMMAND_TOWER_PASS: {
+      const level = catalog.level(tower.id, request.levelId);
+      if (!level) throw refuse(TOWER_ERROR.invalid, "unknown_level");
+      const run = readEventTowerRun(player.eventTower);
+      if (!run || run.tower !== tower.id || run.level !== level.levelId)
+        throw refuse(TOWER_ERROR.invalid, "no_matching_entry");
+      if (!run.active) {
+        // The client resends a settlement until it hears back: replay, never pay twice.
+        if (run.resultCmd !== LUA_COMMAND_TOWER_PASS || run.reply === null)
+          throw refuse(TOWER_ERROR.invalid, "entry_already_closed");
+        outcome.response = structuredClone(run.reply);
+        return outcome;
+      }
+
+      const cost = level.type === 2 ? 0 : effectiveTowerCost(level.cost, player.level);
+      spendTowerVigour(player, cost, outcome, true);
+
+      const key = catalog.levelKey(tower, level.levelId);
+      const before = towerTask(player, group, key);
+      const score = reportScore(request.report);
+      const awards: number[][] = rollTowerAwards(level, before <= 0, run.id);
+      grantTowerAwards(player, awards, outcome);
+      setTowerTask(
+        player,
+        group,
+        key,
+        nextLevelRecord(tower.layout.progress, before, score, request.stars),
+      );
+
+      if (tower.layout.progress === "stars") {
+        if (level.type === 0 && score > 0)
+          setTowerTask(
+            player,
+            group,
+            offset + NODE_TASK.score,
+            towerTask(player, group, offset + NODE_TASK.score) + score,
+          );
+        if (level.type === 1) {
+          const spKey = offset + NODE_TASK.spLevelScore + level.levelId;
+          setTowerTask(
+            player,
+            group,
+            spKey,
+            Math.max(towerTask(player, group, spKey), score),
+          );
+          const passKey = offset + NODE_TASK.spPassCount + level.levelId;
+          setTowerTask(player, group, passKey, towerTask(player, group, passKey) + 1);
+        }
+        if (level.node > 0) {
+          const complete = catalog
+            .nodeLevels(tower.id, level.node)
+            .every(
+              (entry) =>
+                towerTask(player, group, catalog.levelKey(tower, entry.levelId)) > 0,
+            );
+          const nodeKey = offset + NODE_TASK.nodePass + level.node;
+          if (complete && towerTask(player, group, nodeKey) === 0)
+            setTowerTask(player, group, nodeKey, 1);
+        }
+      }
+
+      // Star goals: the level's score is the sum of the reached goals' points.
+      const newGoalIds: number[] = [];
+      const goals = catalog.goals.get(`${tower.id}:${level.levelId}`);
+      if (level.type === 3 && tower.layout.goalBase > 0 && goals) {
+        const base = tower.layout.goalBase;
+        const previous = towerTask(player, group, base + level.levelId);
+        for (const goal of goals) {
+          const flag = base + level.levelId * 100 + goal.id;
+          if (
+            !reachedGoal(request.report, goal.id) ||
+            towerTask(player, group, flag) > 0
+          )
+            continue;
+          setTowerTask(player, group, flag, 1);
+          newGoalIds.push(goal.id);
+        }
+        const reached = goals
+          .filter(
+            (goal) =>
+              towerTask(player, group, base + level.levelId * 100 + goal.id) > 0,
+          )
+          .reduce((total, goal) => total + goal.points, 0);
+        const total = Math.max(previous, reached);
+        setTowerTask(player, group, base + level.levelId, total);
+        const thresholds =
+          catalog.goalRewards.get(`${tower.id}:${level.levelId}`) ?? [];
+        for (const threshold of thresholds) {
+          if (threshold.points <= previous || threshold.points > total) continue;
+          grantTowerAwards(player, threshold.rewards, outcome);
+          awards.push(...awardList(threshold.rewards));
+        }
+      }
+
+      // Variegated towers keep a lifetime score of the event currency earned.
+      if (tower.layout.scoreTask && tower.money1 && !towerItemTask(tower.money1)) {
+        const [g, d, p, l] = tower.money1;
+        const earned = awards
+          .filter((a) => a[0] === g && a[1] === d && a[2] === p && a[3] === l)
+          .reduce((total, a) => total + (a[4] ?? 0), 0);
+        if (earned > 0)
+          setTowerTask(
+            player,
+            group,
+            tower.layout.scoreTask,
+            towerTask(player, group, tower.layout.scoreTask) + earned,
+          );
+      }
+
+      if (level.masterExp > 0) {
+        outcome.experience = applyPlayerExperience(player, level.masterExp);
+        if (outcome.experience.vigourRecovery > 0) outcome.moneyIds.add(MONEY_VIGOUR);
+      }
+      if (level.type !== 2 && run.cardGuids.length > 0) {
+        try {
+          promiseFightProgress(
+            player,
+            {
+              kind: "tower",
+              runId: run.id,
+              formationId: run.formationId,
+              cardGuids: run.cardGuids,
+              activityId: run.activityType,
+            },
+            Date.now(),
+            PromiseCatalog.loadDefault(),
+          );
+        } catch (error) {
+          if (!(error instanceof PromiseOperationError)) throw error;
+        }
+      }
+      finishAwards();
+
+      const response = {
+        tbData: awards,
+        nMasterExp: level.masterExp,
+        nCardExp: level.cardExp,
+        newGoalIds,
+        nGetScore: score,
+        nCardAddScore: 0,
+        nPetAddScore: 0,
+      };
+      run.active = false;
+      run.resultCmd = LUA_COMMAND_TOWER_PASS;
+      run.reply = response;
+      outcome.response = response;
+      return outcome;
+    }
+
+    case LUA_COMMAND_TOWER_FAIL: {
+      // The client shows defeat on its own and ignores the reply. Vigour stays
+      // spent, as for a failed chapter.
+      const run = readEventTowerRun(player.eventTower);
+      const level = catalog.level(tower.id, request.levelId);
+      if (
+        run?.active &&
+        level &&
+        run.tower === tower.id &&
+        run.level === level.levelId
+      ) {
+        const cost =
+          level.type === 2 ? 0 : effectiveTowerCost(level.cost, player.level);
+        spendTowerVigour(player, cost, outcome, false);
+        run.active = false;
+        run.resultCmd = LUA_COMMAND_TOWER_FAIL;
+        run.reply = {};
+      }
+      outcome.response = {};
+      return outcome;
+    }
+
+    case LUA_COMMAND_SWIMWEAR_SERVER_SCORE: {
+      // On a private server the whole server is this player.
+      outcome.response = {
+        nTowerId: tower.id,
+        Score: tower.layout.scoreTask
+          ? towerTask(player, group, tower.layout.scoreTask)
+          : 0,
+      };
+      return outcome;
+    }
+
+    case LUA_COMMAND_SWIMWEAR_SCORE_AWARD:
+    case LUA_COMMAND_SWIMWEAR_SERVER_AWARD: {
+      const personal = request.command === LUA_COMMAND_SWIMWEAR_SCORE_AWARD;
+      const scoreTask = tower.layout.scoreTask;
+      const list = (personal ? catalog.scoreAwards : catalog.serverAwards).get(
+        tower.id,
+      );
+      if (!scoreTask || tower.layout.progress !== "passCount" || !list)
+        throw refuse(TOWER_ERROR.noAward, "no_award_table");
+      const flagBase =
+        offset + (personal ? SWIMWEAR_TASK.scoreAward : SWIMWEAR_TASK.serverAward);
+      const score = towerTask(player, group, scoreTask);
+      // UI_SecondTowerReward: a server award shows when floor(1000 * serverScore / allServiceScore) >= Score.
+      const reached = (needed: number): boolean => {
+        if (personal) return score >= needed;
+        const all = catalog.allServiceScore.get(tower.id) ?? 0;
+        return all > 0 && Math.floor((1000 * score) / all) >= needed;
+      };
+      // Index 0 is the "claim all" button of the personal list.
+      const wanted =
+        request.index === 0 && personal
+          ? list.filter(
+              (entry) =>
+                towerTask(player, group, flagBase + entry.order) === 0 &&
+                reached(entry.score),
+            )
+          : list.filter((entry) => entry.order === request.index);
+      if (wanted.length === 0) throw refuse(TOWER_ERROR.noAward, "no_such_award");
+      const granted: number[][] = [];
+      for (const entry of wanted) {
+        if (towerTask(player, group, flagBase + entry.order) > 0)
+          throw refuse(TOWER_ERROR.gotAward, "already_claimed");
+        if (!reached(entry.score)) throw refuse(TOWER_ERROR.point, "score_too_low");
+        grantTowerAwards(player, entry.awards, outcome);
+        setTowerTask(player, group, flagBase + entry.order, 1);
+        granted.push(...awardList(entry.awards));
+      }
+      finishAwards();
+      outcome.response = { nTowerId: tower.id, tbAward: granted };
+      return outcome;
+    }
+
+    case LUA_COMMAND_NODE_POINT_REWARD: {
+      const list = catalog.pointRewards.get(tower.id);
+      if (!list) throw refuse(TOWER_ERROR.invalid, "no_point_rewards");
+      const score = towerTask(player, group, offset + NODE_TASK.score);
+      const wanted = request.rewardIds ? new Set(request.rewardIds) : null;
+      const due = list.filter(
+        (entry) =>
+          entry.goal <= score &&
+          (!wanted || wanted.has(entry.id)) &&
+          towerTask(player, group, offset + NODE_TASK.pointAward + entry.id) === 0,
+      );
+      if (due.length === 0) throw refuse(TOWER_ERROR.noAward, "nothing_to_claim");
+      const granted: number[][] = [];
+      for (const entry of due) {
+        grantTowerAwards(player, entry.rewards, outcome);
+        setTowerTask(player, group, offset + NODE_TASK.pointAward + entry.id, 1);
+        granted.push(...awardList(entry.rewards));
+      }
+      finishAwards();
+      // UI_TowerScoreInfo compares res with == true, so it must be a real boolean.
+      outcome.response = { res: true, Reward: granted };
+      return outcome;
+    }
+
+    case LUA_COMMAND_POND_DRAW: {
+      const token = catalog.tokens.get(`${tower.id}:${request.type}`);
+      const slots = catalog.pondSlots(tower.id, request.pondId);
+      if (!token || !slots || currentPond(player, tower) !== request.pondId)
+        throw refuse(TOWER_ERROR.invalid, "unknown_pond");
+      const wallet = player.money.find(({ id }) => id === token.moneyId);
+      if ((wallet?.count ?? 0) < token.cost)
+        throw refuse(TOWER_ERROR.point, "not_enough_tokens");
+      const records = slots.map((_, index) =>
+        towerTask(player, group, pondSlotKey(tower, request.pondId, index + 1)),
+      );
+      const left = slots.reduce(
+        (total, slot, index) => total + Math.max(0, slot.count - records[index]!),
+        0,
+      );
+      if (left < Math.max(1, token.times))
+        throw refuse(TOWER_ERROR.pondEmpty, "pond_exhausted");
+      if (wallet) wallet.count -= token.cost;
+      outcome.moneyIds.add(token.moneyId);
+      const drawn: number[] = [];
+      for (let n = 0; n < token.times; n++) {
+        const slot = pickPondSlot(slots, records, random);
+        if (slot < 0) throw refuse(TOWER_ERROR.pondEmpty, "pond_exhausted");
+        records[slot] = records[slot]! + 1;
+        drawn.push(slot + 1);
+        grantTowerAwards(player, [slots[slot]!.award], outcome);
+        setTowerTask(
+          player,
+          group,
+          pondSlotKey(tower, request.pondId, slot + 1),
+          records[slot]!,
+        );
+      }
+      finishAwards();
+      outcome.response = { nTowerId: tower.id, nPondId: request.pondId, tbItem: drawn };
+      return outcome;
+    }
+
+    case LUA_COMMAND_POND_RESET: {
+      const slots = catalog.pondSlots(tower.id, request.pondId);
+      if (!slots || currentPond(player, tower) !== request.pondId)
+        throw refuse(TOWER_ERROR.invalid, "unknown_pond");
+      const records = slots.map((_, index) =>
+        towerTask(player, group, pondSlotKey(tower, request.pondId, index + 1)),
+      );
+      const keyDrawn = slots.some((slot, index) => slot.key && records[index]! > 0);
+      const emptied = slots.every((slot, index) => records[index]! >= slot.count);
+      if (!keyDrawn && !emptied) throw refuse(TOWER_ERROR.invalid, "pond_not_finished");
+      const resetsKey = offset + NODE_TASK.pondResets;
+      if (slots[0]!.loop === 0) {
+        // The last pool repeats (Loop 0): clear it in place; the title counts the resets.
+        slots.forEach((_, index) =>
+          setTowerTask(player, group, pondSlotKey(tower, request.pondId, index + 1), 0),
+        );
+        setTowerTask(player, group, resetsKey, towerTask(player, group, resetsKey) + 1);
+        outcome.response = { nResult: 0, nPondId: request.pondId };
+      } else if (catalog.pondSlots(tower.id, request.pondId + 1)) {
+        setTowerTask(player, group, offset + NODE_TASK.pondId, request.pondId + 1);
+        outcome.response = { nResult: 0, nPondId: request.pondId + 1 };
+      } else {
+        outcome.response = { nResult: 1, nPondId: request.pondId };
+      }
+      return outcome;
+    }
   }
 }
 
@@ -6582,6 +7150,77 @@ export class PlayerRepository {
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
       experienceUpdate,
+    };
+  }
+
+  /**
+   * The past event towers: LuaCall 53-56, 61-63 and 176-178. A refusal leaves
+   * the save unchanged and returns the client's error reply.
+   */
+  async handleEventTowerRequest(
+    account: string,
+    request: EventTowerRequest,
+    options: { random?: (maxExclusive: number) => number } = {},
+  ): Promise<EventTowerResult> {
+    const catalog = EventTowerCatalog.loadDefault();
+    const random = options.random ?? ((max: number) => randomInt(max));
+    const readOnly =
+      request.command === LUA_COMMAND_TOWER_GET ||
+      request.command === LUA_COMMAND_SWIMWEAR_SERVER_SCORE;
+    let player: Player | undefined;
+    let outcome: TowerOutcome | undefined;
+    try {
+      if (readOnly) {
+        player = this.#store.snapshot().players[account];
+        if (!player) throw new Error(`Unknown player account: ${account}`);
+        outcome = applyEventTowerRequest(player, request, catalog, random);
+      } else {
+        await this.#store.update((state) => {
+          const draft = state.players[account];
+          if (!draft) throw new Error(`Unknown player account: ${account}`);
+          outcome = applyEventTowerRequest(draft, request, catalog, random);
+          player = draft;
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof EventTowerError)) throw error;
+      const current = this.#store.snapshot().players[account];
+      if (!current) throw new Error(`Unknown player account: ${account}`);
+      this.#logger.warn("player.event_tower.rejected", {
+        account,
+        command: request.command,
+        tower: request.towerId,
+        reason: error.reason,
+        code: error.code,
+      });
+      return {
+        player: current,
+        response: eventTowerErrorReply(request, error.code),
+        updatedItems: [],
+        updatedMoney: [],
+        updatedGirls: [],
+        experienceUpdate: null,
+        rejected: { code: error.code, reason: error.reason },
+      };
+    }
+    if (!player || !outcome)
+      throw new Error(`Failed to handle event tower request: ${account}`);
+    const snapshot = structuredClone(player);
+    if (!readOnly)
+      this.#logger.info("player.event_tower", {
+        account,
+        command: request.command,
+        tower: request.towerId,
+      });
+    const { itemGuids, moneyIds, girlIds } = outcome;
+    return {
+      player: snapshot,
+      response: outcome.response,
+      updatedItems: snapshot.inventory.filter(({ guid }) => itemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id }) => moneyIds.has(id)),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
+      experienceUpdate: outcome.experience,
+      rejected: null,
     };
   }
 
