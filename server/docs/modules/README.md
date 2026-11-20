@@ -43,6 +43,8 @@
 
 | [Event page achievements](24-event-page-achievements.md) | Core implementation; automated tests only | Table-driven claims for event pages and the achievement panel, progress from saved state |
 
+| [Event towers](25-event-towers.md) | Core implementation; automated tests only | 19 classes of past event towers: fights, task records, node point rewards, lottery pools, swimwear score awards |
+
 ## 自动化验证现状
 
 `pnpm check` 会运行格式检查、ESLint、TypeScript 严格类型检查、Vitest 和生产
