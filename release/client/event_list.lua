@@ -11,6 +11,7 @@ M.TOWER_CLASSES = {
 	FourteenthTower = true, SeventeenthTower = true, EighteenthTower = true, NineteenthTower = true,
 	TwentiethTower = true, TenthTower = true, FifteenthTower = true, SixteenthTower = true, Swimwear = true,
 	AbsorbPeak = true, VariegatedTower = true, NodeTower = true, SeventhTower = true, EleventhTower = true,
+	Animalize = true, EighthTower = true, TwentyFirstTower = true,
 }
 
 -- The event families of the stock tile (UI_FightMode:CheckEventOpen), with the same entry call each.
