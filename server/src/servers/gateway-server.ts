@@ -25,6 +25,8 @@ import {
   LUA_COMMAND_DO_SETTLE,
   LUA_COMMAND_SWIMWEAR_SERVER_SCORE,
   LUA_COMMAND_TOWER_GET,
+  TOWER_ERROR,
+  eventTowerErrorReply,
   parseEventTowerCall,
 } from "../game-data/event-tower-data.js";
 import {
@@ -3659,10 +3661,34 @@ export function createGatewayServer({
           call?.method === "LuaCall" ? parseEventTowerCall(call.parameters) : null;
         if (eventTower) {
           const { request, settled } = eventTower;
-          const result = await players.handleEventTowerRequest(
-            context.account,
-            request,
-          );
+          // 55 and 56 are resent at every reconnect until a reply clears them, so an
+          // unexpected error is logged and answered like a refusal instead of dropped.
+          let result: Awaited<ReturnType<typeof players.handleEventTowerRequest>>;
+          try {
+            result = await players.handleEventTowerRequest(context.account, request);
+          } catch (error) {
+            logger.error("lua.event_tower_failed", {
+              peer,
+              account: context.account,
+              command: request.command,
+              tower: request.towerId,
+              message:
+                error instanceof Error ? (error.stack ?? error.message) : String(error),
+            });
+            const failed = {
+              sCmd: request.command,
+              tbParam: eventTowerErrorReply(request, TOWER_ERROR.invalid),
+            };
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall(
+                "LuaCall",
+                settled ? { sCmd: LUA_COMMAND_DO_SETTLE, tbParam: failed } : failed,
+              ),
+            );
+            return;
+          }
           context.player = result.player;
           // The client's reply handlers re-read money, items and task values, so they go out first.
           for (const money of result.updatedMoney) {
