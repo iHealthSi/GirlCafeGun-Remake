@@ -88,8 +88,10 @@ with the scripts when `GCG_CLIENT_LUA_DIR` points at them.
 ## Server behaviour
 
 - Entry: the level must exist, the formation must exist (story levels need none)
-  and vigour must cover the cost (the full `PreCost` at every commander level, as the
-  level panel shows it; chapters keep their own halving).
+  and vigour must cover the cost the client computes: `RewardActivityLogic:
+GetActivityEnergySale` cuts 50% below commander level 35 (the support plan; only
+  the en_US and ko_KR clients skip it, this one is zh_CN) and rounds up, like
+  chapters and bounties. The card towers also subtract their card-buff discount.
   Nothing is charged at entry.
 - The run (tower, level, open flag, stored reply) is kept in the save
   (`Player.eventTower`). Settlement, replay and refusal happen inside one store
@@ -125,19 +127,22 @@ The server needs `tower` in its `--resources` list, like `card`.
 
 ## Known gaps
 
-- Calls outside this slice that the tower screens send and that still hang:
-  `BossRush_SelectSpBoss` 510, `BossRush_SaveSpFormation` 511, `BossRush_ResetSp` 512
-  and `BossRush_SaveSpResult` 513 (sixteenth tower; its HP, shield and SP tasks
-  60003-60399 are written by them) and `UpgradeTowerSkill` 527 `{20, skillId}`
-  (twentieth tower skills: costs 15-121 items, writes 96/1201 + 10 + skillId).
+- Calls the tower screens send that are still unanswered here: the ranking tower
+  (`Challenge`, activity type 6) and `BossChallenge_GetScoreAward` 535 with `Challenge_Award_Some`
+  206 (the named-field slice answers 535). 510 to 513 and 527 are answered (see below);
+  250 `AssistList` is answered with an empty list by `background-lua-data.ts`.
 - Records are shared between towers of one class (see Task layout).
 - No achievements, mission counters (conditions 99, 105, 108, 110, 181) or daily
   mission counts other than vigour are updated by a tower fight.
 - Card exp is shown (`nCardExp`) but, as for chapters, not applied.
 - Monster drops (`tbDrop`, `tbDropItems`) are empty at entry; random awards come at
   settlement.
-- Event vigour discounts of `RewardActivity` tables and the Animalize/Eighth
-  `GetEnergySale` are not applied.
+- The event-specific vigour discounts of the `RewardActivity` tables
+  (`tbLevelEnergySaleActivity`) are not applied; the low-level support plan and the
+  Animalize/Eighth card-buff discount are.
+- The card round can deal box and fate cards without end (the C# `AnimalizeHandler`
+  does the same): nothing limits how long the player draws before a fight card or the
+  boss comes.
 - 176 and `BossChallenge` scoring (`UI_2ndBossChallengeScoreInfo`) use the same
   command with an `activeId` that can equal a tower id; there is no way to tell them
   apart.

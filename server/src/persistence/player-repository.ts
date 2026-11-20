@@ -2069,7 +2069,7 @@ function applyEventTowerRequest(
           !player.formations.some(({ id }) => id === request.formationId)
         )
           throw refuse(TOWER_ERROR.formation, "unknown_formation");
-        const cost = level.cost;
+        const cost = towerEnergyCost(player, level.cost);
         const available =
           player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
         if (available < cost) throw refuse(TOWER_ERROR.vigour, "insufficient_vigour");
@@ -2115,7 +2115,7 @@ function applyEventTowerRequest(
         return outcome;
       }
 
-      const cost = level.type === 2 ? 0 : level.cost;
+      const cost = level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
       spendTowerVigour(player, cost, outcome, true);
 
       const key = catalog.levelKey(tower, level.levelId);
@@ -2261,7 +2261,7 @@ function applyEventTowerRequest(
         run.tower === tower.id &&
         run.level === level.levelId
       ) {
-        const cost = level.type === 2 ? 0 : level.cost;
+        const cost = level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
         spendTowerVigour(player, cost, outcome, false);
         run.active = false;
         run.resultCmd = LUA_COMMAND_TOWER_FAIL;
@@ -2520,6 +2520,17 @@ function towerAwardRows(awards: readonly (readonly number[])[]): number[][] {
   return awards.map((award) => [...award.slice(0, 5), 100]);
 }
 
+/**
+ * What the client charges for an event level: RewardActivityLogic:GetActivityEnergySale
+ * cuts 50% below commander level 35 (the support plan; only the en_US and ko_KR
+ * clients skip it, this client is zh_CN) and rounds up, then the card-buff
+ * discount of the Animalize/Eighth towers comes off (`buffSale`).
+ */
+function towerEnergyCost(player: Player, cost: number, buffSale = 0): number {
+  const sale = player.level < 35 ? 0.5 : 0;
+  return Math.max(0, Math.ceil(cost - cost * sale) - buffSale);
+}
+
 function towerVigour(player: Player): number {
   return player.money.find(({ id }) => id === MONEY_VIGOUR)?.count ?? 0;
 }
@@ -2730,7 +2741,7 @@ function applyCardTowerRequest(
           !player.formations.some(({ id }) => id === request.formationId)
         )
           throw refuse(TOWER_ERROR.formation, "unknown_formation");
-        if (towerVigour(player) < Math.max(0, level.cost - energySale()))
+        if (towerVigour(player) < towerEnergyCost(player, level.cost, energySale()))
           throw refuse(TOWER_ERROR.vigour, "insufficient_vigour");
         cardGuids = fightRoster(player, request.formationId);
       }
@@ -2791,7 +2802,7 @@ function applyCardTowerRequest(
         // The story is seen: the difficulty screen follows.
         set(CARD_TASK.state, CARD_STATE.diff);
       } else {
-        const cost = Math.max(0, level.cost - energySale());
+        const cost = towerEnergyCost(player, level.cost, energySale());
         spendTowerVigour(player, cost, outcome, true);
         set(CARD_TASK.energyCount, get(CARD_TASK.energyCount) + cost);
         awards.push(...rollTowerAwards(level, first, run.id));
@@ -2841,7 +2852,7 @@ function applyCardTowerRequest(
         const before = towerVigour(player);
         spendTowerVigour(
           player,
-          level.type === 2 ? 0 : Math.max(0, level.cost - energySale()),
+          level.type === 2 ? 0 : towerEnergyCost(player, level.cost, energySale()),
           outcome,
           false,
         );

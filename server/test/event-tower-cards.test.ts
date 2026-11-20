@@ -360,12 +360,16 @@ describe("Animalize round", () => {
     expect(JSON.stringify(player())).toBe(snapshot);
 
     // A lost fight charges the vigour once and leaves the card open for another try.
+    // Below commander level 35 the client halves the cost (10 -> 5), then the buff takes 2 off.
+    await store.update((state) => {
+      state.players[account]!.level = 20;
+    });
     await send(choose(ANIMALIZE, 1));
     await send(click(ANIMALIZE));
     await send(enter(ANIMALIZE, 2, 1));
     const lost = await send(fail(ANIMALIZE, 2, 1));
     expect(lost.response).toEqual({});
-    expect(money(player(), 1)).toBe(before - 16);
+    expect(money(player(), 1)).toBe(before - 8 - 3);
     expect(task(player(), G, A + 6)).toBe(3);
     expect((await send(enter(ANIMALIZE, 2, 1))).rejected).toBeNull();
 

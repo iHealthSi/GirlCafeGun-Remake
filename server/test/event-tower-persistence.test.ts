@@ -198,17 +198,23 @@ describe("event tower fights", () => {
     expect(money(current(repository), 1)).toBe(80);
   });
 
-  it("charges the full cost below level 35, as the level panel shows it", async () => {
+  it("charges what the client computes: half, rounded up, below commander level 35", async () => {
+    // RewardActivityLogic:GetActivityEnergySale: level 2 of the small tower costs 10, 5 below level 35.
     const { repository } = await fixture({ level: 20, vigour: 12 });
-    // Level 2 of the small tower costs 10: half of it would let a level 20 player in with 5.
     expect(
       (await repository.handleEventTowerRequest(account, enter(2, 1, 2))).rejected,
     ).toBeNull();
     await repository.handleEventTowerRequest(account, pass(2, 1, 2, { nScore: 1 }));
-    expect(money(current(repository), 1)).toBe(2);
-    const { repository: poor } = await fixture({ level: 20, vigour: 9 });
-    const refused = await poor.handleEventTowerRequest(account, enter(2, 1, 2));
-    expect(refused.rejected?.code).toBe(5);
+    expect(money(current(repository), 1)).toBe(7);
+    const { repository: poor } = await fixture({ level: 20, vigour: 4 });
+    expect(
+      (await poor.handleEventTowerRequest(account, enter(2, 1, 2))).rejected?.code,
+    ).toBe(5);
+    // From level 35 on the full cost is due.
+    const { repository: full } = await fixture({ level: 35, vigour: 9 });
+    expect(
+      (await full.handleEventTowerRequest(account, enter(2, 1, 2))).rejected?.code,
+    ).toBe(5);
   });
 
   it("refuses an entry without level, formation or vigour and keeps the save", async () => {
