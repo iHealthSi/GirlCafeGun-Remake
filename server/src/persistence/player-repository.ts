@@ -86,6 +86,7 @@ import {
   reportScore,
   rollTowerAwards,
   towerItemTask,
+  towerItemWallet,
   whole,
   type CardTowerBuff,
   type CardTowerCard,
@@ -111,6 +112,7 @@ import {
 } from "../game-data/event-mission-data.js";
 import {
   ACTIVITY_TYPE,
+  ANNIVERSARY_TASK,
   BOSS_TASK,
   CHESS_TASK,
   CHESS_TEAM_FORMATION,
@@ -1963,6 +1965,17 @@ function grantTowerAwards(
         effect.key,
         towerTask(player, effect.group, effect.key) + count,
       );
+      continue;
+    }
+    const walletId = towerItemWallet(award);
+    if (walletId !== null) {
+      let wallet = player.money.find(({ id }) => id === walletId);
+      if (!wallet) {
+        wallet = { id: walletId, count: 0 };
+        player.money.push(wallet);
+      }
+      wallet.count += count;
+      outcome.moneyIds.add(walletId);
       continue;
     }
     grantAwards(
@@ -4361,6 +4374,42 @@ function applyNamedTowerRequest(
           const isNew = score > towerTask(player, family.group, key);
           if (isNew) setTowerTask(player, family.group, key, score);
           reply.tbRet = [Number(request.body.useTime) || 0, rate, score, isNew];
+          break;
+        }
+        case "discovery": {
+          // Star goals of the SP levels (type 1): the client reports them as tbScore[goalId]; the level's
+          // points are the sum of the reached goals and the thresholds of AnniversaryTowerGoalReward pay once.
+          const key = `${level.tower}:${level.levelId}`;
+          const goals = level.type === 1 ? catalog.discoveryGoals.get(key) : undefined;
+          if (!goals) break;
+          const base = ANNIVERSARY_TASK.goalBase;
+          const previous = towerTask(player, family.group, base + level.levelId);
+          const fresh: number[] = [];
+          for (const goal of goals) {
+            const flag = base + level.levelId * 100 + goal.id;
+            if (
+              !reachedGoal(request.body.tbScore, goal.id) ||
+              towerTask(player, family.group, flag) > 0
+            )
+              continue;
+            setTowerTask(player, family.group, flag, 1);
+            fresh.push(goal.id);
+          }
+          const reached = goals
+            .filter(
+              (goal) =>
+                towerTask(player, family.group, base + level.levelId * 100 + goal.id) >
+                0,
+            )
+            .reduce((total, goal) => total + goal.points, 0);
+          const total = Math.max(previous, reached);
+          setTowerTask(player, family.group, base + level.levelId, total);
+          for (const threshold of catalog.discoveryGoalRewards.get(key) ?? []) {
+            if (threshold.points <= previous || threshold.points > total) continue;
+            grantTowerAwards(player, threshold.rewards, outcome);
+            awards.push(...threshold.rewards.map((award) => [...award, 100]));
+          }
+          reply.newGoalIds = fresh;
           break;
         }
         case "linkage":

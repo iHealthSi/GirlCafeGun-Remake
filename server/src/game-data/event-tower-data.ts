@@ -364,6 +364,22 @@ export function towerItemTask(
   );
 }
 
+/**
+ * AutoUse items that add to a wallet currency without an ItemNormalCoinAuto rule (autouse.txt ExtParam2 names
+ * the wallet): the first Anniversary's discovery power (15-86, money 58) and skill point (15-87, money 59),
+ * which only the anniversary tower levels pay and the discovery map spends.
+ */
+export const TOWER_ITEM_WALLETS: ReadonlyMap<string, number> = new Map([
+  ["15-86-1-1", 58],
+  ["15-87-1-1", 59],
+]);
+
+export function towerItemWallet(award: readonly number[]): number | null {
+  return (
+    TOWER_ITEM_WALLETS.get(`${award[0]}-${award[1]}-${award[2]}-${award[3]}`) ?? null
+  );
+}
+
 export function makeTowerTaskId(group: number, key: number): number {
   return (group << 16) | key;
 }

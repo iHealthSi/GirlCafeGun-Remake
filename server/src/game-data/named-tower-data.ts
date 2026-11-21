@@ -27,6 +27,8 @@ import {
   whole,
   LUA_COMMAND_DO_SETTLE,
   type Row,
+  type TowerGoal,
+  type TowerGoalReward,
   type TowerLevel,
   type TowerPondSlot,
 } from "./event-tower-data.js";
@@ -88,6 +90,31 @@ export const NAMED_COMMAND = {
   chessPass: 537,
   chessFail: 538,
   chessBoard: 539,
+  // The first Anniversary (AnniversaryMainLogic, GridActLogic and the side games of UI_AnniversaryMain).
+  gridPower: 418,
+  gridReset: 419,
+  gridMove: 420,
+  discoveryEnter: 421,
+  discoveryPass: 422,
+  discoveryFail: 423,
+  boardOpen: 424,
+  boardAward: 425,
+  anniversaryEnter: 426,
+  anniversaryPass: 427,
+  anniversaryFail: 428,
+  strengthen: 429,
+  guessRefresh: 430,
+  guessFist: 431,
+  guessAward: 432,
+  guessLog: 433,
+  love: 437,
+  gacha: 438,
+  puzzleOpen: 440,
+  puzzleBox: 441,
+  processReward: 480,
+  fanSupport: 355,
+  fanReward: 356,
+  challengeAwardSome: 206,
 } as const;
 
 /** ActivitiesLogic.ActivityType. */
@@ -97,6 +124,8 @@ export const ACTIVITY_TYPE = {
   musicTower: 19,
   buffTower: 20,
   musicInterest: 21,
+  anniversaryDiscovery: 22,
+  anniversaryTower: 23,
   mixOnline: 24,
   linkage: 25,
   secondAnniversary: 27,
@@ -120,7 +149,17 @@ export const NAMED_ERROR = {
 } as const;
 
 export type NamedFamilyKey =
-  "micro" | "coop" | "mix" | "buff" | "linkage" | "second" | "boss" | "music" | "chess";
+  | "micro"
+  | "coop"
+  | "mix"
+  | "buff"
+  | "linkage"
+  | "second"
+  | "boss"
+  | "music"
+  | "chess"
+  | "anniversary"
+  | "discovery";
 
 export interface NamedLevel extends TowerLevel {
   /** The difficulty column; 0 for tables without one. */
@@ -160,6 +199,8 @@ export interface NamedFamily {
   fought?: (level: NamedLevel) => boolean;
   /** Levels that send no formation (the concert's fixed-team levels). */
   noFormation?: (level: NamedLevel) => boolean;
+  /** LevelType values this family reads from a table that other families share (the first Anniversary's level file). */
+  levelTypes?: readonly number[];
 }
 
 export const MICRO_DIFF_MAX = 5;
@@ -197,6 +238,17 @@ export const MUSIC_TASK = {
 /** MusicActivityLogic.InterestTeamId: the formation of the interest levels (type 6). */
 export const MUSIC_INTEREST_TEAM = 5000;
 export const MUSIC_GAME_TASK = { group: 1, score: 3100, maxGameId: 100 } as const;
+/**
+ * AnniversaryMainLogic: group 81, pass bit (event - 1) of 1010 + LevelId. GridActLogic (the same group): a
+ * discovery level counts its clears at 3002 + event * 100 + LevelId, the star goals sit at 20000 + LevelId (points)
+ * and 20000 + LevelId * 100 + GoalID (flags).
+ */
+export const ANNIVERSARY_TASK = {
+  group: 81,
+  pass: 1010,
+  discoveryPass: 3002,
+  goalBase: 20000,
+} as const;
 /** WarChessTower.lua: group 97, level records 110 + LevelId (clear count), the board 201-1000. */
 export const CHESS_TASK = {
   group: 97,
@@ -351,6 +403,38 @@ export const NAMED_FAMILIES: Readonly<Record<NamedFamilyKey, NamedFamily>> = {
     recordKey: (l) => CHESS_TASK.pass + l.levelId,
     recordBit: () => -1,
   },
+  anniversary: {
+    key: "anniversary",
+    name: "anniversary tower",
+    enter: NAMED_COMMAND.anniversaryEnter,
+    pass: NAMED_COMMAND.anniversaryPass,
+    fail: NAMED_COMMAND.anniversaryFail,
+    activityType: ACTIVITY_TYPE.anniversaryTower,
+    group: ANNIVERSARY_TASK.group,
+    levelFile: "anniversaryactivity/anniversarytowerlevel.txt",
+    towerField: "nId",
+    echo: ["nType", "nId", "nLevelId"],
+    recordKey: (l) => ANNIVERSARY_TASK.pass + l.levelId,
+    recordBit: (l) => l.tower - 1,
+    // Types 0 (action) and 2 (story); the SP and fun levels belong to the discovery map.
+    levelTypes: [0, 2],
+  },
+  discovery: {
+    key: "discovery",
+    name: "anniversary discovery",
+    enter: NAMED_COMMAND.discoveryEnter,
+    pass: NAMED_COMMAND.discoveryPass,
+    fail: NAMED_COMMAND.discoveryFail,
+    activityType: ACTIVITY_TYPE.anniversaryDiscovery,
+    group: ANNIVERSARY_TASK.group,
+    levelFile: "anniversaryactivity/anniversarytowerlevel.txt",
+    towerField: "nId",
+    echo: ["nType", "nId", "nLevelId"],
+    recordKey: (l) => ANNIVERSARY_TASK.discoveryPass + l.tower * 100 + l.levelId,
+    recordBit: () => -1,
+    // Types 1 (SP with star goals) and 3 (fun levels, formation 5000).
+    levelTypes: [1, 3],
+  },
 };
 
 const FAMILY_OF_COMMAND = new Map<
@@ -487,6 +571,9 @@ export class NamedTowerCatalog {
   readonly microGoals = new Map<string, MicroGoal[]>();
   /** BuffTowerBuff.txt: the score of each buff by "id:level:diff", in row order (the client's position list). */
   readonly buffScores = new Map<string, number[]>();
+  /** AnniversaryTowerGoal / AnniversaryTowerGoalReward by "event:level". */
+  readonly discoveryGoals = new Map<string, TowerGoal[]>();
+  readonly discoveryGoalRewards = new Map<string, TowerGoalReward[]>();
   readonly buffAwards = new Map<number, ScoreAwardRow[]>();
   readonly bossAwards = new Map<number, ScoreAwardRow[]>();
   /** MixOnlineActivities.txt ids in table order. */
@@ -527,6 +614,8 @@ export class NamedTowerCatalog {
       "boss",
       "music",
       "chess",
+      "anniversary",
+      "discovery",
     ];
     for (const key of plain) {
       const family = NAMED_FAMILIES[key];
@@ -534,6 +623,8 @@ export class NamedTowerCatalog {
       for (const row of read(family.levelFile)) {
         const levelId = int(row.LevelId);
         if (levelId <= 0) continue;
+        if (family.levelTypes && !family.levelTypes.includes(int(row.LevelType)))
+          continue;
         const tower = family.towerField ? int(row.Id) : 0;
         const diff = int(row.Diff);
         if (family.towerField && tower <= 0) continue;
@@ -587,6 +678,19 @@ export class NamedTowerCatalog {
       for (let column = 0; column < 4; column++)
         if ((row[`Text${column + 1}`] ?? "").trim() !== "")
           catalog.barrageSizes[column]!++;
+
+    for (const row of read("anniversaryactivity/anniversarytowergoal.txt")) {
+      const key = `${int(row.Id)}:${int(row.LevelId)}`;
+      const list = catalog.discoveryGoals.get(key) ?? [];
+      list.push({ id: int(row.GoalID), points: int(row.GoalPoint) });
+      catalog.discoveryGoals.set(key, list);
+    }
+    for (const row of read("anniversaryactivity/anniversarytowergoalreward.txt")) {
+      const key = `${int(row.Id)}:${int(row.LevelId)}`;
+      const list = catalog.discoveryGoalRewards.get(key) ?? [];
+      list.push({ points: int(row.GoalPoint), rewards: parseAwards(row.Reward) });
+      catalog.discoveryGoalRewards.set(key, list);
+    }
 
     catalog.#loadMix(read);
     catalog.#loadLinkage(read);

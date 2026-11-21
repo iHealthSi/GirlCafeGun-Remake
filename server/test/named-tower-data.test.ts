@@ -82,6 +82,8 @@ describe("named-field event tower tables", () => {
       mix: 17,
       music: 58,
       chess: 106,
+      anniversary: 14,
+      discovery: 56,
     });
   });
 
@@ -157,7 +159,9 @@ describe("named-field event tower tables", () => {
     );
     let checked = 0;
     const orphans = new Set<string>();
-    for (const [key, levels] of catalog.levels)
+    for (const [key, levels] of catalog.levels) {
+      // The first Anniversary pays power and skill points too: anniversary-tower.test.ts checks its wallets.
+      if (key === "anniversary" || key === "discovery") continue;
       for (const level of levels.values())
         for (const { award } of level.fixedAwards) {
           if (award[0] !== 15) continue;
@@ -176,6 +180,7 @@ describe("named-field event tower tables", () => {
           ).toBe(true);
           checked++;
         }
+    }
     expect(checked).toBeGreaterThan(40);
     // CoopClientLevel has an event 6 that CoopClientActivities.txt never lists: it can not be opened.
     expect([...orphans]).toEqual(["coop:6"]);
@@ -310,8 +315,8 @@ describe("named-field event tower requests", () => {
   });
 
   it("leaves everything else on the unhandled path", () => {
-    // 223, 282 and 391 are accepted by the gateway without a reply; 138 is the cafe, 426 the first anniversary.
-    for (const command of [223, 53, 54, 250, 426, 138, 391, 282, 999])
+    // 223, 282 and 391 are accepted by the gateway without a reply; 138 is the cafe.
+    for (const command of [223, 53, 54, 250, 138, 391, 282, 999])
       expect(call({ sCmd: command, tbParam: {} }), String(command)).toBeNull();
     expect(call(null)).toBeNull();
     expect(call({ sCmd: 252, tbParam: null })).toBeNull();
