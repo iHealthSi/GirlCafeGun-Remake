@@ -4867,7 +4867,8 @@ function applyAnniversaryRequest(
         if (!cell) throw refuse(2, "unknown_cell");
         if (cell.id === position) continue;
         // [INFER] The team walks between cells that share a side: the maps put hinders and fights on corners
-        // (map 2 hinder cell 28, fight cells 57 and 88) that a diagonal step would skip.
+        // that a diagonal step would skip (map 1 fight cell 57, map 2 hinder cell 28 and fight cell 88), and the
+        // client's IL2CPP metadata names NeighborUp/Down/Left/Right and IsAdjoin for its path finder.
         const from = map.cells.get(position);
         if (!from || Math.abs(from.x - cell.x) + Math.abs(from.y - cell.y) !== 1) {
           cut = "not_adjacent";

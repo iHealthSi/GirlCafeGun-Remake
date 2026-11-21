@@ -394,10 +394,12 @@ group 84 (see `GUESS_TASK`).
   on an error). First arrival pays the cell event's FirstAward once. The walk starts where the team stands (a first
   path cell equal to it is skipped) and ends, with `Err: 0` and `TeamPos` where it stopped, at the first step that
   breaks a rule: a cell that does not share a side with the last one [INFER: the maps put hinders and fights on
-  corners, map 2 cells 28, 57 and 88, that a diagonal step would skip]; a new hinder cell (event type 101) while
+  corners that a diagonal step would skip, map 1 cell 57, map 2 cells 28 and 88; the client's IL2CPP metadata names
+  `NeighborUp/Down/Left/Right`, `IsAdjoin` and `CheckGridFightPass`]; a new hinder cell (event type 101) while
   strength, spirit and technique are below its needs (`CheckAttr`); a new cell after a fight cell whose level is not
-  passed (`CheckFightPass`), also when the team stands on that fight cell: from there only the start and cells it has
-  been on are open. Ending the walk instead of an error keeps `MoveRsp` moving the team (it answers nothing else);
+  passed (`CheckFightPass`), also when the team stands on that fight cell [INFER: whether the stock path finder
+  checks the cell it starts from is not known]: from there only the start and cells it has been on are open. Unknown
+  cells before the first cut get `Err: 2`. Ending the walk instead of an error keeps `MoveRsp` moving the team (it answers nothing else);
   the log line `player.anniversary.note` (`walk_cut`, the reason and the path) shows each cut. The stock client's path
   format (the native `GridMapMgr`) was not read: whether it lists the cell the team stands on and every cell of the
   walk is not checked on a phone (2026-11-21). 429 refuses at the highest level any hinder or story asks for [INFER].

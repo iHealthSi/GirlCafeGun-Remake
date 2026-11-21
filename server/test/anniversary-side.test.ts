@@ -172,11 +172,15 @@ describe("discovery map, 418 to 420, 429 and 480", () => {
     });
 
   it("walks the map: one power per new cell, first arrival pays the event once", async () => {
-    // Cells 5 and 7 hold type 3 events (first awards).
+    // Cells 5 and 7 hold type 3 events 1 and 16 (first awards: 7-2-1-1 x3 and 15-20 x10; 7-2-1-3, 7-3-1-3 and
+    // the story items 15-88, 15-89).
     const { repository } = await fixture({ money: { 58: 8 } });
     const path = corridor(2, 7);
+    const itemsBefore = current(repository).inventory.length;
     const first = await send(repository, call(420, { MapID: 1, Path: path }));
     expect(first.rejected).toBeNull();
+    expect(first.updatedItems.length).toBeGreaterThan(0);
+    expect(current(repository).inventory.length).toBeGreaterThan(itemsBefore);
     const reply = body(first);
     expect(reply).toMatchObject({ Err: 0, TeamPos: 7, LastPower: 2 });
     const player = current(repository);
@@ -269,8 +273,9 @@ describe("discovery map, 418 to 420, 429 and 480", () => {
 
   it("ends the walk at a step onto a cell that does not touch the team", async () => {
     const { repository } = await fixture({ money: { 58: 40 } });
-    // From the start (cell 1): cell 7 is 6 cells away, 21 lies behind hinder 24, 60 behind hinder 66.
-    for (const target of [7, 21, 60]) {
+    // From the start (cell 1): cell 7 is 6 cells away; 21 and 60 are the cells in front of hinders 24 and 66,
+    // 25 and 67 the cells behind them.
+    for (const target of [7, 21, 25, 60, 67]) {
       const jump = await send(repository, call(420, { MapID: 1, Path: [target] }));
       expect(jump.rejected).toBeNull();
       expect(body(jump)).toMatchObject({ Err: 0, TeamPos: 1, LastPower: 40 });
