@@ -3560,7 +3560,7 @@ export class PlayerRepository {
         gacha: makeInitialGachaState(),
         dailySignUp: makeInitialDailySignUpState(),
         eightDaySignUp: makeInitialEightDaySignUpState(),
-        bounty: makeInitialBountyState(),
+        bounty: makeInitialBountyState(now),
         ...makeStarterRoster(registerTime),
       };
       if (this.#welcomeGifts) reconcileStarterCafe(player, now);
