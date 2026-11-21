@@ -130,12 +130,13 @@ def pointers(value):
 
 
 def decode(data):
+ error=None
  for encrypted,plain in ((False,data),(True,transform(data))):
   try:
    meta,raw=unityfs(plain)
    return meta,raw,encrypted,plain
-  except Exception: pass
- raise ValueError('Invalid Unity2018 bundle')
+  except Exception as e: error=e
+ raise ValueError('Invalid Unity2018 bundle') from error
 def sha(data):return hashlib.sha256(data).hexdigest()
 def ptr(path_id=0,file_id=0):return {'m_FileID':file_id,'m_PathID':path_id}
 def model_objects(data):
