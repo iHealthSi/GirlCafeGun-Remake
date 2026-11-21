@@ -275,6 +275,47 @@ export function isGoodsInWindow(goods: GoodsConfig, nowSeconds: number): boolean
 }
 
 /**
+ * Event shops (ShopType 3) that stay open here whatever the dates of `shoptabs.txt` and of their goods. The
+ * offline client opens a past event from its event list page and, with it, that event's shop (the same list is
+ * `M.SHOPS` in `release/client/event_list.lua`); the server is not told which event is open. Each shop below sells
+ * only for tokens of its own event (no diamonds, gold or price 0: `event-shops.test.ts`), so keeping it open gives
+ * nothing for free. Shop ids: the `ShopId` column of the event's top table (armed survey: the third value of
+ * `Param`). Left closed: the Concert shops 30013 and 30014 (one goods each costs 10 diamonds) and the shops of
+ * events with no server part (lottery, monopoly, harvest, battle pass, Lida supply).
+ */
+export const OPEN_EVENT_SHOPS: ReadonlySet<number> = new Set([
+  // Tower.txt towers 1 (and its rerun 201), 5, 9, 10, 12-19, 21, 101-107, 303.
+  30001, 30006, 30002, 30003, 30004, 30017, 30022, 30027, 30031, 30033, 30034, 30036,
+  30037, 30045, 30005, 30010, 30016, 30023, 30030, 30032, 30035, 30038,
+  // Armed survey rows 1, 2, 3, 4, 5, 7, 8.
+  30011, 30012, 30015, 30019, 30025, 30039, 30043,
+  // First Anniversary 1, 2; second Anniversary 1, 2 and its hall; Railgun collab; War Chess 1, 2; joint events.
+  30020,
+  30021, 30040, 30041, 30042, 30028, 30046, 30047, 30092, 30024,
+]);
+
+/** How far ahead the shop screen's countdown of an open event shop runs (the client opens it for 30 days). */
+export const OPEN_EVENT_SHOP_DAYS = 30;
+
+/** isShopOpen, with the event shops of OPEN_EVENT_SHOPS open at any date. */
+export function shopOpenNow(tab: ShopTabConfig, nowSeconds: number): boolean {
+  if (OPEN_EVENT_SHOPS.has(tab.shopId) && (tab.onOff === 1 || tab.onOff === 2))
+    return true;
+  return isShopOpen(tab, nowSeconds);
+}
+
+/** isGoodsInWindow, with the goods of OPEN_EVENT_SHOPS on sale at any date. */
+export function goodsOpenNow(goods: GoodsConfig, nowSeconds: number): boolean {
+  return OPEN_EVENT_SHOPS.has(goods.shopId) || isGoodsInWindow(goods, nowSeconds);
+}
+
+/** The end the goods list reports: an open event shop runs OPEN_EVENT_SHOP_DAYS from now. */
+export function shopEndTime(tab: ShopTabConfig, nowSeconds: number): number {
+  if (!OPEN_EVENT_SHOPS.has(tab.shopId)) return tab.end ?? 0;
+  return Math.max(tab.end ?? 0, nowSeconds + OPEN_EVENT_SHOP_DAYS * 86_400);
+}
+
+/**
  * 手动刷新次数与每日计数按运营日（UTC+8 凌晨 4 点）重置，与悬赏/签到一致。
  */
 export function shopOperationalDate(now = Date.now()): string {

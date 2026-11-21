@@ -242,11 +242,12 @@ import {
   MONTH_CARD_LIMIT_DAYS,
 } from "../game-data/ib-shop-data.js";
 import {
-  isGoodsInWindow,
-  isShopOpen,
+  goodsOpenNow,
   nextPriceIndex,
   refreshFee,
   rollShelf,
+  shopEndTime,
+  shopOpenNow,
   shopOperationalDate,
   shopOperationalWeek,
   shopShelfKey,
@@ -5420,7 +5421,7 @@ function rerollShelf(
   const nowSeconds = Math.floor(now / 1_000);
   const pool = catalog
     .goodsForShop(tab.shopId)
-    .filter((config) => isGoodsInWindow(config, nowSeconds));
+    .filter((config) => goodsOpenNow(config, nowSeconds));
   const stock = rollShelf(pool, tab.columns);
   shopState.shelf = stock.map((entry) => ({
     goodsId: entry.goodsId,
@@ -5520,7 +5521,7 @@ function buildShopGoodsList(
 ): ShopGoodsListResult {
   const tab = catalog.getTab(shopId);
   const nowSeconds = Math.floor(now / 1_000);
-  if (!tab || !isShopOpen(tab, nowSeconds)) {
+  if (!tab || !shopOpenNow(tab, nowSeconds)) {
     return {
       shopId,
       isOpen: false,
@@ -5534,12 +5535,12 @@ function buildShopGoodsList(
   if (shopUsesShelf(tab)) {
     for (const shelfEntry of shopState.shelf) {
       const config = catalog.getGoods(shelfEntry.goodsId);
-      if (!config || !isGoodsInWindow(config, nowSeconds)) continue;
+      if (!config || !goodsOpenNow(config, nowSeconds)) continue;
       goodsList.push(buildShopGoodsEntry(config, shopState, shelfEntry));
     }
   } else {
     for (const config of catalog.goodsForShop(shopId)) {
-      if (!isGoodsInWindow(config, nowSeconds)) continue;
+      if (!goodsOpenNow(config, nowSeconds)) continue;
       goodsList.push(buildShopGoodsEntry(config, shopState, null));
     }
   }
@@ -5548,7 +5549,7 @@ function buildShopGoodsList(
     isOpen: true,
     refreshCount: shopState.refreshCount,
     goodsList,
-    endTime: tab.end ?? 0,
+    endTime: shopEndTime(tab, nowSeconds),
   };
 }
 
@@ -8603,7 +8604,7 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       const nowSeconds = Math.floor(now / 1_000);
-      if (!isShopOpen(tab, nowSeconds)) throw new ShopError("shop_closed");
+      if (!shopOpenNow(tab, nowSeconds)) throw new ShopError("shop_closed");
       const shopState = reconcileShopState(player, catalog, tab, now);
       if (shopState.refreshCount >= tab.refreshLimits) {
         throw new ShopError("limit_reached");
@@ -8665,8 +8666,8 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       const nowSeconds = Math.floor(now / 1_000);
-      if (!isShopOpen(tab, nowSeconds)) throw new ShopError("shop_closed");
-      if (!isGoodsInWindow(config, nowSeconds)) throw new ShopError("unknown_goods");
+      if (!shopOpenNow(tab, nowSeconds)) throw new ShopError("shop_closed");
+      if (!goodsOpenNow(config, nowSeconds)) throw new ShopError("unknown_goods");
       const shopState = reconcileShopState(player, catalog, tab, now);
       const shelfEntry = shopState.shelf.find((entry) => entry.goodsId === goodsId);
       if (tab.refreshRule === 1 && !shelfEntry) {

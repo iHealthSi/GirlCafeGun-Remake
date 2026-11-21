@@ -24,7 +24,9 @@
 `{shopid, isopen, refreshcount, goodslist, endtime}`：
 
 - `isopen`：栏目 `OnOff=1` 且在 `Begin`/`End` 窗口内；未知或关闭的商店回
-  `isopen=0` + 空列表（咖啡馆探测任意 shopid 也不会卡住）；
+  `isopen=0` + 空列表（咖啡馆探测任意 shopid 也不会卡住）；`OPEN_EVENT_SHOPS`
+  中的活动商店（只收本活动代币）不看日期，其商品也不看 `Begin`/`End`（见
+  `25-event-towers.md` "Event shops"）；
 - 非随机货架商店（RefreshRule 2/3/4/5）上架全部在售商品；RefreshRule=1 的
   常驻商店（20001/20002）按 `Weight` 不放回随机抽取 `Columns` 个组成货架；
 - 货架按 `RefreshTime` 自动槽位（如 04:00/18:00）重掷，货架 key 为
@@ -36,7 +38,8 @@
 - goodslist 条目按配置带 `buynum`（累计）与对应限购计数
   （`refreshbuynum`/`dailybuynum`/`weekbuynum`/`totalbuynum`/`shelfbuynum`），
   客户端 `GoodsLogicC:IsInStock` 据此显示售罄；
-- `endtime` 为栏目 `End`（unix 秒），供活动商店倒计时。
+- `endtime` 为栏目 `End`（unix 秒），供活动商店倒计时；`OPEN_EVENT_SHOPS` 中的
+  商店取 `max(End, now + 30 天)`。
 
 ### 手动刷新（`LuaCall sCmd=12`）
 

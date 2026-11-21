@@ -121,6 +121,21 @@ GetActivityEnergySale` cuts 50% below commander level 35 (the support plan; only
   player's own score, so these awards stay out of reach, as on a server with no
   other player.
 
+## Event shops
+
+Each event's shop is a tab of `shop/shoptabs.txt` (ShopType 3, ids 30001-30047 and 30092) and its goods in
+`shop/goods.txt`, served by the shop module (11 list, 12 refresh, 13 buy); the event screens open it with
+`UI.CloseAndOpen('UI_ShopNew', ShopId)`. The shop's dates are its tab's `Begin`/`End` (mostly the event's
+`ClearTime`), all past. `OPEN_EVENT_SHOPS` in `game-data/shop-data.ts` keeps 39 of them open at any date, with
+their goods (`shopOpenNow`, `goodsOpenNow`), and reports a countdown end 30 days ahead (`shopEndTime`): the shops of
+the events the event list page serves whose goods all cost the event's own tokens (tested: no diamonds, gold or price
+0). The client opens the shop with its event (`M.SHOPS` in `event_list.lua`); the server is not told which event is
+open, so it keeps them all open. Closed: the Concert shops 30013 and 30014 (goods 31301 and 31401 cost 10 diamonds),
+and the shops of events with no server part (lottery 30029/30044, monopoly, harvest 30018, battle pass 30008/30009,
+the Lida supply shops 30007/30026 that sell for diamonds and gold). Most tokens come from the `FixAward` of the
+event's levels; a few only from achievements, missions or the hub's Challenge awards (money 76 in 30033, 64 in 30023,
+73 in 30032, 85 in 30042, part of 68 in 30025), so those goods wait for whatever pays that table.
+
 ## Phone package
 
 The server needs `tower` in its `--resources` list, like `card`.
@@ -289,8 +304,9 @@ fight tickets are tasks 1/554-556 (first issue) and 557-559 (next): gained, play
 add to 554 and 557 (`TOWER_ITEM_TASKS`). Enter is refused with error 11 when no ticket is left, the settlement (pass
 or fail) uses one, a pass pays the `FirstAward` steps `[g-d-p-l-n-score]` for the score reached every run
 (`LevelManager:GetScoreReward`) and the fixed award. 373 answers `{}`; `MusicActivityLogic:OnFailTower` does not exist
-in the client script, so the nil call after the DoSettle reply is a Lua error that cannot be avoided (the stored
-settlement is cleared before it). 391 (relay log) and 282 (BGM log) are accepted without a reply, the relay choices
+in the 0.1.3 client script (nor `BuffTowerLogic:OnFailTower`, called after 379), so the stock client runs a nil call
+after the DoSettle reply (the stored settlement is cleared before it). The event list recipe
+(`release/client/patch_event_list.py`) adds the empty method that the other families have. 391 (relay log) and 282 (BGM log) are accepted without a reply, the relay choices
 (64/6000-6998, 6999) are written by the client. 138 is the cafe music (cafe runtime).
 
 **Missions, 374 (group 70) and 436 (group 85, the second anniversary screen).** Request `{Type, nId}` or
@@ -398,14 +414,14 @@ group 84 (see `GUESS_TASK`).
   the client's hint, type 3 anything but the hint, type 4 sometimes does not throw (the player wins by timeout). 431
   answers `{Error, nType, ServerFist, bGold}` or a timeout shape; 432 pays by bouts, wins against one girl or against
   all; 433 returns the last twenty rounds. The record and the round's girls are in `player.anniversary`.
-- Fail replies of 423 and 428 are `{}`; `AnniversaryMainLogic` and `GridActLogic` have no `OnFailTower`, so the client
-  runs a nil call after the DoSettle reply (as it does for the concert tower).
+- Fail replies of 423 and 428 are `{}`; `AnniversaryMainLogic` and `GridActLogic` have no `OnFailTower` in the 0.1.3
+  client, so the stock client runs a nil call after the DoSettle reply (as for the concert tower); the event list
+  recipe adds the empty method.
 
 Not served: the Event button (NormalActivity 144, the cake page: `NormalActivityGetAward {nActivityId: 144}` and
 `SwitchAnniversaryMission` are unanswered); the first Anniversary has no missions in the tables (all 20 rows of
-`monthmission.txt` are `missionEvent` 2), so its mission button only shows the tip of the client. The shops 30020 and
-30021 are served by the shop module, whose own `shoptabs.txt` closes them by their 2020 dates (as 30040, 30041, 30046,
-30047). 355 and 356 are refused, the idol vote is not built. The client writes no task value of these screens.
+`monthmission.txt` are `missionEvent` 2), so its mission button only shows the tip of the client. 355 and 356 are
+refused, the idol vote is not built. The client writes no task value of these screens.
 
 **Review fixes of slice 4** (landed with slice 5): the pond stock counts unlimited slots, a boss move onto an
 occupied cell is answered as done and the boss stays, the mission day rolls before a count is added, mission counters
