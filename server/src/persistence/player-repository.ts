@@ -3513,10 +3513,10 @@ export class PlayerRepository {
         reconcileInventoryLockState(player);
         reconcileRuneState(player);
         reconcileRuneSkills(player);
-        reconcileDailyMissions(player);
-        reconcileDailySignUp(player);
-        reconcileEightDaySignUp(player);
-        reconcileBounty(player);
+        reconcileDailyMissions(player, now);
+        reconcileDailySignUp(player, now);
+        reconcileEightDaySignUp(player, now);
+        reconcileBounty(player, now);
         reconcileChapterStarTaskValues(player);
         reconcileMaximumFightPower(player);
         this.#activities.reconcile(player);
@@ -3567,10 +3567,10 @@ export class PlayerRepository {
       reconcileEnergyActivity(player, now);
       reconcileInventoryLockState(player);
       reconcileRuneState(player);
-      reconcileDailyMissions(player);
+      reconcileDailyMissions(player, now);
       reconcileGirlAppearanceState(player);
       reconcileGirlFetterUnlocks(player);
-      reconcileBounty(player);
+      reconcileBounty(player, now);
       reconcileChapterStarTaskValues(player);
       reconcileMaximumFightPower(player);
       this.#activities.reconcile(player);
