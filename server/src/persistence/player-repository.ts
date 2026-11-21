@@ -3250,7 +3250,9 @@ function rollExchangeDay(player: Player): void {
   const day = missionDay(Date.now());
   if (mission.exchangeDay === day) return;
   mission.exchangeDay = day;
-  setTowerTask(player, EXCHANGE_TASK.group, EXCHANGE_TASK.listingCount, 0);
+  // No entry is created for a counter that is already 0.
+  if (towerTask(player, EXCHANGE_TASK.group, EXCHANGE_TASK.listingCount) !== 0)
+    setTowerTask(player, EXCHANGE_TASK.group, EXCHANGE_TASK.listingCount, 0);
 }
 
 /** Only the first buff tower event is the concert challenge; the later ones have no missions here. */
