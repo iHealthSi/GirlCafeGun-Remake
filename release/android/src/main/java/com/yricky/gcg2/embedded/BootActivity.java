@@ -107,8 +107,8 @@ public final class BootActivity extends Activity {
                     if(pending.isFile()&&!live){
                         show("Finishing approved app update…");File apk=null;
                         try{apk=ReleaseEngine.importUpdate(this,pending,false,this::show);}
-                        catch(IOException|RuntimeException failed){if(Thread.currentThread().isInterrupted())throw failed;setAside(pending,failed);}
-                        if(apk!=null){runOnUiThread(()->{startActivity(new Intent(this,UpdateActivity.class).putExtra("pending",true));finish();});return;}
+                        catch(IOException|RuntimeException failed){if(Thread.currentThread().isInterrupted()||failed instanceof java.nio.channels.OverlappingFileLockException)throw failed;setAside(pending,failed);}
+                        if(apk!=null){if(closed)return;runOnUiThread(()->{startActivity(new Intent(this,UpdateActivity.class).putExtra("pending",true));finish();});return;}
                     }
                     ReleaseEngine.bootstrap(this,new BootProgress());
                     if(!live){
@@ -134,7 +134,7 @@ public final class BootActivity extends Activity {
         Log.w(TAG,"approved update could not apply; it is set aside",why);
         try{
             File dir=ReleaseIO.dir(new File(ReleaseStore.root(this),"failed"));String name=System.currentTimeMillis()+"-pending.gcgupdate";
-            ReleaseIO.rename(pending,new File(dir,name));ReleaseIO.atomic(new File(dir,name+".txt"),ReleaseIO.utf8(why.getMessage()+"\n"));
+            ReleaseIO.rename(pending,new File(dir,name));ReleaseIO.atomic(new File(dir,name+".txt"),ReleaseIO.utf8((why.getMessage()==null?why.getClass().getSimpleName():why.getMessage())+"\n"));
         }catch(IOException moveError){Log.w(TAG,"cannot set the failed update aside",moveError);if(!pending.delete())Log.w(TAG,"cannot remove the failed update");}
     }
     private boolean isReady(){

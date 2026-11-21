@@ -23,10 +23,12 @@ public final class ReleaseInbox {
         if(files==null)return new File[0];
         Arrays.sort(files,Comparator.comparing(File::getName));return files;
     }
-    /** A closed boot screen interrupts its thread; the file lock then fails. That is no fault of the package: stop and
-     *  leave every remaining package in the inbox for the next start. */
-    private static void stopIfInterrupted()throws InterruptedIOException{
+    /** A closed boot screen interrupts its thread, and the file lock then fails; another run in this process holding
+     *  the lock gives OverlappingFileLockException. Neither is a fault of the package: stop, and leave every remaining
+     *  package in the inbox for the next start. */
+    private static void stopIfInterrupted(Exception cause)throws InterruptedIOException{
         if(Thread.currentThread().isInterrupted())throw new InterruptedIOException("Updates stopped: the boot screen closed; packages stay for the next start");
+        if(cause instanceof java.nio.channels.OverlappingFileLockException)throw new InterruptedIOException("Updates stopped: another update run holds the lock; packages stay for the next start");
     }
     private static String reason(Exception e){return e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
     private static String stamp(){return new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",Locale.ROOT).format(new Date());}
@@ -35,16 +37,18 @@ public final class ReleaseInbox {
         File inbox=inbox(c);Set<String> handled=new HashSet<>();
         JSONArray applied=new JSONArray(),failed=new JSONArray(),waiting=new JSONArray();
         JSONObject state=ReleaseStore.state(c);String before=state==null?null:state.optString("releaseId",null),current=before;
+        String stopped=null;
         try{
+            try{
             if(current!=null)for(int round=0;round<MAX_ROUNDS;round++){
-                stopIfInterrupted();File next=null;String id=null;
+                stopIfInterrupted(null);File next=null;String id=null;
                 for(File f:packages(inbox,handled)){
                     ReleaseManifest m;
                     try{
                         m=ReleaseEngine.inspect(c,f,false);
                         if(!m.kind.equals("delta")||!m.packs.isEmpty())throw new IOException("Not an offline data delta");
                         if(m.json.optJSONObject("apk")!=null)throw new IOException("APK updates need the Update screen");
-                    }catch(IOException|RuntimeException e){stopIfInterrupted();quarantine(inbox,f,e,handled,failed,log);continue;}
+                    }catch(IOException|RuntimeException e){stopIfInterrupted(e);quarantine(inbox,f,e,handled,failed,log);continue;}
                     if(m.json.optString("baseReleaseId").equals(current)){next=f;id=m.releaseId;break;}
                 }
                 if(next==null)break;
@@ -55,7 +59,7 @@ public final class ReleaseInbox {
                     JSONObject now=ReleaseStore.state(c);
                     if(now==null||!id.equals(now.optString("releaseId")))throw new IOException("Release marker did not move to "+id);
                     current=id;
-                }catch(IOException|RuntimeException e){stopIfInterrupted();handled.remove(name);quarantine(inbox,next,e,handled,failed,log);continue;}
+                }catch(IOException|RuntimeException e){stopIfInterrupted(e);handled.remove(name);quarantine(inbox,next,e,handled,failed,log);continue;}
                 JSONObject row=new JSONObject().put("file",name).put("releaseId",id);
                 try{File done=ReleaseIO.dir(new File(ReleaseStore.external(c),"updates/applied"));File target=new File(done,name);
                     if(target.exists()&&!target.delete())throw new IOException("Cannot replace "+target.getName());
@@ -63,11 +67,14 @@ public final class ReleaseInbox {
                 }catch(IOException e){row.put("moveError",reason(e));log.line("applied "+name+" but could not move it: "+reason(e));}
                 applied.put(row);log.line("applied "+name);
             }
-            for(File f:packages(inbox,handled))waiting.put(f.getName());
+            }catch(InterruptedIOException stop){stopped=reason(stop);log.line(stopped);}
+            // Every package still in the inbox waits, also the one a stopped run was applying.
+            for(File f:packages(inbox,Collections.<String>emptySet()))waiting.put(f.getName());
             JSONObject result=new JSONObject().put("schemaVersion",1).put("time",System.currentTimeMillis())
                 .put("before",before==null?JSONObject.NULL:before).put("after",current==null?JSONObject.NULL:current)
-                .put("applied",applied).put("failed",failed).put("waiting",waiting);
+                .put("applied",applied).put("failed",failed).put("waiting",waiting).put("stopped",stopped==null?JSONObject.NULL:stopped);
             ReleaseStore.writeJson(new File(inbox,RESULT),result);
+            if(stopped!=null)throw new InterruptedIOException(stopped);
             return result;
         }catch(JSONException e){throw new IOException("Cannot record update inbox result",e);}
     }

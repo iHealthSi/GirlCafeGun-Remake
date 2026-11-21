@@ -58,10 +58,13 @@ final class InboxHostChecks {
         UpdaterHostTest.test("an interrupted boot run stops and leaves valid packages in the inbox",()->{
             Context c=UpdaterHostTest.context("inbox-interrupt");UpdaterHostTest.state(c,"0.1.0");UpdaterHostTest.write(UpdaterHostTest.external(c,"a.u"),UpdaterHostTest.b("old"));
             drop(c,"good.gcgupdate",delta("0.1.1","0.1.0","a.u","new"),content("a.u","new"),keys);
-            Thread.currentThread().interrupt();
+            // The interrupt comes while the package is being applied, as when onDestroy shuts the worker down.
             boolean stopped=false;
-            try{ReleaseInbox.applyAll(c,s->{},QUIET);}catch(InterruptedIOException expected){stopped=true;}finally{Thread.interrupted();}
+            try{ReleaseInbox.applyAll(c,s->{if(s.startsWith("Applying update"))Thread.currentThread().interrupt();},QUIET);}
+            catch(InterruptedIOException expected){stopped=true;}finally{Thread.interrupted();}
             UpdaterHostTest.yes(stopped,"run stops with InterruptedIOException");
+            JSONObject partial=result(c);
+            UpdaterHostTest.yes(!partial.isNull("stopped")&&partial.getJSONArray("waiting").length()==1,"result file names the stop and the waiting package: "+partial);
             UpdaterHostTest.yes(new File(ReleaseInbox.inbox(c),"good.gcgupdate").isFile(),"valid package stays in the inbox");
             UpdaterHostTest.yes(!new File(ReleaseInbox.inbox(c),"failed").exists(),"nothing set aside");
             UpdaterHostTest.yes(ReleaseStore.state(c).getString("releaseId").equals("0.1.0")&&UpdaterHostTest.text(UpdaterHostTest.external(c,"a.u")).equals("old"),"nothing applied");
