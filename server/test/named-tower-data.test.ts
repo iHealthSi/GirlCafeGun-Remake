@@ -80,6 +80,8 @@ describe("named-field event tower tables", () => {
       second: 40,
       boss: 9,
       mix: 17,
+      music: 58,
+      chess: 106,
     });
   });
 
@@ -143,6 +145,16 @@ describe("named-field event tower tables", () => {
       wallets.set(`second:${int(row.Id)}`, new Set(numbers(row.MoneyType)));
     for (const row of read("linkageactivity/linkagetower.txt"))
       wallets.set(`linkage:0`, new Set(numbers(row.MoneyType)));
+    for (const row of read("warchesstower/warchesstower.txt"))
+      wallets.set(`chess:${int(row.Id)}`, new Set(numbers(row.MoneyType)));
+    wallets.set(
+      "music:0",
+      new Set(
+        read("musicactivity/musictowertotal.txt").flatMap((row) =>
+          numbers(row.MoneyType),
+        ),
+      ),
+    );
     let checked = 0;
     const orphans = new Set<string>();
     for (const [key, levels] of catalog.levels)
@@ -298,8 +310,8 @@ describe("named-field event tower requests", () => {
   });
 
   it("leaves everything else on the unhandled path", () => {
-    // 223 is accepted by the gateway without a reply; the ranking, music and chess calls are not here.
-    for (const command of [223, 53, 54, 250, 371, 426, 536, 539, 999])
+    // 223, 282 and 391 are accepted by the gateway without a reply; 138 is the cafe, 426 the first anniversary.
+    for (const command of [223, 53, 54, 250, 426, 138, 391, 282, 999])
       expect(call({ sCmd: command, tbParam: {} }), String(command)).toBeNull();
     expect(call(null)).toBeNull();
     expect(call({ sCmd: 252, tbParam: null })).toBeNull();
@@ -316,9 +328,9 @@ describe("named-field event tower requests", () => {
         nError: 13,
       },
     );
-    expect(namedTowerErrorReply(call({ sCmd: 339, tbParam: {} })!.request, 2)).toEqual({
-      tbAward: [],
-    });
+    expect(namedTowerErrorReply(call({ sCmd: 339, tbParam: {} })!.request, 2)).toEqual(
+      [],
+    );
     expect(namedTowerErrorReply(call({ sCmd: 260, tbParam: {} })!.request, 2)).toEqual(
       [],
     );

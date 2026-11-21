@@ -55,10 +55,15 @@ describe("event tower tables", () => {
         provenance.files[name]!.sha256,
       );
       // Slice 1 and 2 tables come from smalltower/; the named-field families have their own folders.
+      // Slice 4 adds tables from concertexchange/ and mission/ (kept in eventmission/).
       const base = "setting.u:assets/_game/settinggen/activities/";
-      expect([`${base}smalltower/${name}`, `${base}${name}`]).toContain(
-        provenance.files[name]!.source,
-      );
+      const root = "setting.u:assets/_game/settinggen/";
+      expect([
+        `${base}smalltower/${name}`,
+        `${base}${name}`,
+        `${root}${name}`,
+        `${root}mission/${path.basename(name)}`,
+      ]).toContain(provenance.files[name]!.source);
     }
   });
 
@@ -217,6 +222,8 @@ describe("event tower item rules", () => {
       "15-106-1-1": ["ItemFifteenthTowerExpAuto", 1],
       "15-25-1-1": ["ItemAnimalizeTowerScoreAuto", null],
       "15-35-1-1": ["ItemEighthTowerScoreAuto", null],
+      "15-68-1-1": ["ItemAddFirstMusicInterestFightTimeAuto", null],
+      "15-69-1-1": ["ItemAddNextMusicInterestFightTimeAuto", null],
     };
     const table = readFileSync(path.resolve("resources/item/autouse.txt"), "utf8")
       .split(/\r?\n/)

@@ -349,6 +349,9 @@ export const TOWER_ITEM_TASKS: ReadonlyMap<string, { group: number; key: number 
     ["15-105-1-1", { group: 64, key: 3693 }],
     ["15-106-1-1", { group: 64, key: 3692 }],
     // Card tower scores (AnimalizeLogic nATIScore = offset + 8, read by GetSmallTowerMoney).
+    // Concert interest level tickets (ItemAddFirst / ItemAddNextMusicInterestFightTimeAuto): 1/554 and 1/557.
+    ["15-68-1-1", { group: 1, key: 554 }],
+    ["15-69-1-1", { group: 1, key: 557 }],
     ["15-25-1-1", { group: 34, key: 1008 }],
     ["15-35-1-1", { group: 34, key: 3008 }],
   ]);
@@ -1323,6 +1326,11 @@ export function encodeBuff(buff: CardTowerBuff): number {
   return buff.effectTime === 1 ? buff.id : buff.id | (Math.max(1, buff.count) << 16);
 }
 
+/** A negative Count is unlimited (the client treats it so in GetPondLeftNum). */
+function hasStock(slot: TowerPondSlot, drawn: number): boolean {
+  return slot.count < 0 || drawn < slot.count;
+}
+
 /** Whole-weight draw over slots with stock left; index of the slot, or -1 when none is left. */
 export function pickPondSlot(
   slots: readonly TowerPondSlot[],
@@ -1331,11 +1339,11 @@ export function pickPondSlot(
 ): number {
   let total = 0;
   for (let i = 0; i < slots.length; i++)
-    if ((records[i] ?? 0) < slots[i]!.count) total += Math.max(1, slots[i]!.weight);
+    if (hasStock(slots[i]!, records[i] ?? 0)) total += Math.max(1, slots[i]!.weight);
   if (total === 0) return -1;
   let roll = random(total);
   for (let i = 0; i < slots.length; i++) {
-    if ((records[i] ?? 0) >= slots[i]!.count) continue;
+    if (!hasStock(slots[i]!, records[i] ?? 0)) continue;
     roll -= Math.max(1, slots[i]!.weight);
     if (roll < 0) return i;
   }

@@ -30,6 +30,7 @@ import {
   type TowerLevel,
   type TowerPondSlot,
 } from "./event-tower-data.js";
+import { EVENT_MISSION_GROUP, parseMissionClaim } from "./event-mission-data.js";
 
 export const NAMED_COMMAND = {
   microGet: 285,
@@ -66,17 +67,41 @@ export const NAMED_COMMAND = {
   coopEventApply: 260,
   coopEventReward: 261,
   reportLog: 223,
+  rikiBgmLog: 282,
+  musicEnter: 371,
+  musicPass: 372,
+  musicFail: 373,
+  musicMission: 374,
+  exchangeRefresh: 380,
+  exchangeListing: 381,
+  exchangeAward: 382,
+  exchangeLog: 383,
+  exchangeGive: 384,
+  musicGameComplete: 388,
+  musicGameRank: 389,
+  musicGameFriendRank: 390,
+  musicRelayLog: 391,
+  fanList: 354,
+  fanDaily: 357,
+  monthMission: 436,
+  chessEnter: 536,
+  chessPass: 537,
+  chessFail: 538,
+  chessBoard: 539,
 } as const;
 
 /** ActivitiesLogic.ActivityType. */
 export const ACTIVITY_TYPE = {
   microClimbTower: 12,
   coopClient: 17,
+  musicTower: 19,
   buffTower: 20,
+  musicInterest: 21,
   mixOnline: 24,
   linkage: 25,
   secondAnniversary: 27,
   bossChallenge: 28,
+  warChess: 29,
 } as const;
 
 /** ActivitiesLogic.tbErrorCode values that these screens show. */
@@ -88,18 +113,22 @@ export const NAMED_ERROR = {
   formation: 10,
   noAward: 12,
   gotAward: 13,
+  /** The interest level has no fight left (tbErrorCode.Exhaust). */
+  exhausted: 11,
   /** CoopClientEvent:OnEnterTower shows Error.20043 for 17. */
   noToken: 17,
 } as const;
 
 export type NamedFamilyKey =
-  "micro" | "coop" | "mix" | "buff" | "linkage" | "second" | "boss";
+  "micro" | "coop" | "mix" | "buff" | "linkage" | "second" | "boss" | "music" | "chess";
 
 export interface NamedLevel extends TowerLevel {
   /** The difficulty column; 0 for tables without one. */
   diff: number;
   /** BossChallengeLevel.MaxScore. */
   maxScore: number;
+  /** FirstAward with the sixth number kept: the concert interest levels pay by score, not by first clear. */
+  firstScored: { award: BaseAward; score: number }[];
   /** CoopClientLevel.KillAward: [monster attribute, max kills, g-d-p-l-n of one kill]. */
   killAward: { attribute: number; max: number; award: BaseAward } | null;
   /** CoopClientLevel.OtherCost: [wallet id, count]. */
@@ -125,6 +154,12 @@ export interface NamedFamily {
   recordKey: (level: NamedLevel) => number;
   /** The bit of that task a clear sets; -1 when the task counts clears. */
   recordBit: (level: NamedLevel) => number;
+  /** The Enter reply echoes the request's nType (the music tower and its interest levels share 371). */
+  echoRequestType?: boolean;
+  /** Levels the family fights through Enter; others (relay, music select) are refused. */
+  fought?: (level: NamedLevel) => boolean;
+  /** Levels that send no formation (the concert's fixed-team levels). */
+  noFormation?: (level: NamedLevel) => boolean;
 }
 
 export const MICRO_DIFF_MAX = 5;
@@ -151,6 +186,38 @@ export const BOSS_TASK = {
   score: 30150,
   diffCount: 6,
 } as const;
+
+/** MusicActivityLogic: group 64, level records 4100 + LevelId (a bit per difficulty), relay choices 6000-6998. */
+export const MUSIC_TASK = {
+  group: 64,
+  pass: 4100,
+  relay: 6000,
+  relayEnter: 6999,
+} as const;
+/** MusicActivityLogic.InterestTeamId: the formation of the interest levels (type 6). */
+export const MUSIC_INTEREST_TEAM = 5000;
+export const MUSIC_GAME_TASK = { group: 1, score: 3100, maxGameId: 100 } as const;
+/** WarChessTower.lua: group 97, level records 110 + LevelId (clear count), the board 201-1000. */
+export const CHESS_TASK = {
+  group: 97,
+  pass: 110,
+  map: 201,
+  steps: 202,
+  fightCache: 203,
+  teamHp: [204, 205],
+  bossMove: 206,
+  round: 207,
+  freeze: 208,
+  mapPass: 210,
+  minRound: 250,
+  bossHp: 300,
+  mapScore: 320,
+  grid: 500,
+  gridEnd: 1000,
+  maxMaps: 20,
+} as const;
+/** ChessMap sizes: the team formations of the war chess board. */
+export const CHESS_TEAM_FORMATION = [5106, 5107] as const;
 
 export const NAMED_FAMILIES: Readonly<Record<NamedFamilyKey, NamedFamily>> = {
   micro: {
@@ -252,6 +319,38 @@ export const NAMED_FAMILIES: Readonly<Record<NamedFamilyKey, NamedFamily>> = {
     recordKey: (l) => BOSS_TASK.pass + l.levelId,
     recordBit: (l) => l.diff - 1,
   },
+  music: {
+    key: "music",
+    name: "concert tower",
+    enter: NAMED_COMMAND.musicEnter,
+    pass: NAMED_COMMAND.musicPass,
+    fail: NAMED_COMMAND.musicFail,
+    activityType: ACTIVITY_TYPE.musicTower,
+    group: MUSIC_TASK.group,
+    levelFile: "musicactivity/musiclevel.txt",
+    towerField: null,
+    echo: ["nType", "nLevelId", "nDiff"],
+    recordKey: (l) => MUSIC_TASK.pass + l.levelId,
+    recordBit: (l) => l.diff - 1,
+    echoRequestType: true,
+    // Types 5 (relay) and 7 (music select) are screens, 0 to 2, 4 and 6 are fought.
+    fought: (l) => l.type !== 5 && l.type !== 7,
+    noFormation: (l) => l.type === 4,
+  },
+  chess: {
+    key: "chess",
+    name: "war chess tower",
+    enter: NAMED_COMMAND.chessEnter,
+    pass: NAMED_COMMAND.chessPass,
+    fail: NAMED_COMMAND.chessFail,
+    activityType: ACTIVITY_TYPE.warChess,
+    group: CHESS_TASK.group,
+    levelFile: "warchesstower/warchesstowerlevel.txt",
+    towerField: "nId",
+    echo: ["nId", "nLevelId", "nFormationId"],
+    recordKey: (l) => CHESS_TASK.pass + l.levelId,
+    recordBit: () => -1,
+  },
 };
 
 const FAMILY_OF_COMMAND = new Map<
@@ -285,6 +384,46 @@ export interface LinkagePondSlot extends TowerPondSlot {
   special: boolean;
 }
 
+/** ConcertExchange timelist.txt: one season of the collection exchange. */
+export interface ExchangeSeason {
+  id: number;
+  /** [wallet id, count] of each of the four collection currencies. */
+  collections: number[][];
+  maxListing: number;
+  /** The gift paid for giving a collection piece away. */
+  award: BaseAward[];
+}
+
+export interface ExchangeReward {
+  id: number;
+  /** Rare rewards (type 1) carry a TaskId 1..; basic rewards (type 2) none. */
+  taskId: number;
+  type: number;
+  award: BaseAward;
+}
+
+export interface ChessMap {
+  id: number;
+  mapId: number;
+  diff: number;
+  maxItems: number;
+  columns: number;
+  rows: number;
+  /** [x, y] of the cells a team can start on. */
+  birth: number[][];
+  /** [x, y, ChessBoss id] of each boss, in boss order (boss index = position + 1). */
+  bosses: number[][];
+  walls: number[][];
+  cafe: number[];
+}
+
+export interface ChessBoss {
+  id: number;
+  actId: number;
+  levelId: number;
+  spSkill: number;
+}
+
 export interface LinkageMissionRows {
   daily: number;
   /** States 1 to 4: the mission ids of each. */
@@ -312,6 +451,10 @@ function toLevel(row: Row, tower: number, levelId: number, diff: number): NamedL
     fixedAwards: weights(row.FixAward, 10_000),
     randomAwards: weights(row.RandomAward, 0),
     diff,
+    firstScored: parseWeighted(row.FirstAward).map(({ award, weight }) => ({
+      award,
+      score: weight ?? 0,
+    })),
     maxScore: int(row.MaxScore),
     killAward: kill,
     otherCost: cost.length >= 2 ? { moneyId: cost[0]!, count: cost[1]! } : null,
@@ -358,6 +501,15 @@ export class NamedTowerCatalog {
   linkageToken: { times: number; cost: number; moneyId: number } | null = null;
   /** BarrageText.txt: how many texts each of the four columns has. */
   readonly barrageSizes: number[] = [0, 0, 0, 0];
+  /** MusicTower.txt: the issue (MusicTowerTotal.Id) each level belongs to, main and sub levels. */
+  readonly musicIssueOfLevel = new Map<number, number>();
+  readonly exchangeSeasons = new Map<number, ExchangeSeason>();
+  readonly exchangeRewards: ExchangeReward[] = [];
+  /** "id:mapId:diff". */
+  readonly chessMaps = new Map<string, ChessMap>();
+  readonly chessBosses = new Map<number, ChessBoss>();
+  /** SpItem.txt: "id:itemId" to the item and what it does (1 move once, 2 twice, 3 obstacle, 4 freeze). */
+  readonly chessItems = new Map<string, { gdpl: number[]; skill: number }>();
 
   private constructor() {}
 
@@ -373,6 +525,8 @@ export class NamedTowerCatalog {
       "linkage",
       "second",
       "boss",
+      "music",
+      "chess",
     ];
     for (const key of plain) {
       const family = NAMED_FAMILIES[key];
@@ -436,7 +590,87 @@ export class NamedTowerCatalog {
 
     catalog.#loadMix(read);
     catalog.#loadLinkage(read);
+    catalog.#loadMusicAndChess(read);
     return catalog;
+  }
+
+  #loadMusicAndChess(read: (file: string) => Row[]): void {
+    for (const row of read("musicactivity/musictower.txt")) {
+      const issue = int(row.Id);
+      if (issue <= 0) continue;
+      // SubLevelIds "[[71],[17-6]]": every number is a level id.
+      for (const id of [int(row.MainLevelId), ...numbers(row.SubLevelIds)])
+        if (id > 0) this.musicIssueOfLevel.set(id, issue);
+    }
+    for (const row of read("concertexchange/timelist.txt")) {
+      const id = int(row.ID);
+      if (id <= 0) continue;
+      this.exchangeSeasons.set(id, {
+        id,
+        collections: [1, 2, 3, 4]
+          .map((column) => numbers(row[`Collection${column}`]))
+          .filter((pair) => pair.length >= 2),
+        maxListing: int(row.MaxListing),
+        award: parseAwards(row.Award),
+      });
+    }
+    for (const row of read("concertexchange/rewardlist.txt")) {
+      const award = parseAwards(row.NormalAward)[0];
+      if (int(row.ID) > 0 && award)
+        this.exchangeRewards.push({
+          id: int(row.ID),
+          taskId: int(row.TaskId),
+          type: int(row.Type),
+          award,
+        });
+    }
+    for (const row of read("warchesstower/chessmap.txt")) {
+      const size = numbers(row.MapSize);
+      if (
+        int(row.Id) <= 0 ||
+        int(row.MapId) <= 0 ||
+        int(row.Diff) <= 0 ||
+        size.length < 2
+      )
+        continue;
+      const pairs = (text: string | undefined, width: number): number[][] => {
+        const list = numbers(text);
+        const result: number[][] = [];
+        for (let at = 0; at + width <= list.length; at += width)
+          result.push(list.slice(at, at + width));
+        return result;
+      };
+      const map: ChessMap = {
+        id: int(row.Id),
+        mapId: int(row.MapId),
+        diff: int(row.Diff),
+        maxItems: int(row.MaxItemCount),
+        columns: size[0]!,
+        rows: size[1]!,
+        birth: pairs(row.PlayerBirthPos, 2),
+        bosses: pairs(row.BossBirthPos, 3),
+        walls: pairs(row.UnmovablePos, 2),
+        cafe: numbers(row.CafePos).slice(0, 2),
+      };
+      this.chessMaps.set(`${map.id}:${map.mapId}:${map.diff}`, map);
+    }
+    for (const row of read("warchesstower/chessboss.txt")) {
+      const id = int(row.Id);
+      if (id > 0)
+        this.chessBosses.set(id, {
+          id,
+          actId: int(row.ActId),
+          levelId: int(row.LevelId),
+          spSkill: int(row.SpSkillId),
+        });
+    }
+    for (const row of read("warchesstower/spitem.txt")) {
+      if (int(row.Id) > 0 && int(row.ItemId) > 0)
+        this.chessItems.set(`${int(row.Id)}:${int(row.ItemId)}`, {
+          gdpl: numbers(row.GDPL),
+          skill: int(row.SpSkill),
+        });
+    }
   }
 
   /**
@@ -587,7 +821,36 @@ export type NamedTowerRequest =
   | { kind: "coopEventReward"; command: number }
   | { kind: "linkageMission"; command: number; stateId: number; missionId: number }
   | { kind: "linkageGacha"; command: number; pondId: number }
-  | { kind: "secondBarrage"; command: number };
+  | { kind: "secondBarrage"; command: number }
+  | { kind: "mission"; command: number; group: number; type: number; ids: number[] }
+  | {
+      kind: "exchange";
+      command: number;
+      op: "refresh" | "listing" | "award" | "log" | "give";
+      typeId: number;
+      /** Give: the player asked to give to (no other players here). */
+      roleId: number;
+      /** Listing: Type 0 lists a collection piece, 1 cancels the listing. */
+      cancel: boolean;
+    }
+  | {
+      kind: "musicGame";
+      command: number;
+      op: "complete" | "rank" | "friendRank";
+      gameId: number;
+      score: number;
+      rating: number;
+    }
+  /** FanEvent_GetList (354) and GetPreDaily (357): the exchange hub waits for the first. */
+  | { kind: "fan"; command: number }
+  | { kind: "chess"; command: number; body: Record<string, unknown> };
+
+/** Commands the client sends and never waits for: accepted and logged, no reply. */
+export const NAMED_LOG_COMMANDS: ReadonlySet<number> = new Set([
+  NAMED_COMMAND.reportLog,
+  NAMED_COMMAND.rikiBgmLog,
+  NAMED_COMMAND.musicRelayLog,
+]);
 
 export interface NamedTowerCall {
   request: NamedTowerRequest;
@@ -709,6 +972,62 @@ export function parseNamedTowerCall(
       });
     case NAMED_COMMAND.barrage2nd:
       return wrap({ kind: "secondBarrage", command });
+    case NAMED_COMMAND.musicMission:
+    case NAMED_COMMAND.monthMission: {
+      const claim = parseMissionClaim(command, envelope.tbParam);
+      return wrap({
+        kind: "mission",
+        command,
+        group:
+          command === NAMED_COMMAND.musicMission
+            ? EVENT_MISSION_GROUP.music
+            : EVENT_MISSION_GROUP.month,
+        type: claim.type,
+        ids: claim.ids,
+      });
+    }
+    case NAMED_COMMAND.exchangeRefresh:
+    case NAMED_COMMAND.exchangeListing:
+    case NAMED_COMMAND.exchangeAward:
+    case NAMED_COMMAND.exchangeLog:
+    case NAMED_COMMAND.exchangeGive: {
+      const ops = {
+        [NAMED_COMMAND.exchangeRefresh]: "refresh",
+        [NAMED_COMMAND.exchangeListing]: "listing",
+        [NAMED_COMMAND.exchangeAward]: "award",
+        [NAMED_COMMAND.exchangeLog]: "log",
+        [NAMED_COMMAND.exchangeGive]: "give",
+      } as const;
+      return wrap({
+        kind: "exchange",
+        command,
+        op: ops[command],
+        typeId: whole(body.TypeId) ?? 0,
+        roleId: whole(body.RoleId) ?? 0,
+        cancel: whole(body.Type) === 1,
+      });
+    }
+    case NAMED_COMMAND.musicGameComplete:
+    case NAMED_COMMAND.musicGameRank:
+    case NAMED_COMMAND.musicGameFriendRank:
+      return wrap({
+        kind: "musicGame",
+        command,
+        op:
+          command === NAMED_COMMAND.musicGameComplete
+            ? "complete"
+            : command === NAMED_COMMAND.musicGameRank
+              ? "rank"
+              : "friendRank",
+        gameId: whole(body.gameId) ?? whole(body.musicId) ?? 0,
+        score: whole(body.score) ?? 0,
+        rating: whole(body.type) ?? 0,
+      });
+    case NAMED_COMMAND.fanList:
+    case NAMED_COMMAND.fanDaily:
+      return wrap({ kind: "fan", command });
+    case NAMED_COMMAND.chessBoard:
+      return wrap({ kind: "chess", command, body });
     default:
       return null;
   }
@@ -721,6 +1040,10 @@ export function namedTowerReadOnly(request: NamedTowerRequest): boolean {
     request.kind === "mixSpCount" ||
     request.kind === "secondBarrage" ||
     request.kind === "coopEventReward" ||
+    request.kind === "fan" ||
+    (request.kind === "exchange" &&
+      (request.op === "refresh" || request.op === "log")) ||
+    (request.kind === "musicGame" && request.op !== "complete") ||
     (request.kind === "mixBarrage" && request.message === null)
   );
 }
@@ -734,12 +1057,25 @@ export function namedTowerErrorReply(
     case "fail":
       return {};
     case "enter":
-    case "pass":
       return { nError: code };
+    case "pass":
+      // CoopClientEvent:OnPassTower and MixOnlineLogic:OnPassLevel never read nError: they must find the
+      // fields of a success reply, empty.
+      return request.family === "coop" || request.family === "mix"
+        ? {
+            nError: code,
+            tbData: [],
+            nMasterExp: 0,
+            nCardExp: 0,
+            spKillNum: 0,
+            curScore: 0,
+          }
+        : { nError: code };
     case "echo":
       return { [request.field]: request.value };
     case "coopSaveSp":
-      return { tbAward: [] };
+      // The client stores the whole reply as the list of awards (luacall.lua CoopClient_SaveSp).
+      return [];
     case "mixSpCount":
       return { spCount: 0 };
     case "mixBarrage":
@@ -751,6 +1087,23 @@ export function namedTowerErrorReply(
       return [];
     case "secondBarrage":
       return [];
+    case "mission":
+      // MissionManager shows ui.Error.<code> with the word "mission" or "achievement".
+      return { Error: code, Type: request.type };
+    case "exchange":
+      return request.op === "refresh"
+        ? { tbData: [] }
+        : request.op === "log"
+          ? { tbList: [] }
+          : { Error: code, Type: request.cancel ? 1 : 0, TypeId: request.typeId };
+    case "musicGame":
+      return request.op === "friendRank" ? { musicId: request.gameId, tbList: [] } : [];
+    case "fan":
+      return request.command === NAMED_COMMAND.fanList
+        ? { tbNewGirlList: [] }
+        : { tbList: [] };
+    case "chess":
+      return { nType: whole(request.body.nType) ?? 0, nError: code };
     case "scoreAward":
     case "linkageMission":
     case "linkageGacha":

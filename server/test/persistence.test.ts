@@ -71,8 +71,9 @@ it("persists player and task changes atomically", async () => {
       "593826": 2,
       "593828": 2,
       "593829": 2,
-      // The event ids the named-field event towers seed at login: Railgun 63/3001, mixed online 68/1001.
+      // The event ids the named-field event towers seed at login: Railgun 63/3001, mixed online 68/1001, concert exchange 74/1.
       "4131769": 1,
+      "4849665": 1,
       "4457449": 1,
       "1507329": 256,
       "1507330": 256,

@@ -595,14 +595,14 @@ describe("armed survey", () => {
       account,
       named(339, { bSave: true, maxDamage: 1234 }),
     );
-    expect(body(saved).tbAward).toEqual([[15, 78, 1, 1, 300]]);
+    expect(saved.response).toEqual([[15, 78, 1, 1, 300]]);
     expect(money(current(repository), 50)).toBe(300);
     expect(task(current(repository), 68, 5)).toBe(1234);
     const twice = await repository.handleNamedTowerRequest(
       account,
       named(339, { bSave: true, maxDamage: 9999 }),
     );
-    expect(body(twice).tbAward).toEqual([]);
+    expect(twice.response).toEqual([]);
     expect(money(current(repository), 50)).toBe(300);
     expect(task(current(repository), 68, 5)).toBe(1234);
   });
@@ -617,14 +617,14 @@ describe("armed survey", () => {
       account,
       named(339, { bSave: false }),
     );
-    expect(body(dropped).tbAward).toEqual([]);
+    expect(dropped.response).toEqual([]);
     expect(money(current(repository), 50)).toBe(0);
     // Nothing to save any more; with no open SP result 339 still answers.
     const nothing = await repository.handleNamedTowerRequest(
       account,
       named(339, { bSave: true, maxDamage: 5 }),
     );
-    expect(nothing.response).toEqual({ tbAward: [] });
+    expect(nothing.response).toEqual([]);
     // The cap is 150 kills: a new run pays 1500.
     await repository.handleNamedTowerRequest(account, enter(4, 5));
     await repository.handleNamedTowerRequest(account, pass(4, 5, kills));
@@ -632,7 +632,7 @@ describe("armed survey", () => {
       account,
       named(339, { bSave: true, maxDamage: 1 }),
     );
-    expect(body(capped).tbAward).toEqual([[15, 78, 1, 1, 1500]]);
+    expect(capped.response).toEqual([[15, 78, 1, 1, 1500]]);
   });
 
   it("answers 260, 261 and the online lobby calls this event does not use", async () => {

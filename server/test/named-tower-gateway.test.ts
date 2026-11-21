@@ -295,7 +295,17 @@ it("serves the named-field event towers over real TCP: wrapped settlements, repl
       [454, {}, { spCount: 0 }],
       [455, {}, []],
       [261, { id: 1 }, []],
-      [339, { bSave: true, maxDamage: 1 }, { tbAward: [] }],
+      [339, { bSave: true, maxDamage: 1 }, []],
+      // Slice 4: the concert hub and exchange, the music game, the missions and the war chess board.
+      [354, {}, { tbNewGirlList: [] }],
+      [380, {}, { tbData: [] }],
+      [383, {}, { tbList: [] }],
+      [389, { isAll: true }, []],
+      [390, { gameId: 3 }, { musicId: 3, tbList: [] }],
+      [374, { Type: 1, nId: 1 }, { Error: 20003, Type: 1 }],
+      [436, { Type: 2, nId: 1 }, { Error: 20003, Type: 2 }],
+      [539, { nType: 8 }, { nType: 8, tbInfo: {} }],
+      [539, { nType: 3, teamId: 1, gridId: 1 }, { nType: 3, nError: 4 }],
     ];
     for (const [command, body, reply] of fixed) {
       const got = await call({ sCmd: command, tbParam: body }, replyTo(command));

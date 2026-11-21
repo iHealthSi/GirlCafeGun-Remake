@@ -31,7 +31,7 @@ import {
   parseEventTowerCall,
 } from "../game-data/event-tower-data.js";
 import {
-  NAMED_COMMAND,
+  NAMED_LOG_COMMANDS,
   NamedTowerCatalog,
   namedTowerErrorReply,
   namedTowerReadOnly,
@@ -3772,7 +3772,7 @@ export function createGatewayServer({
           return;
         }
         // WriteReportLog: the client sends it and waits for nothing.
-        if (luaCommand === NAMED_COMMAND.reportLog) {
+        if (luaCommand !== null && NAMED_LOG_COMMANDS.has(luaCommand ?? -1)) {
           logger.info("lua.accepted", {
             peer,
             account: context.account,
@@ -3842,7 +3842,16 @@ export function createGatewayServer({
               makePlayerUpdateNotification(result.player),
             );
           }
-          answer(result.response);
+          // MusicGameComplete (388) has an empty client handler: nothing to answer.
+          if (!(request.kind === "musicGame" && request.op === "complete"))
+            answer(result.response);
+          // Replies the server sends on its own (the war chess board starts a boss fight this way).
+          for (const push of result.pushes ?? [])
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", { sCmd: push.command, tbParam: push.body }),
+            );
           logger.info("lua.callback", {
             peer,
             account: context.account,

@@ -96,8 +96,25 @@ import {
   type TowerInfo,
 } from "../game-data/event-tower-data.js";
 import {
+  EventMissionCatalog,
+  MISSION_COUNTER,
+  MISSION_ERROR,
+  bumpMission,
+  bumpWalletChange,
+  missionDay,
+  missionState,
+  missionTaskValue,
+  refreshEventMissions,
+  taskKey as missionTaskKey,
+  walletSnapshot,
+  type EventMissionState,
+} from "../game-data/event-mission-data.js";
+import {
   ACTIVITY_TYPE,
   BOSS_TASK,
+  CHESS_TASK,
+  CHESS_TEAM_FORMATION,
+  MUSIC_GAME_TASK,
   BUFF_TASK,
   COOP_TASK,
   LINKAGE_TASK,
@@ -111,6 +128,7 @@ import {
   namedTowerErrorReply,
   namedTowerReadOnly,
   readNamedRun,
+  type ChessMap,
   type LinkagePondSlot,
   type NamedFamily,
   type NamedLevel,
@@ -578,6 +596,8 @@ export interface Player {
   eventTower?: EventTowerState;
   /** The same for the named-field event towers (micro, armed survey, mixed online, buff, linkage, anniversary). */
   namedTower?: NamedTowerState;
+  /** Counters behind the concert and anniversary missions (event-mission-data.ts). */
+  eventMissions?: EventMissionState;
 }
 
 export interface PersistedState {
@@ -620,6 +640,8 @@ export interface EventTowerResult {
   experienceUpdate: PlayerExperienceUpdate | null;
   /** Set when the request was refused; the save is unchanged then. */
   rejected: { code: number; reason: string } | null;
+  /** Replies the server sends on its own after the answer (the war chess board starts a fight this way). */
+  pushes?: { command: number; body: unknown }[];
 }
 
 export interface ChapterStarAwardResult {
@@ -1901,6 +1923,7 @@ function grantAwards(
 
 interface TowerOutcome {
   response: unknown;
+  pushes?: { command: number; body: unknown }[];
   itemGuids: Set<number>;
   moneyIds: Set<number>;
   girlIds: Set<number>;
@@ -3072,6 +3095,17 @@ function refreshLinkageMissions(
   const rows = catalog.linkageMissions.get(linkageActivityId(player, catalog));
   if (!rows) return;
   const achievements = ActivityAchievementCatalog.loadDefault();
+  // The daily mission can be claimed once per day (04:00 Shanghai, like the rest of the game).
+  const missions = missionState(player);
+  const today = missionDay(Date.now());
+  if (missions.linkageDay !== today) {
+    // The first sight of a save only marks the day; later days start the mission again.
+    if (missions.linkageDay !== undefined)
+      delete player.taskValues[
+        String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, rows.daily))
+      ];
+    missions.linkageDay = today;
+  }
   const ids = [rows.daily, ...rows.states.flat(), ...catalog.linkageNodeMissions];
   for (const id of ids) {
     const config = achievements.achievement(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id);
@@ -3090,15 +3124,18 @@ function refreshLinkageMissions(
       progress = Math.max(progress, girl?.level ?? 0);
     }
     if (config.type === 45) {
-      const [genre, detail, particular] = config.counts;
-      const owned = player.inventory.some(
-        (item) =>
-          item.genre === genre &&
-          item.detail === detail &&
-          item.particular === particular &&
-          item.count > 0,
-      );
-      progress = Math.max(progress, owned ? requiredAchievementCount(config) : 0);
+      // AchieveType 45: [count, genre, detail, particular, level]; the first number is the count wanted.
+      const [, genre, detail, particular, level] = config.counts;
+      const owned = player.inventory
+        .filter(
+          (item) =>
+            item.genre === genre &&
+            item.detail === detail &&
+            item.particular === particular &&
+            item.templateLevel === level,
+        )
+        .reduce((total, item) => total + Math.max(0, item.count), 0);
+      progress = Math.max(progress, owned);
     }
     if (progress === achievementProgress(stored)) continue;
     player.taskValues[key] = makeAchievementTaskValue(
@@ -3124,6 +3161,10 @@ function reconcileNamedTowerSeeds(player: Player): void {
   if (mix && towerTask(player, 68, MIX_TASK.currentId) === 0)
     setTowerTask(player, 68, MIX_TASK.currentId, mix);
   refreshLinkageMissions(player, catalog);
+  // The concert exchange season the client reads (task 74/1): the first, unless the page chose another.
+  const exchange = [...catalog.exchangeSeasons.keys()][0];
+  if (exchange && towerTask(player, 74, 1) === 0) setTowerTask(player, 74, 1, exchange);
+  refreshMissions(player);
 }
 
 function fieldRecord(value: unknown): Record<string, unknown> {
@@ -3134,6 +3175,534 @@ function fieldRecord(value: unknown): Record<string, unknown> {
 
 function namedAwardRows(awards: readonly (readonly number[])[]): number[][] {
   return awards.map((award) => award.slice(0, 5));
+}
+
+// ---------------------------------------------------------------- event missions (374, 436), concert fights
+
+/** The families whose fights feed the event missions. */
+const EXCHANGE_TASK = {
+  group: 74,
+  season: 1,
+  awardCount: 2,
+  listingFlags: 3,
+  listingCount: 4,
+  rare: 10,
+} as const;
+/** ui.Error.20045 (event window) and 20043 (insufficient tokens). */
+const EXCHANGE_ERROR = { window: 20045, tokens: 20043 } as const;
+
+const MISSION_FAMILIES: ReadonlySet<string> = new Set(["music", "second", "boss"]);
+
+function refreshMissions(player: Player): void {
+  const missions = EventMissionCatalog.tryLoadDefault();
+  if (missions) refreshEventMissions(player, missions);
+}
+
+/**
+ * Counts one won fight for the missions. The "issue" of a concert level is the MusicTowerTotal row it
+ * hangs under, that of the anniversary and boss challenge levels their event id (Id column).
+ */
+function recordMissionPass(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  family: NamedFamily,
+  level: NamedLevel,
+  body: Record<string, unknown>,
+  vigour: number,
+): void {
+  bumpMission(player, MISSION_COUNTER.vigour, vigour);
+  const issue =
+    family.key === "music"
+      ? (catalog.musicIssueOfLevel.get(level.levelId) ?? 0)
+      : level.tower;
+  const type = family.activityType;
+  if (level.type === 2) return;
+  if (level.type === 0) {
+    bumpMission(player, MISSION_COUNTER.clear(issue, type));
+    const kills = whole(fieldRecord(body.tbKillMonster).totalkillMonster) ?? 0;
+    bumpMission(player, MISSION_COUNTER.kills(issue), kills);
+  }
+  if (level.type === 1) bumpMission(player, MISSION_COUNTER.special(issue, type));
+  bumpMission(player, MISSION_COUNTER.level(issue, type, level.levelId));
+  bumpMission(player, MISSION_COUNTER.diff(level.levelId, level.diff));
+}
+
+/** Interest level 71 belongs to the first concert issue (tasks 1/554-556), 72 to the next (557-559). */
+function interestTasks(levelId: number): {
+  gained: number;
+  played: number;
+  best: number;
+} {
+  return levelId === 71
+    ? { gained: 554, played: 555, best: 556 }
+    : { gained: 557, played: 558, best: 559 };
+}
+
+function interestChances(player: Player, levelId: number): number {
+  const tasks = interestTasks(levelId);
+  return towerTask(player, 1, tasks.gained) - towerTask(player, 1, tasks.played);
+}
+
+/** One interest fight used up: the played counter, the mission counter and the best score. */
+function settleInterest(player: Player, level: NamedLevel, score: number): void {
+  const tasks = interestTasks(level.levelId);
+  setTowerTask(player, 1, tasks.played, towerTask(player, 1, tasks.played) + 1);
+  if (score > towerTask(player, 1, tasks.best))
+    setTowerTask(player, 1, tasks.best, score);
+  bumpMission(player, MISSION_COUNTER.interest(level.levelId === 71 ? 1 : 2));
+}
+
+/** FirstAward of an interest level: [g-d-p-l-n-score] paid every run for the score reached (LevelManager:GetScoreReward). */
+function interestScoreAwards(level: NamedLevel, score: number): number[][] {
+  const paid: number[][] = [];
+  if (score <= 0) return paid;
+  for (const award of level.firstScored) {
+    if (score < award.score) break;
+    const same = paid.find(
+      (entry) => entry.slice(0, 4).join("-") === award.award.slice(0, 4).join("-"),
+    );
+    if (same) same[4]! += award.award[4];
+    else paid.push([...award.award]);
+  }
+  return paid;
+}
+
+// ---------------------------------------------------------------- war chess board (539)
+
+/**
+ * The board of WarChessTower.lua lives in task group 97: the map and its cells (tasks 500-1000, one per
+ * cell, GridStates), steps, round, boss moves, team health and boss health. The client finds the boss
+ * paths itself and the server applies each move. [INFER] Nothing in the client or the tables says how
+ * many steps a team gets in a round (one here, items add more), what a boss reaching the cafe costs (the
+ * map is lost) or how the score of a hard map is worked out (1000 less 50 per round and 20 per item).
+ */
+const CHESS_CELL = {
+  empty: 0,
+  cafe: 1,
+  team: [3, 4],
+  boss: 5,
+  wall: 11,
+  obstacle: 12,
+} as const;
+const CHESS_PHASE = { shift: 29, boss: 1, won: 2, lost: 3 } as const;
+/** WarChessTower.Error. */
+const CHESS_ERROR = { lock: 1, init: 2, birth: 3, move: 4, team: 5 } as const;
+const CHESS_FULL_TEAM = 100 | (100 << 8) | (100 << 16) | (100 << 24);
+
+function chessGrid(map: ChessMap, x: number, y: number): number {
+  return x + 1 + y * (map.columns + 1);
+}
+
+function chessCells(map: ChessMap): number {
+  return (map.columns + 1) * (map.rows + 1);
+}
+
+function chessTask(player: Player, key: number): number {
+  return towerTask(player, CHESS_TASK.group, key);
+}
+
+function chessSet(player: Player, key: number, value: number): void {
+  setTowerTask(player, CHESS_TASK.group, key, value);
+}
+
+function chessCurrentMap(player: Player, catalog: NamedTowerCatalog): ChessMap | null {
+  const value = chessTask(player, CHESS_TASK.map);
+  return (
+    catalog.chessMaps.get(
+      `${value & 0x3ff}:${(value >> 10) & 0x3ff}:${(value >> 20) & 0xfff}`,
+    ) ?? null
+  );
+}
+
+function chessPhase(player: Player): number {
+  return chessTask(player, CHESS_TASK.bossMove) >>> CHESS_PHASE.shift;
+}
+
+function chessClearBoard(player: Player): void {
+  for (let key = CHESS_TASK.grid; key <= CHESS_TASK.gridEnd; key++)
+    chessSet(player, key, 0);
+  for (let boss = 1; boss <= 6; boss++) chessSet(player, CHESS_TASK.bossHp + boss, 0);
+  for (const key of [
+    CHESS_TASK.map,
+    CHESS_TASK.steps,
+    CHESS_TASK.fightCache,
+    ...CHESS_TASK.teamHp,
+    CHESS_TASK.bossMove,
+    CHESS_TASK.round,
+    CHESS_TASK.freeze,
+  ])
+    chessSet(player, key, 0);
+}
+
+function chessSteps(player: Player, team: number): number {
+  const value = chessTask(player, CHESS_TASK.steps);
+  return team === 1 ? value & 0xffff : value >>> 16;
+}
+
+function chessSetSteps(player: Player, team: number, steps: number): void {
+  const value = chessTask(player, CHESS_TASK.steps);
+  const other = team === 1 ? value >>> 16 : value & 0xffff;
+  chessSet(
+    player,
+    CHESS_TASK.steps,
+    team === 1 ? steps | (other << 16) : other | (steps << 16),
+  );
+}
+
+function chessTeamAlive(player: Player, team: number): boolean {
+  return chessTask(player, CHESS_TASK.teamHp[team - 1]!) !== 0;
+}
+
+function chessCellOf(player: Player, map: ChessMap, state: number): number {
+  for (let cell = 1; cell <= chessCells(map); cell++)
+    if (chessTask(player, CHESS_TASK.grid + cell) === state) return cell;
+  return 0;
+}
+
+function chessMinRoundInfo(
+  player: Player,
+  catalog: NamedTowerCatalog,
+): Record<string, number> {
+  const info: Record<string, number> = {};
+  for (const map of catalog.chessMaps.values()) {
+    const best = chessTask(
+      player,
+      CHESS_TASK.minRound + map.mapId + (map.diff - 1) * CHESS_TASK.maxMaps,
+    );
+    if (best > 0) info[`${map.mapId}_${map.diff}`] = best;
+  }
+  return info;
+}
+
+function chessMapEnded(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  outcome: TowerOutcome,
+): void {
+  (outcome.pushes ??= []).push({
+    command: NAMED_FAMILIES.chess.enter + 3,
+    body: { nType: 6, tbInfo: chessMinRoundInfo(player, catalog) },
+  });
+}
+
+function chessWin(player: Player, map: ChessMap): void {
+  const round = chessTask(player, CHESS_TASK.round);
+  const rounds = round & 0xffff;
+  const items = round >>> 16;
+  chessSet(player, CHESS_TASK.bossMove, CHESS_PHASE.won * 2 ** CHESS_PHASE.shift);
+  const passKey = CHESS_TASK.mapPass + map.mapId;
+  chessSet(player, passKey, (chessTask(player, passKey) | (1 << map.diff)) >>> 0);
+  const bestKey = CHESS_TASK.minRound + map.mapId + (map.diff - 1) * CHESS_TASK.maxMaps;
+  if (chessTask(player, bestKey) === 0 || rounds < chessTask(player, bestKey))
+    chessSet(player, bestKey, rounds);
+  if (map.diff > 1) {
+    const scoreKey = CHESS_TASK.mapScore + map.mapId;
+    const score = Math.max(0, 1000 - 50 * rounds - 20 * items);
+    if (score > chessTask(player, scoreKey)) chessSet(player, scoreKey, score);
+  }
+}
+
+function chessLose(player: Player): void {
+  chessSet(player, CHESS_TASK.bossMove, CHESS_PHASE.lost * 2 ** CHESS_PHASE.shift);
+}
+
+/** The boss fight a move starts: 536 is pushed to the client, which loads the level with the team's formation. */
+function chessStartFight(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  map: ChessMap,
+  team: number,
+  boss: number,
+  byBoss: boolean,
+  outcome: TowerOutcome,
+): boolean {
+  const bossRow = catalog.chessBosses.get(map.bosses[boss - 1]?.[2] ?? 0);
+  const level = bossRow
+    ? catalog.level("chess", bossRow.actId, bossRow.levelId, 0)
+    : null;
+  const formationId = CHESS_TEAM_FORMATION[team - 1];
+  if (!level || !formationId || !player.formations.some(({ id }) => id === formationId))
+    return false;
+  chessSet(player, CHESS_TASK.fightCache, (byBoss ? 1 : 0) | (team << 1) | (boss << 6));
+  namedState(player).run = {
+    id: randomUUID(),
+    family: "chess",
+    tower: level.tower,
+    level: level.levelId,
+    diff: 0,
+    node: 0,
+    active: true,
+    activityType: ACTIVITY_TYPE.warChess,
+    formationId,
+    cardGuids: fightRoster(player, formationId),
+    resultCmd: 0,
+    reply: null,
+  };
+  (outcome.pushes ??= []).push({
+    command: NAMED_FAMILIES.chess.enter,
+    body: {
+      tbData: { nId: level.tower, nLevelId: level.levelId, nFormationId: formationId },
+      tbDrop: [],
+      tbDropItems: [],
+    },
+  });
+  return true;
+}
+
+/** A won boss fight (537 of a type 1 level): the team takes the boss's cell, the boss is gone. */
+function chessBossWon(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  body: Record<string, unknown>,
+  outcome: TowerOutcome,
+): void {
+  const cache = chessTask(player, CHESS_TASK.fightCache);
+  const team = (cache >> 1) & 0x1f;
+  const boss = (cache >> 6) & 0x1f;
+  const map = chessCurrentMap(player, catalog);
+  if (!map || (team !== 1 && team !== 2) || boss === 0) return;
+  const state = positional(body.tbTeamState);
+  if (state && state.length >= 4) {
+    const byte = (index: number): number =>
+      Math.max(0, Math.min(100, whole(state[index]) ?? 0));
+    chessSet(
+      player,
+      CHESS_TASK.teamHp[team - 1]!,
+      byte(0) | (byte(1) << 8) | (byte(2) << 16) | (byte(3) << 24),
+    );
+  }
+  chessSet(player, CHESS_TASK.bossHp + boss, 0);
+  const mine = CHESS_CELL.team[team - 1]!;
+  let bossesLeft = false;
+  for (let cell = 1; cell <= chessCells(map); cell++) {
+    const key = CHESS_TASK.grid + cell;
+    const value = chessTask(player, key);
+    if (value === CHESS_CELL.boss + boss) chessSet(player, key, mine);
+    else if (value === mine) chessSet(player, key, CHESS_CELL.empty);
+    else if (value > CHESS_CELL.boss && value <= CHESS_CELL.boss + 5) bossesLeft = true;
+  }
+  chessSet(player, CHESS_TASK.fightCache, 0);
+  if (!bossesLeft) {
+    chessWin(player, map);
+    chessMapEnded(player, catalog, outcome);
+  }
+}
+
+/** A lost boss fight (538): the boss keeps the health it has left, the team is out. */
+function chessBossFailed(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  body: Record<string, unknown>,
+  outcome: TowerOutcome,
+): void {
+  const cache = chessTask(player, CHESS_TASK.fightCache);
+  const team = (cache >> 1) & 0x1f;
+  const boss = (cache >> 6) & 0x1f;
+  if ((team !== 1 && team !== 2) || boss === 0) return;
+  const left = Number(body.bossLeftHp);
+  if (Number.isFinite(left))
+    chessSet(player, CHESS_TASK.bossHp + boss, Math.max(0, Math.min(100, left)));
+  chessSet(player, CHESS_TASK.teamHp[team - 1]!, 0);
+  chessSet(player, CHESS_TASK.fightCache, 0);
+  const map = chessCurrentMap(player, catalog);
+  if (map && !chessTeamAlive(player, 1) && !chessTeamAlive(player, 2)) {
+    chessLose(player);
+    chessMapEnded(player, catalog, outcome);
+  }
+}
+
+/** One LuaCall 539: the sub-command is nType. The reply is { nType, nError? } (WarChessTower:OnServerRsp). */
+function applyChessBoard(
+  player: Player,
+  body: Record<string, unknown>,
+  catalog: NamedTowerCatalog,
+  outcome: TowerOutcome,
+): void {
+  const type = whole(body.nType) ?? 0;
+  const reply: Record<string, unknown> = { nType: type };
+  outcome.response = reply;
+  const fail = (code: number): void => {
+    reply.nError = code;
+  };
+  const map = type === 1 ? null : chessCurrentMap(player, catalog);
+  const ended = (): boolean => chessPhase(player) >= CHESS_PHASE.won;
+
+  switch (type) {
+    case 1: {
+      const id = whole(body.id) ?? 0;
+      const mapId = whole(body.mapId) ?? 0;
+      const diff = whole(body.diff) ?? 0;
+      const team1 = whole(body.team1) ?? 0;
+      const team2 = whole(body.team2) ?? 0;
+      const config = catalog.chessMaps.get(`${id}:${mapId}:${diff}`);
+      if (!config) return fail(CHESS_ERROR.init);
+      if (
+        diff > 1 &&
+        ((chessTask(player, CHESS_TASK.mapPass + mapId) >>> (diff - 1)) & 1) === 0
+      )
+        return fail(CHESS_ERROR.lock);
+      const births = config.birth.map(([x, y]) => chessGrid(config, x!, y!));
+      if (team1 === team2 || !births.includes(team1) || !births.includes(team2))
+        return fail(CHESS_ERROR.birth);
+      chessClearBoard(player);
+      chessSet(player, CHESS_TASK.map, id | (mapId << 10) | (diff << 20));
+      for (const [x, y] of config.walls)
+        chessSet(player, CHESS_TASK.grid + chessGrid(config, x!, y!), CHESS_CELL.wall);
+      config.bosses.forEach(([x, y], index) => {
+        chessSet(
+          player,
+          CHESS_TASK.grid + chessGrid(config, x!, y!),
+          CHESS_CELL.boss + index + 1,
+        );
+        chessSet(player, CHESS_TASK.bossHp + index + 1, 100);
+      });
+      if (config.cafe.length >= 2)
+        chessSet(
+          player,
+          CHESS_TASK.grid + chessGrid(config, config.cafe[0]!, config.cafe[1]!),
+          CHESS_CELL.cafe,
+        );
+      chessSet(player, CHESS_TASK.grid + team1, CHESS_CELL.team[0]);
+      chessSet(player, CHESS_TASK.grid + team2, CHESS_CELL.team[1]);
+      chessSet(player, CHESS_TASK.teamHp[0]!, CHESS_FULL_TEAM);
+      chessSet(player, CHESS_TASK.teamHp[1]!, CHESS_FULL_TEAM);
+      chessSet(player, CHESS_TASK.round, 1);
+      chessSet(player, CHESS_TASK.steps, 1 | (1 << 16));
+      return;
+    }
+    case 2:
+      chessClearBoard(player);
+      return;
+    case 3: {
+      const team = whole(body.teamId) ?? 0;
+      const cell = whole(body.gridId) ?? 0;
+      if (!map || (team !== 1 && team !== 2) || ended() || chessPhase(player) !== 0)
+        return fail(CHESS_ERROR.move);
+      if (chessSteps(player, team) < 1 || cell < 1 || cell > chessCells(map))
+        return fail(CHESS_ERROR.move);
+      const from = chessCellOf(player, map, CHESS_CELL.team[team - 1]!);
+      const width = map.columns + 1;
+      const distance =
+        Math.abs(((from - 1) % width) - ((cell - 1) % width)) +
+        Math.abs(Math.floor((from - 1) / width) - Math.floor((cell - 1) / width));
+      const target = chessTask(player, CHESS_TASK.grid + cell);
+      const bossIndex = target - CHESS_CELL.boss;
+      const attack = bossIndex >= 1 && bossIndex <= 5;
+      if (from === 0 || distance !== 1 || (!attack && target !== CHESS_CELL.empty))
+        return fail(CHESS_ERROR.move);
+      if (attack) {
+        if (!chessStartFight(player, catalog, map, team, bossIndex, false, outcome))
+          return fail(CHESS_ERROR.team);
+        chessSetSteps(player, team, chessSteps(player, team) - 1);
+        return;
+      }
+      chessSetSteps(player, team, chessSteps(player, team) - 1);
+      chessSet(player, CHESS_TASK.grid + from, CHESS_CELL.empty);
+      chessSet(player, CHESS_TASK.grid + cell, CHESS_CELL.team[team - 1]!);
+      return;
+    }
+    case 4:
+      if (!map || ended() || chessPhase(player) !== 0) return fail(CHESS_ERROR.move);
+      chessSet(player, CHESS_TASK.bossMove, CHESS_PHASE.boss * 2 ** CHESS_PHASE.shift);
+      return;
+    case 5: {
+      if (!map || ended()) return fail(CHESS_ERROR.move);
+      const move = body.tbMove;
+      if (typeof move !== "object" || move === null) {
+        // Every boss has moved: the next player round starts.
+        chessSet(player, CHESS_TASK.bossMove, 0);
+        chessSet(player, CHESS_TASK.freeze, 0);
+        chessSet(player, CHESS_TASK.round, chessTask(player, CHESS_TASK.round) + 1);
+        chessSet(
+          player,
+          CHESS_TASK.steps,
+          (chessTeamAlive(player, 1) ? 1 : 0) |
+            ((chessTeamAlive(player, 2) ? 1 : 0) << 16),
+        );
+        return;
+      }
+      const fields = move as Record<string, unknown>;
+      const boss = whole(fields.bossIdx) ?? 0;
+      const from = whole(fields.fromGrid) ?? 0;
+      const aim = whole(fields.aimGrid) ?? 0;
+      if (
+        chessPhase(player) !== CHESS_PHASE.boss ||
+        boss < 1 ||
+        boss > 5 ||
+        chessTask(player, CHESS_TASK.grid + from) !== CHESS_CELL.boss + boss ||
+        aim < 1 ||
+        aim > chessCells(map)
+      )
+        return fail(CHESS_ERROR.move);
+      const target = chessTask(player, CHESS_TASK.grid + aim);
+      const moved = chessTask(player, CHESS_TASK.bossMove) | (1 << boss);
+      if (target === CHESS_CELL.cafe) {
+        chessLose(player);
+        reply.nType = 6;
+        reply.tbInfo = chessMinRoundInfo(player, catalog);
+        return;
+      }
+      const team = CHESS_CELL.team.indexOf(target as 3 | 4) + 1;
+      if (team > 0) {
+        // The boss catches a team: that fight is played before the round goes on.
+        if (!chessStartFight(player, catalog, map, team, boss, true, outcome))
+          return fail(CHESS_ERROR.team);
+        chessSet(
+          player,
+          CHESS_TASK.bossMove,
+          moved | (CHESS_PHASE.boss * 2 ** CHESS_PHASE.shift),
+        );
+        return;
+      }
+      if (target !== CHESS_CELL.empty) return fail(CHESS_ERROR.move);
+      chessSet(
+        player,
+        CHESS_TASK.bossMove,
+        moved | (CHESS_PHASE.boss * 2 ** CHESS_PHASE.shift),
+      );
+      chessSet(player, CHESS_TASK.grid + from, CHESS_CELL.empty);
+      chessSet(player, CHESS_TASK.grid + aim, CHESS_CELL.boss + boss);
+      return;
+    }
+    case 7: {
+      if (!map || ended() || chessPhase(player) !== 0) return fail(CHESS_ERROR.move);
+      const item = catalog.chessItems.get(`${map.id}:${whole(body.itemId) ?? 0}`);
+      const round = chessTask(player, CHESS_TASK.round);
+      if (!item || (map.maxItems > 0 && round >>> 16 >= map.maxItems))
+        return fail(CHESS_ERROR.team);
+      const team = whole(body.teamIdx) ?? 0;
+      const bossIdx = whole(body.bossIdx) ?? 0;
+      const cell = whole(body.gridId) ?? 0;
+      const bossCell = chessCellOf(player, map, CHESS_CELL.boss + bossIdx);
+      if (
+        (item.skill <= 2 && team !== 1 && team !== 2) ||
+        (item.skill === 3 &&
+          (cell < 1 ||
+            cell > chessCells(map) ||
+            chessTask(player, CHESS_TASK.grid + cell) !== CHESS_CELL.empty)) ||
+        (item.skill === 4 && (bossIdx < 1 || bossCell === 0))
+      )
+        return fail(CHESS_ERROR.move);
+      if (!takeTowerItem(player, item.gdpl, 1, outcome)) return fail(CHESS_ERROR.team);
+      chessSet(player, CHESS_TASK.round, round + (1 << 16));
+      if (item.skill <= 2)
+        chessSetSteps(player, team, chessSteps(player, team) + item.skill);
+      else if (item.skill === 3)
+        chessSet(player, CHESS_TASK.grid + cell, CHESS_CELL.obstacle);
+      else
+        chessSet(
+          player,
+          CHESS_TASK.freeze,
+          (chessTask(player, CHESS_TASK.freeze) | (1 << bossIdx)) >>> 0,
+        );
+      return;
+    }
+    case 8:
+      reply.tbInfo = chessMinRoundInfo(player, catalog);
+      return;
+    default:
+      return fail(CHESS_ERROR.init);
+  }
 }
 
 /** Applies one request of these families. Throws EventTowerError for a refusal. */
@@ -3220,7 +3789,7 @@ function applyNamedTowerRequest(
       const run = readNamedRun(state);
       const sp = run?.family === "coop" ? run.sp : undefined;
       if (!sp || sp.settled) {
-        outcome.response = { tbAward: [] };
+        outcome.response = [];
         return outcome;
       }
       sp.settled = true;
@@ -3235,7 +3804,7 @@ function applyNamedTowerRequest(
           setTowerTask(player, 68, COOP_TASK.maxScore, request.maxDamage);
       }
       finishAwards();
-      outcome.response = { tbAward: paid };
+      outcome.response = paid;
       return outcome;
     }
 
@@ -3296,7 +3865,12 @@ function applyNamedTowerRequest(
       if (!rows || !config || !listed)
         throw refuse(NAMED_ERROR.invalid, "unknown_mission");
       // IsMissionStateComp: a state opens when every mission of the states before it is claimed.
-      for (let state = 1; state < request.stateId; state++)
+      // The daily mission is not part of a state: the client lets every tab send it.
+      for (
+        let state = 1;
+        state < request.stateId && request.missionId !== rows.daily;
+        state++
+      )
         for (const id of rows.states[state - 1]!) {
           const value =
             player.taskValues[
@@ -3337,7 +3911,14 @@ function applyNamedTowerRequest(
         list.reduce(
           (total, slot, index) =>
             total +
-            Math.max(0, slot.count - towerTask(player, 63, slotKey(pond, index + 1))),
+              // A negative Count is unlimited (the client treats it so in GetPondLeftNum).
+              slot.count <
+            0
+              ? Number.POSITIVE_INFINITY
+              : Math.max(
+                  0,
+                  slot.count - towerTask(player, 63, slotKey(pond, index + 1)),
+                ),
           0,
         );
       // LinkageActivityLogic:IsPondUnlock: the last pond opens when every earlier one is empty.
@@ -3372,12 +3953,214 @@ function applyNamedTowerRequest(
       return outcome;
     }
 
+    case "fan":
+      // The concert exchange hub opens through FanEvent_GetList (354) and waits for it: no idol vote here.
+      outcome.response = namedTowerErrorReply(request, 0);
+      return outcome;
+
+    case "chess":
+      applyChessBoard(player, request.body, catalog, outcome);
+      return outcome;
+
+    case "musicGame": {
+      if (request.op === "friendRank") {
+        // The client puts the player into the list itself (UI_MusicSelect:OnFriendRankDataResponse).
+        outcome.response = { musicId: request.gameId, tbList: [] };
+        return outcome;
+      }
+      if (request.op === "rank") {
+        // Indexed by game id (the client reads tb[Id]); pos 0 shows "not ranked": no other players.
+        const list: unknown[] = [];
+        for (let id = 1; id <= MUSIC_GAME_TASK.maxGameId; id++) {
+          const score = towerTask(
+            player,
+            MUSIC_GAME_TASK.group,
+            MUSIC_GAME_TASK.score + id,
+          );
+          if (score > 0) list[id - 1] = { pos: 0, score };
+        }
+        outcome.response = Array.from(list, (entry) => entry ?? null);
+        return outcome;
+      }
+      outcome.response = {};
+      if (
+        request.gameId < 1 ||
+        request.gameId > MUSIC_GAME_TASK.maxGameId ||
+        request.score <= 0
+      )
+        return outcome;
+      const key = MUSIC_GAME_TASK.score + request.gameId;
+      if (request.score > towerTask(player, MUSIC_GAME_TASK.group, key))
+        setTowerTask(player, MUSIC_GAME_TASK.group, key, request.score);
+      bumpMission(player, MISSION_COUNTER.musicGame);
+      // Ratings 1 C, 2 B, 3 A, 4 S: a play counts for every rating up to its own (AchieveType 191).
+      for (let rating = 1; rating <= Math.min(4, request.rating); rating++)
+        bumpMission(player, MISSION_COUNTER.rating(rating));
+      refreshMissions(player);
+      return outcome;
+    }
+
+    case "mission": {
+      const missions = EventMissionCatalog.tryLoadDefault();
+      if (!missions) throw refuse(MISSION_ERROR.missing, "no_mission_tables");
+      refreshEventMissions(player, missions);
+      const ids = [...new Set(request.ids)];
+      const paid: number[][] = [];
+      let claimedCount = 0;
+      for (const id of ids) {
+        const row = missions.mission(request.group, id);
+        const alone = ids.length === 1;
+        const value = row
+          ? (player.taskValues[missionTaskKey(row.group, row.id)] ?? 0)
+          : 0;
+        // A single claim says why it fails; a claim of a list pays what is ready.
+        if (!row) {
+          if (alone) throw refuse(MISSION_ERROR.missing, "unknown_mission");
+          continue;
+        }
+        if ((value & 1) === 1) {
+          if (alone) throw refuse(MISSION_ERROR.claimed, "already_claimed");
+          continue;
+        }
+        if (value >>> 1 < row.required) {
+          if (alone) throw refuse(MISSION_ERROR.notDone, "not_completed");
+          continue;
+        }
+        grantTowerAwards(player, row.awards, outcome);
+        player.taskValues[missionTaskKey(row.group, row.id)] = missionTaskValue(
+          value >>> 1,
+          true,
+        );
+        paid.push(...namedAwardRows(row.awards));
+        claimedCount++;
+      }
+      if (claimedCount === 0)
+        throw refuse(
+          ids.length === 0 ? MISSION_ERROR.missing : MISSION_ERROR.notDone,
+          "nothing_to_claim",
+        );
+      refreshEventMissions(player, missions);
+      finishAwards();
+      outcome.response = { Type: request.type, tbItem: paid };
+      return outcome;
+    }
+
+    case "exchange": {
+      const group = EXCHANGE_TASK.group;
+      const season = catalog.exchangeSeasons.get(
+        towerTask(player, group, EXCHANGE_TASK.season),
+      );
+      switch (request.op) {
+        case "refresh":
+          // Nobody else lists collection pieces here: the board stays empty.
+          outcome.response = { tbData: [] };
+          return outcome;
+        case "log":
+          outcome.response = { tbList: [] };
+          return outcome;
+        case "give":
+          // Unreachable with an empty board; the answer the client uses when a piece is gone.
+          outcome.response = {
+            Error: 20122,
+            TypeId: request.typeId,
+            RoleId: request.roleId,
+          };
+          return outcome;
+        case "listing": {
+          if (!season || request.typeId < 1 || request.typeId > 4)
+            throw refuse(EXCHANGE_ERROR.window, "no_season");
+          const mission = missionState(player);
+          const day = missionDay(Date.now());
+          if (mission.exchangeDay !== day) {
+            mission.exchangeDay = day;
+            setTowerTask(player, group, EXCHANGE_TASK.listingCount, 0);
+          }
+          const flags = towerTask(player, group, EXCHANGE_TASK.listingFlags);
+          const bit = 1 << request.typeId;
+          if (request.cancel) {
+            setTowerTask(player, group, EXCHANGE_TASK.listingFlags, flags & ~bit);
+          } else {
+            const count = towerTask(player, group, EXCHANGE_TASK.listingCount);
+            if ((flags & bit) !== 0 || count >= season.maxListing)
+              throw refuse(EXCHANGE_ERROR.window, "cannot_list");
+            setTowerTask(player, group, EXCHANGE_TASK.listingFlags, flags | bit);
+            setTowerTask(player, group, EXCHANGE_TASK.listingCount, count + 1);
+          }
+          outcome.response = {
+            Error: 0,
+            Type: request.cancel ? 1 : 0,
+            TypeId: request.typeId,
+          };
+          return outcome;
+        }
+        case "award": {
+          // [INFER] A full set of the four collection currencies pays the first rare reward not yet
+          // received (TaskId order) and one basic reward; the client holds no such rule.
+          if (!season || season.collections.length === 0)
+            throw refuse(EXCHANGE_ERROR.window, "no_season");
+          const wallets = season.collections.map(([moneyId, count]) => ({
+            money: player.money.find(({ id }) => id === moneyId),
+            count: count!,
+          }));
+          if (wallets.some(({ money, count }) => (money?.count ?? 0) < count))
+            throw refuse(EXCHANGE_ERROR.tokens, "incomplete_collection");
+          for (const { money, count } of wallets) {
+            money!.count -= count;
+            outcome.moneyIds.add(money!.id);
+          }
+          const rewards = catalog.exchangeRewards.filter(({ id }) => id === season.id);
+          const received = (taskId: number): boolean =>
+            ((towerTask(player, group, EXCHANGE_TASK.rare + Math.floor(taskId / 30)) >>>
+              (taskId % 30)) &
+              1) ===
+            1;
+          const rare = rewards
+            .filter(({ type }) => type === 1)
+            .sort((left, right) => left.taskId - right.taskId)
+            .find(({ taskId }) => !received(taskId));
+          const basic = rewards.filter(({ type }) => type === 2);
+          const items: BaseAward[] = [];
+          if (rare) {
+            items.push(rare.award);
+            const key = EXCHANGE_TASK.rare + Math.floor(rare.taskId / 30);
+            setTowerTask(
+              player,
+              group,
+              key,
+              (towerTask(player, group, key) | (1 << (rare.taskId % 30))) >>> 0,
+            );
+          }
+          if (basic.length > 0) items.push(basic[random(basic.length)]!.award);
+          grantTowerAwards(player, items, outcome);
+          setTowerTask(
+            player,
+            group,
+            EXCHANGE_TASK.awardCount,
+            towerTask(player, group, EXCHANGE_TASK.awardCount) + 1,
+          );
+          refreshMissions(player);
+          finishAwards();
+          outcome.response = { Items: namedAwardRows(items) };
+          return outcome;
+        }
+      }
+      return outcome;
+    }
+
     case "enter": {
       const family = NAMED_FAMILIES[request.family];
       const level = resolveNamedLevel(player, catalog, request);
-      if (!level) throw refuse(NAMED_ERROR.invalid, "unknown_level");
+      if (!level || (family.fought && !family.fought(level)))
+        throw refuse(NAMED_ERROR.invalid, "unknown_level");
+      // The concert interest levels (type 6) cost no vigour: the tickets of task 1/554-559 are the limit.
+      if (
+        family.key === "music" &&
+        level.type === 6 &&
+        interestChances(player, level.levelId) < 1
+      )
+        throw refuse(NAMED_ERROR.exhausted, "no_interest_fight_left");
       let cardGuids: number[] = [];
-      if (level.type !== 2) {
+      if (level.type !== 2 && !family.noFormation?.(level)) {
         if (
           request.formationId <= 0 ||
           !player.formations.some(({ id }) => id === request.formationId)
@@ -3421,7 +4204,9 @@ function applyNamedTowerRequest(
       for (const field of family.echo) {
         data[field] =
           field === "nType"
-            ? family.activityType
+            ? family.echoRequestType
+              ? (whole(request.body.nType) ?? family.activityType)
+              : family.activityType
             : (whole(request.body[field]) ?? (field === "nodeId" ? request.node : 0));
       }
       outcome.response = { tbData: data, tbDrop: [], tbDropItems: [] };
@@ -3449,6 +4234,7 @@ function applyNamedTowerRequest(
         return outcome;
       }
 
+      const wallet = walletSnapshot(player);
       const cost = level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
       spendTowerVigour(player, cost, outcome, true);
       if (level.otherCost) {
@@ -3460,7 +4246,15 @@ function applyNamedTowerRequest(
       }
 
       const { first, before } = namedRecordFirst(player, family, level);
-      const awards: number[][] = rollTowerAwards(level, first, run.id);
+      // An interest level (concert type 6) pays by score on every run, not by first clear.
+      const interest = family.key === "music" && level.type === 6;
+      const score = whole(request.body.nScore) ?? 0;
+      const awards: number[][] = rollTowerAwards(
+        interest ? { ...level, firstAwards: [] } : level,
+        first,
+        run.id,
+      );
+      if (interest) awards.push(...interestScoreAwards(level, score));
       grantTowerAwards(player, awards, outcome);
       const bit = family.recordBit(level);
       setTowerTask(
@@ -3576,8 +4370,19 @@ function applyNamedTowerRequest(
               vigour: cost,
             });
           break;
+        case "music":
+          if (interest) settleInterest(player, level, score);
+          break;
+        case "chess":
+          if (level.type === 1) chessBossWon(player, catalog, request.body, outcome);
+          break;
         default:
           break;
+      }
+      if (MISSION_FAMILIES.has(family.key)) {
+        bumpWalletChange(player, wallet);
+        recordMissionPass(player, catalog, family, level, request.body, cost);
+        refreshMissions(player);
       }
 
       if (level.masterExp > 0) {
@@ -3621,6 +4426,10 @@ function applyNamedTowerRequest(
         run.active = false;
         run.resultCmd = family.fail;
         run.reply = {};
+        if (level && family.key === "music" && level.type === 6)
+          settleInterest(player, level, 0);
+        if (level && family.key === "chess" && level.type === 1)
+          chessBossFailed(player, catalog, request.body, outcome);
       }
       outcome.response = {};
       return outcome;
@@ -7052,6 +7861,9 @@ export class PlayerRepository {
       price = unitPrice(config, priceIndex, discount) * buyNum;
       if (price > 0) {
         deductShopMoney(player, config.moneyType, price, updatedMoneyIds);
+        // The anniversary missions of AchieveType 259 count the tokens spent in the event shops.
+        if (EventMissionCatalog.tryLoadDefault()?.spentMoney.has(config.moneyType))
+          bumpMission(player, MISSION_COUNTER.spent(config.moneyType), price);
       }
       grantAwards(
         player,
@@ -8596,6 +9408,7 @@ export class PlayerRepository {
       updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
       experienceUpdate: outcome.experience,
       rejected: null,
+      ...(outcome.pushes ? { pushes: outcome.pushes } : {}),
     };
   }
 
