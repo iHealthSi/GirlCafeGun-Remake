@@ -333,7 +333,9 @@ it("rejects TASK_CHANGE_REQ before LOGIN and leaves the task value alone", async
         Buffer.concat([fieldBytes(1, "android"), fieldBytes(2, identity)]),
         COMMAND.VERIFY_RSP,
       );
-      const change = makeTaskValueSync({ 123: 9 });
+      // Group 32 (UI_User userdefineGroupId) is a task group the client may write.
+      const taskId = String((32 << 16) | 1);
+      const change = makeTaskValueSync({ [taskId]: 9 });
       const early = await request(
         socket,
         COMMAND.TASK_CHANGE_REQ,
@@ -342,7 +344,7 @@ it("rejects TASK_CHANGE_REQ before LOGIN and leaves the task value alone", async
         COMMAND.TASK_CHANGE_RSP,
       );
       expect(early.at(-1)!.returnCode).toBe(1);
-      expect(players.get(identity)?.taskValues["123"]).toBeUndefined();
+      expect(players.get(identity)?.taskValues[taskId]).toBeUndefined();
 
       await request(
         socket,
@@ -351,7 +353,7 @@ it("rejects TASK_CHANGE_REQ before LOGIN and leaves the task value alone", async
         fieldBytes(1, account),
         COMMAND.LOGIN_RSP,
       );
-      expect(players.get(identity)?.taskValues["123"]).toBeUndefined();
+      expect(players.get(identity)?.taskValues[taskId]).toBeUndefined();
 
       const accepted = await request(
         socket,
@@ -361,7 +363,7 @@ it("rejects TASK_CHANGE_REQ before LOGIN and leaves the task value alone", async
         COMMAND.TASK_CHANGE_RSP,
       );
       expect(accepted.at(-1)!.returnCode).toBe(0);
-      expect(players.get(identity)?.taskValues["123"]).toBe(9);
+      expect(players.get(identity)?.taskValues[taskId]).toBe(9);
     } finally {
       const closed = once(socket, "close");
       socket.destroy();
