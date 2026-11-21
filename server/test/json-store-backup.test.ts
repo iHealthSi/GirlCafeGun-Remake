@@ -1,4 +1,4 @@
-import { readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { readdir, readFile, rm, stat, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -263,5 +263,38 @@ describe("unreadable saves", () => {
     const reopened = openStore(filePath, backupDirectory);
     await reopened.initialize(START + DAY);
     expect(reopened.snapshot().players.tester?.account).toBe("tester");
+  });
+});
+
+describe("no-op updates", () => {
+  it("skips the disk write and keeps updatedAt when the mutator changes nothing", async () => {
+    const { filePath } = await workspace();
+    const store = openStore(filePath, "", 0);
+    await store.initialize(START);
+    await store.update((state) => {
+      state.nextRoleId = 7;
+    });
+    const written = await readFile(filePath, "utf8");
+    const updatedAt = store.snapshot().updatedAt;
+    expect(updatedAt).not.toBeNull();
+    // Age the file so that a rewrite would show in the mtime.
+    const old = new Date(Date.UTC(2020, 0, 1));
+    await utimes(filePath, old, old);
+
+    const result = await store.update((state) => {
+      state.nextRoleId = 7;
+      return "same";
+    });
+    expect(result).toBe("same");
+    expect(await readFile(filePath, "utf8")).toBe(written);
+    expect((await stat(filePath)).mtimeMs).toBe(old.getTime());
+    expect(store.snapshot().updatedAt).toBe(updatedAt);
+
+    await store.update((state) => {
+      state.nextRoleId = 8;
+    });
+    expect(store.snapshot().nextRoleId).toBe(8);
+    expect(JSON.parse(await readFile(filePath, "utf8")).nextRoleId).toBe(8);
+    expect((await stat(filePath)).mtimeMs).toBeGreaterThan(old.getTime());
   });
 });

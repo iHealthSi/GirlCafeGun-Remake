@@ -321,13 +321,20 @@ describe("MOD progression transactions", () => {
       ).rejects.toThrow(/insufficient_money/);
       expect(store.snapshot()).toEqual(before);
       expect(await readFile(file)).toEqual(disk);
+      // A request that changes nothing no longer touches the disk, so the
+      // persistence failure needs a request that really changes the save.
+      await store.update((state) => {
+        state.players[account]!.money = [{ id: 2, count: 999_999_999 }];
+      });
+      const funded = store.snapshot();
+      const fundedDisk = await readFile(file);
       const temp = `${file}.${process.pid}.tmp`;
       await mkdir(temp);
       await expect(
-        repository.handleRuneRequest(account, 34, { rune: 100, usenew: false }),
+        repository.handleRuneRequest(account, 33, { rune: 100 }),
       ).rejects.toThrow();
-      expect(store.snapshot()).toEqual(before);
-      expect(await readFile(file)).toEqual(disk);
+      expect(store.snapshot()).toEqual(funded);
+      expect(await readFile(file)).toEqual(fundedDisk);
       await rm(temp, { recursive: true });
     });
   });

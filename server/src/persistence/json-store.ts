@@ -90,6 +90,10 @@ export function rankBackups(names: readonly string[], today: string): string[] {
   return [...past.reverse(), ...future];
 }
 
+function stateFingerprint(state: PersistedDocument): string {
+  return JSON.stringify({ ...state, updatedAt: null });
+}
+
 export class JsonStore<T extends PersistedDocument> {
   readonly #filePath: string;
   readonly #initialState: T;
@@ -148,8 +152,12 @@ export class JsonStore<T extends PersistedDocument> {
   async update<R>(mutator: (draft: T) => R | Promise<R>): Promise<R> {
     if (!this.#state) throw new Error("JsonStore is not initialized");
     const operation = this.#writeQueue.then(async () => {
-      const draft = structuredClone(this.#state as T);
+      const current = this.#state as T;
+      const draft = structuredClone(current);
+      const before = stateFingerprint(current);
       const result = await mutator(draft);
+      // A mutation that changed nothing must not rewrite the save or move updatedAt.
+      if (stateFingerprint(draft) === before) return result;
       draft.updatedAt = new Date().toISOString();
       await this.#persist(draft);
       this.#state = draft;
