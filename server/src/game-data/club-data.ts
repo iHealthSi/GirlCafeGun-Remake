@@ -1,4 +1,9 @@
 import type { BaseAward } from "./chapter-config.js";
+import {
+  clubBossMemberFields,
+  clubBossPayload,
+  type ClubBossState,
+} from "./club-boss-data.js";
 import { dailySignUpOperationalDate } from "./daily-sign-up-data.js";
 
 /**
@@ -27,11 +32,6 @@ export const LUA_COMMAND_CLUB_MEMBERS = 10_027;
 export const LUA_COMMAND_CLUB_APPLY_LIST = 10_028;
 export const LUA_COMMAND_CLUB_LOG = 10_029;
 export const LUA_COMMAND_CLUB_CANCEL_APPLY = 10_100;
-
-/** Club boss commands: ClubBossTime has ended, so the client never sends them. */
-export const CLUB_BOSS_COMMANDS: ReadonlySet<number> = new Set([
-  10_015, 10_016, 10_017, 10_018, 10_019, 10_023, 10_024, 10_025, 10_032,
-]);
 
 export const CLUB_COMMANDS: ReadonlySet<number> = new Set([
   LUA_COMMAND_CLUB_CREATE,
@@ -427,6 +427,8 @@ export interface ClubState {
   nextMemberIndex: number;
   members: ClubMemberState[];
   log: ClubLogEntry[];
+  /** The club boss map of the current season (club-boss-data.ts). */
+  boss?: ClubBossState;
 }
 
 export interface ClubPlayer {
@@ -937,10 +939,12 @@ export interface ClubSelf {
 }
 
 function memberPayload(
+  club: ClubState,
   member: ClubMemberState,
   playerLevel: number,
-  time: number,
+  now: number,
 ): Record<string, unknown> {
+  const time = Math.floor(now / 1_000);
   return {
     roleid: member.roleId,
     name: member.name,
@@ -954,17 +958,16 @@ function memberPayload(
     daily_contribute: member.dailyPoints,
     off_times: time - member.offlineSeconds,
     join_date: member.joinTime,
-    boss_explore_score: 0,
-    clubboss_enter_times: 0,
-    today_clubboss_enter_times: 0,
+    ...clubBossMemberFields(club, member.roleId, now),
   };
 }
 
 function selfPayload(
   club: ClubState,
   self: ClubSelf,
-  time: number,
+  now: number,
 ): Record<string, unknown> {
+  const time = Math.floor(now / 1_000);
   return {
     roleid: self.roleId,
     name: self.name,
@@ -978,9 +981,7 @@ function selfPayload(
     daily_contribute: 0,
     off_times: time,
     join_date: club.createTime,
-    boss_explore_score: 0,
-    clubboss_enter_times: 0,
-    today_clubboss_enter_times: 0,
+    ...clubBossMemberFields(club, self.roleId, now),
   };
 }
 
@@ -989,10 +990,9 @@ export function clubMemberList(
   self: ClubSelf,
   now: number,
 ): Record<string, unknown>[] {
-  const time = Math.floor(now / 1_000);
   return [
-    selfPayload(club, self, time),
-    ...club.members.map((member) => memberPayload(member, self.level, time)),
+    selfPayload(club, self, now),
+    ...club.members.map((member) => memberPayload(club, member, self.level, now)),
   ];
 }
 
@@ -1021,7 +1021,11 @@ export function clubPrimary(club: ClubState, self: ClubSelf): Record<string, unk
   };
 }
 
-/** Club object of 10001, 10002, 10009, 10011 and 10022; no `clubboss` (the boss is over). */
+/**
+ * Club object of 10001, 10002, 10009, 10011 and 10022. `clubboss` is always
+ * there: the client loads the boss stage from it, and its main-menu red dot
+ * reads the stage tables whenever a season shows (patch_club_boss.py).
+ */
 export function clubPayload(
   club: ClubState,
   self: ClubSelf,
@@ -1031,6 +1035,7 @@ export function clubPayload(
     primary: clubPrimary(club, self),
     memberlist: clubMemberList(club, self, now),
     applylist: [],
+    clubboss: clubBossPayload(club, self, now),
   };
 }
 

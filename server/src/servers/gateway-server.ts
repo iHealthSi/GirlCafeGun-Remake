@@ -5,6 +5,10 @@ import type { AppConfig } from "../config.js";
 import { makeBackgroundLuaResponse } from "../game-data/background-lua-data.js";
 import {
   CLUB_BOSS_COMMANDS,
+  LUA_COMMAND_CLUB_BOSS_END,
+  LUA_COMMAND_DO_SETTLE,
+} from "../game-data/club-boss-data.js";
+import {
   CLUB_COMMANDS,
   CLUB_MISSION_CLAIM_METHOD,
   CLUB_MISSION_REPLY_TYPE,
@@ -606,6 +610,32 @@ function parseChapterCall(call: LuaCall | null): ChapterCall | null {
 
   const state = Number(parameters.nState);
   return Number.isSafeInteger(state) ? { state, parameters } : null;
+}
+
+/**
+ * Club and club boss LuaCalls. The client sends the boss result (10017)
+ * through GameManager.SendInfoToServer, which wraps it in DoSettle (252):
+ * {sCmd: 252, tbParam: {sCmd: 10017, tbParam}}.
+ */
+function parseClubCall(
+  luaCommand: number | null,
+  parameters: unknown,
+): { command: number; parameters: unknown } | null {
+  if (luaCommand === null) return null;
+  if (CLUB_COMMANDS.has(luaCommand) || CLUB_BOSS_COMMANDS.has(luaCommand))
+    return { command: luaCommand, parameters };
+  if (luaCommand !== LUA_COMMAND_DO_SETTLE) return null;
+  const wrapped =
+    typeof parameters === "object" && parameters !== null
+      ? (parameters as Record<string, unknown>).tbParam
+      : undefined;
+  if (
+    typeof wrapped !== "object" ||
+    wrapped === null ||
+    Number((wrapped as Record<string, unknown>).sCmd) !== LUA_COMMAND_CLUB_BOSS_END
+  )
+    return null;
+  return { command: LUA_COMMAND_CLUB_BOSS_END, parameters: wrapped };
 }
 
 function parseNumericLuaCommand(call: LuaCall | null): number | null {
@@ -3226,20 +3256,12 @@ export function createGatewayServer({
           );
           return;
         }
-        if (luaCommand !== null && CLUB_BOSS_COMMANDS.has(luaCommand)) {
-          // ClubBossTime has ended: the client never opens the boss. No reply
-          // is safe (club commands show no mask) and loads no boss map.
-          logger.info("club.boss_ignored", {
-            account: context.account,
-            command: luaCommand,
-          });
-          return;
-        }
-        if (luaCommand !== null && CLUB_COMMANDS.has(luaCommand)) {
+        const clubCall = parseClubCall(luaCommand, call?.parameters);
+        if (clubCall) {
           const result = await players.handleClubRequest(
             context.account,
-            luaCommand,
-            call?.parameters,
+            clubCall.command,
+            clubCall.parameters,
           );
           context.player = result.player;
           for (const money of result.updatedMoney) {
@@ -3265,7 +3287,7 @@ export function createGatewayServer({
               COMMAND.NTF_S2C_CALL,
               0,
               makeServerLuaCall("LuaCall", {
-                sCmd: luaCommand,
+                sCmd: clubCall.command,
                 tbParam: result.response,
               }),
             );
@@ -3289,7 +3311,7 @@ export function createGatewayServer({
           }
           logger.info("club.callback", {
             account: context.account,
-            command: luaCommand,
+            command: clubCall.command,
             replied: result.response !== undefined,
             tip: result.tip,
             dissolved: result.dissolved,

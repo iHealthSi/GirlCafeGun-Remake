@@ -184,6 +184,11 @@ import {
 } from "../game-data/daily-mission-data.js";
 import { AutoUseItemCatalog } from "../game-data/auto-use-item-data.js";
 import {
+  CLUB_BOSS_COMMANDS,
+  clubBossCommand,
+  reconcileClubBoss,
+} from "../game-data/club-boss-data.js";
+import {
   applyClubAwards,
   changeClubPosition,
   claimClubDailyAward,
@@ -5050,6 +5055,8 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       dissolved = reconcileClub(player, now) === "dissolved";
+      // The clubmates' boss fights of today; their GridAwards are club exp.
+      applyClubAwards(player, reconcileClubBoss(player, now), now);
       if (dissolved && command === LUA_COMMAND_CLUB_DISSOLVE) {
         // 10022 nError 1 = "the club is dissolved": the client shows it and goes home.
         response = { nError: 1 };
@@ -5112,6 +5119,25 @@ export class PlayerRepository {
   ): { response: unknown; tip: string | null; rewardBox?: BaseAward[] } {
     const club = player.club;
     const reply = (response: unknown, tip: string | null = null) => ({ response, tip });
+    if (CLUB_BOSS_COMMANDS.has(command)) {
+      const self = clubSelf(player);
+      const outcome = clubBossCommand(
+        player,
+        self,
+        command,
+        parameters,
+        () => (player.club ? clubMemberList(player.club, self, now) : []),
+        now,
+      );
+      // Club exp and coin go to the club and the wallet; the rest to the bag.
+      grantAwards(
+        player,
+        applyClubAwards(player, [...outcome.playerAwards, ...outcome.clubAwards], now),
+        updatedItemGuids,
+        updatedMoneyIds,
+      );
+      return reply(outcome.response);
+    }
     switch (command) {
       case LUA_COMMAND_CLUB_INFO:
         return reply(club ? clubPayload(club, clubSelf(player), now) : {});

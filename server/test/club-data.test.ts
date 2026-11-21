@@ -130,6 +130,7 @@ describe("a new club", () => {
       primary: Record<string, unknown>;
       memberlist: Record<string, unknown>[];
       applylist: unknown[];
+      clubboss: Record<string, unknown>;
     };
     for (const key of [
       "id",
@@ -150,7 +151,8 @@ describe("a new club", () => {
       weektaskvalue: 540,
       count: 7,
     });
-    expect(payload).not.toHaveProperty("clubboss");
+    // The client loads the boss stage from it (patch_club_boss.py): always there.
+    expect(payload.clubboss).toMatchObject({ stageid: 1, score: 0 });
     expect(payload.applylist).toEqual([]);
     expect(payload.memberlist).toHaveLength(7);
     expect(payload.memberlist[0]).toMatchObject({

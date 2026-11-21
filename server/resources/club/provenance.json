@@ -1,0 +1,116 @@
+{
+  "sourceSettingSha256": "f0c6351ce9be11296c75c3b7cef1c3775080798219e0fb2b06c722647afe4ab2",
+  "sourceSetting": "assets/setting.u of the GCG Offline 0.1.3 release APK",
+  "files": {
+    "clubbossmap_1.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_1.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "f788a8d4db89c856149746b6b0de2f235b8935166360bcef0bb0d587e9391464",
+      "bytes": 25882
+    },
+    "clubbossmap_2.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_2.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "148d997432e45a77e563dbffcfe2bfba5315653b09fb9da36311c209b83dcbeb",
+      "bytes": 26156
+    },
+    "clubbossmap_3.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_3.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "914ec0a7602ebdb6804e7c2d0ec87e405ccc6e424a67dd112cbd4908bc503a81",
+      "bytes": 26627
+    },
+    "clubbossmap_4.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_4.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "7196d73148df43668655bf9c7ccb7af504ac99c91d643e9356c748b09ac2cb77",
+      "bytes": 25898
+    },
+    "clubbossmap_5.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_5.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "d59a90c95134a494391f30fb389e1f5ceaf6c8e58f0440d8004eaa1ee345548c",
+      "bytes": 26759
+    },
+    "clubbossmap_6.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_6.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "b0ddcd8aa1b3a21aaefa0d73e4d156a254d81568f75eae75884eb66a0ee9f148",
+      "bytes": 27477
+    },
+    "clubbossmap_7.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_7.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "33f305d8859a71efb00ad1695573c1614eaf289ae836c0a843ad86891c541fa0",
+      "bytes": 27777
+    },
+    "clubbossmap_8.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_8.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "43771293dccfd7228f6e32753d83b0779bdfcaa5b0c5fc10a64f16852db70250",
+      "bytes": 26641
+    },
+    "clubbossmap_9.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_9.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "7196d73148df43668655bf9c7ccb7af504ac99c91d643e9356c748b09ac2cb77",
+      "bytes": 25898
+    },
+    "clubbossmap_10.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossmap_10.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "d59a90c95134a494391f30fb389e1f5ceaf6c8e58f0440d8004eaa1ee345548c",
+      "bytes": 26759
+    },
+    "clubbosslevel_1.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_1.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "3b5dc9abb48b259b8f02e98e3f627c8d029543f4d525c5019d2b07673ac070c5",
+      "bytes": 18673
+    },
+    "clubbosslevel_2.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_2.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "939d02dfcc27450dd19de24fb70a58332d523f1b12d389b0f30ce941db9d8ff0",
+      "bytes": 18495
+    },
+    "clubbosslevel_3.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_3.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "796e234600ddc087834c90fd2b25257676f0f99baf2d4ecbecabfe78cd1de3c6",
+      "bytes": 18491
+    },
+    "clubbosslevel_4.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_4.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "04ee621111802713c00a86d46ceab4421f60007b77f4d84a0068b9da105b3a28",
+      "bytes": 18491
+    },
+    "clubbosslevel_5.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_5.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "3136d2c54e2bdc1aab6112a4355174194828d0f516bb2842103853bcb430fdc9",
+      "bytes": 18491
+    },
+    "clubbosslevel_6.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_6.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "8049330979ea498293b58ce2178db08b604598f8470dd59e10cf78f9d27707c4",
+      "bytes": 18491
+    },
+    "clubbosslevel_7.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_7.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "479714e7b40ab22c37b69ba0ea0f1ff10178a81cb4f46671ce15831d4896416b",
+      "bytes": 18491
+    },
+    "clubbosslevel_8.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_8.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "c9e2dab3050607254c18ca5570ed2d164e966b27eaf7f84b3a50bcf500133b14",
+      "bytes": 18787
+    },
+    "clubbosslevel_9.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_9.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "f6d4205e0c714fa46ba0fe7007f32b3234acb477c345dc0a5bfac7c135ee38b1",
+      "bytes": 18491
+    },
+    "clubbosslevel_10.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbosslevel_10.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "3136d2c54e2bdc1aab6112a4355174194828d0f516bb2842103853bcb430fdc9",
+      "bytes": 18491
+    },
+    "clubparticipateaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubparticipateaward.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "e0fb29016f835bf1e015cf67c4a9f81c571ad20a9542567a2496f82606637e19",
+      "bytes": 7272
+    },
+    "clubbossrankaward.txt": {
+      "source": "setting.u:assets/_game/settinggen/club/clubbossrankaward.txt (byte copy of the TextAsset; UTF-8 tab table, 3 header rows)",
+      "sha256": "baa76dd5088943adf58e8d3b0c6eaaeb3598026254e8e5aecfa8451e494b49ae",
+      "bytes": 3024
+    }
+  }
+}
