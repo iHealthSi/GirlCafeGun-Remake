@@ -1956,6 +1956,8 @@ interface TowerOutcome {
   moneyIds: Set<number>;
   girlIds: Set<number>;
   experience: PlayerExperienceUpdate | null;
+  /** Something the log should show (a walk cut short), not sent to the client. */
+  note?: Record<string, unknown>;
 }
 
 function towerTask(player: Player, group: number, key: number): number {
@@ -4846,36 +4848,64 @@ function applyAnniversaryRequest(
       const entered: GridCell[] = [];
       const fresh = new Set<number>();
       const path = request.path.slice(0, ANNIVERSARY_PATH_LIMIT);
-      for (const [index, grid] of path.entries()) {
+      const visited = (id: number): boolean =>
+        fresh.has(id) || gridVisited(player, map, id);
+      // GridActLogic.CheckFightPass: a cell without LevelInfo, or whose level is passed.
+      const fightOpen = (id: number): boolean => {
+        const [eventId, levelId] =
+          catalog.events.get(map.cells.get(id)?.event ?? 0)?.levelInfo ?? [];
+        return (
+          eventId === undefined ||
+          levelId === undefined ||
+          discoveryLevelPassed(player, eventId, levelId)
+        );
+      };
+      let cut: string | undefined;
+      for (const grid of path) {
         const cell = map.cells.get(grid);
         if (!cell) throw refuse(2, "unknown_cell");
         if (cell.id === position) continue;
-        const event = catalog.events.get(cell.event);
-        const visited = gridVisited(player, map, cell.id) || fresh.has(cell.id);
-        if (!visited) {
-          // A hinder (type 101) stops the team until the attributes reach what it needs.
+        // [INFER] The team walks between cells that share a side: the maps put hinders and fights on corners
+        // (map 2 hinder cell 28, fight cells 57 and 88) that a diagonal step would skip.
+        const from = map.cells.get(position);
+        if (!from || Math.abs(from.x - cell.x) + Math.abs(from.y - cell.y) !== 1) {
+          cut = "not_adjacent";
+          break;
+        }
+        // A fight cell whose level is not passed lets the team go back only: onto the start or a cell it has
+        // been on.
+        if (!fightOpen(position) && cell.id !== map.start && !visited(cell.id)) {
+          cut = "unwon_fight";
+          break;
+        }
+        if (!visited(cell.id)) {
+          // A hinder (type 101) stops the team until the attributes reach what it needs
+          // (GridActLogic:CheckAttr).
+          const event = catalog.events.get(cell.event);
           if (
             event &&
             event.type > 100 &&
             !event.conditions.every(
               (need, attribute) => (levels[attribute] ?? 0) >= need,
             )
-          )
+          ) {
+            cut = "hinder";
             break;
+          }
           fresh.add(cell.id);
           entered.push(cell);
         }
         position = cell.id;
-        // A fight cell stops the team until its level is passed.
-        const [eventId, levelId] = event?.levelInfo ?? [];
-        if (
-          eventId !== undefined &&
-          levelId !== undefined &&
-          index < path.length - 1 &&
-          !discoveryLevelPassed(player, eventId, levelId)
-        )
-          break;
       }
+      // A step the rules refuse ends the walk where it is, with Err 0: MoveRsp moves the team only on Err 0,
+      // so an error here would leave the client's walk without an answer it handles.
+      if (cut)
+        outcome.note = {
+          event: "walk_cut",
+          reason: cut,
+          path,
+          teamPos: position,
+        };
       // One power per new cell. MoveRsp does not move the team on an error, so a path the power cannot pay
       // is refused whole.
       if (!spendWallet(player, GRID_TASK.power, entered.length, outcome))
@@ -4885,7 +4915,8 @@ function applyAnniversaryRequest(
         const event = catalog.events.get(cell.event);
         if (event) grantTowerAwards(player, event.awards, outcome);
       }
-      setTowerTask(player, GRID_TASK.group, map.id, position);
+      if (position !== gridPosition(player, map))
+        setTowerTask(player, GRID_TASK.group, map.id, position);
       finishAwards();
       outcome.response = {
         Err: 0,
@@ -10303,6 +10334,11 @@ export class PlayerRepository {
         account,
         command: request.command,
         kind: request.kind,
+      });
+    if (outcome.note)
+      this.#logger.warn("player.anniversary.note", {
+        account,
+        ...outcome.note,
       });
     const { itemGuids, moneyIds, girlIds } = outcome;
     return {

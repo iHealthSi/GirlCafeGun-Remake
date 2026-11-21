@@ -152,26 +152,48 @@ describe("anniversary tables and requests", () => {
 });
 
 describe("discovery map, 418 to 420, 429 and 480", () => {
+  // Map 1 starts at cell 1 (7,0); cells 2-21 are one corridor in id order, with the fight cell 11 (level 1/11) on
+  // it, the hinder 24 (needs 5/5/0) off cell 21 and the hinder 66 (needs 10/10/10) off cell 60.
+  const corridor = (from: number, to: number): number[] => {
+    const cells: number[] = [];
+    const step = from <= to ? 1 : -1;
+    for (let id = from; id !== to + step; id += step) cells.push(id);
+    return cells;
+  };
+  const passDiscoveryLevel = (
+    store: Awaited<ReturnType<typeof fixture>>["store"],
+    eventId: number,
+    levelId: number,
+  ) =>
+    store.update((state) => {
+      state.players[account]!.taskValues[
+        String((81 << 16) | (ANNIVERSARY_TASK.discoveryPass + eventId * 100 + levelId))
+      ] = 1;
+    });
+
   it("walks the map: one power per new cell, first arrival pays the event once", async () => {
-    const { repository } = await fixture({ money: { 58: 5 } });
-    const path = [...map1.cells.values()]
-      .filter((cell) => cell.event > 0 && catalog.events.get(cell.event)?.type === 3)
-      .slice(0, 3)
-      .map((cell) => cell.id);
+    // Cells 5 and 7 hold type 3 events (first awards).
+    const { repository } = await fixture({ money: { 58: 8 } });
+    const path = corridor(2, 7);
     const first = await send(repository, call(420, { MapID: 1, Path: path }));
     expect(first.rejected).toBeNull();
     const reply = body(first);
-    expect(reply).toMatchObject({ Err: 0, TeamPos: path[2], LastPower: 2 });
+    expect(reply).toMatchObject({ Err: 0, TeamPos: 7, LastPower: 2 });
     const player = current(repository);
     expect(money(player, 58)).toBe(2);
-    expect(task(player, 81, 1)).toBe(path[2]);
+    expect(task(player, 81, 1)).toBe(7);
     for (const id of path) expect(task(player, 80, id)).toBe(1);
     expect(first.updatedMoney.map(({ id }) => id)).toContain(58);
-    // The same cells again cost nothing and pay nothing.
+    // The same cells again, back and forth, cost nothing and pay nothing.
     const wallet = JSON.stringify(current(repository).money);
-    const again = await send(repository, call(420, { MapID: 1, Path: path }));
-    expect(body(again)).toMatchObject({ Err: 0, TeamPos: path[2] });
+    const items = JSON.stringify(current(repository).inventory);
+    const again = await send(
+      repository,
+      call(420, { MapID: 1, Path: [...corridor(6, 2), ...corridor(3, 7)] }),
+    );
+    expect(body(again)).toMatchObject({ Err: 0, TeamPos: 7 });
     expect(JSON.stringify(current(repository).money)).toBe(wallet);
+    expect(JSON.stringify(current(repository).inventory)).toBe(items);
   });
 
   it("refuses a path the power cannot pay whole, and unknown cells", async () => {
@@ -187,16 +209,19 @@ describe("discovery map, 418 to 420, 429 and 480", () => {
     expect(snapshot(repository)).toBe(before);
   });
 
-  it("stops at a hinder until the attributes are high enough and at a fight until its level is passed", async () => {
-    const { repository, store } = await fixture({ money: { 58: 20 } });
+  it("stops at a hinder until the attributes are high enough", async () => {
+    const { repository, store } = await fixture({ money: { 58: 40 } });
     const hinder = cellWith((type) => type === 101);
+    expect(hinder.id).toBe(24);
     const need = catalog.events.get(hinder.event)!.conditions;
+    await passDiscoveryLevel(store, 1, 11);
     const blocked = await send(
       repository,
-      call(420, { MapID: 1, Path: [2, hinder.id, 3] }),
+      call(420, { MapID: 1, Path: [...corridor(2, 21), 24, 25] }),
     );
-    expect(body(blocked)).toMatchObject({ Err: 0, TeamPos: 2 });
-    expect(money(current(repository), 58)).toBe(19);
+    expect(body(blocked)).toMatchObject({ Err: 0, TeamPos: 21 });
+    expect(money(current(repository), 58)).toBe(20);
+    expect(task(current(repository), 80, 24)).toBe(0);
     await store.update((state) => {
       // 100 exp is one level: level = exp / 100 + 1.
       need.forEach((level, index) => {
@@ -204,21 +229,67 @@ describe("discovery map, 418 to 420, 429 and 480", () => {
           (level - 1) * 100;
       });
     });
-    const passed = await send(
-      repository,
-      call(420, { MapID: 1, Path: [hinder.id, 3] }),
-    );
-    expect(body(passed)).toMatchObject({ Err: 0, TeamPos: 3 });
+    const passed = await send(repository, call(420, { MapID: 1, Path: [24, 25] }));
+    expect(body(passed)).toMatchObject({ Err: 0, TeamPos: 25 });
+    expect(money(current(repository), 58)).toBe(18);
+  });
 
-    const fight = cellWith((_, info) => info.length >= 2);
-    const stopped = await send(
+  it("lets the team onto a fight cell, then only back until the fight is won", async () => {
+    const { repository, store } = await fixture({ money: { 58: 40 } });
+    const fight = map1.cells.get(11)!;
+    expect(catalog.events.get(fight.event)!.levelInfo).toEqual([1, 11]);
+    // A path through the fight cell stops on it.
+    const through = await send(
       repository,
-      call(420, { MapID: 1, Path: [fight.id, 4] }),
+      call(420, { MapID: 1, Path: corridor(2, 13) }),
     );
-    expect(body(stopped).TeamPos).toBe(fight.id);
-    // Standing on the fight cell, leaving it is allowed.
-    const left = await send(repository, call(420, { MapID: 1, Path: [4] }));
-    expect(body(left).TeamPos).toBe(4);
+    expect(body(through)).toMatchObject({ Err: 0, TeamPos: 11 });
+    expect(money(current(repository), 58)).toBe(30);
+    expect(task(current(repository), 80, 12)).toBe(0);
+    // Standing on it, a step forward, alone or behind the cell itself, ends where the team stands.
+    const before = snapshot(repository);
+    for (const path of [[12], [11, 12], [12, 13]]) {
+      const forward = await send(repository, call(420, { MapID: 1, Path: path }));
+      expect(forward.rejected).toBeNull();
+      expect(body(forward)).toMatchObject({
+        Err: 0,
+        TeamPos: 11,
+        LastPower: 30,
+      });
+    }
+    expect(snapshot(repository)).toBe(before);
+    // Back onto cells it has been on is open.
+    const back = await send(repository, call(420, { MapID: 1, Path: [10, 9] }));
+    expect(body(back)).toMatchObject({ Err: 0, TeamPos: 9, LastPower: 30 });
+    // Once the level is passed, the walk goes on through the cell.
+    await passDiscoveryLevel(store, 1, 11);
+    const won = await send(repository, call(420, { MapID: 1, Path: corridor(10, 13) }));
+    expect(body(won)).toMatchObject({ Err: 0, TeamPos: 13, LastPower: 28 });
+  });
+
+  it("ends the walk at a step onto a cell that does not touch the team", async () => {
+    const { repository } = await fixture({ money: { 58: 40 } });
+    // From the start (cell 1): cell 7 is 6 cells away, 21 lies behind hinder 24, 60 behind hinder 66.
+    for (const target of [7, 21, 60]) {
+      const jump = await send(repository, call(420, { MapID: 1, Path: [target] }));
+      expect(jump.rejected).toBeNull();
+      expect(body(jump)).toMatchObject({ Err: 0, TeamPos: 1, LastPower: 40 });
+    }
+    // No cell visited and the team still on the start cell (task 81/1 unset).
+    const gridTasks = Object.keys(current(repository).taskValues).filter((key) =>
+      [80, 81].includes(Number(key) >>> 16),
+    );
+    expect(gridTasks).toEqual([]);
+    // A gap in the middle keeps the cells before it. Cells 6 (3,1) and 8 (2,2) touch only at a corner.
+    const gap = await send(
+      repository,
+      call(420, { MapID: 1, Path: [2, 3, 4, 5, 6, 8, 9] }),
+    );
+    expect(body(gap)).toMatchObject({ Err: 0, TeamPos: 6, LastPower: 35 });
+    expect(task(current(repository), 80, 8)).toBe(0);
+    // A path that lists the cell the team stands on first is read from the next cell.
+    const fromHere = await send(repository, call(420, { MapID: 1, Path: [6, 7, 8] }));
+    expect(body(fromHere)).toMatchObject({ Err: 0, TeamPos: 8, LastPower: 33 });
   });
 
   it("418 and 419 change nothing and send nothing", async () => {

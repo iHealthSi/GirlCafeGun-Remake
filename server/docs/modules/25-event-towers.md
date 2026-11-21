@@ -375,9 +375,16 @@ group 84 (see `GUESS_TASK`).
 - 418 and 419 are marked as test commands in `luacall.lua`; the C# build gave out power and let rewards pay again.
   They are accepted, change nothing and get no reply.
 - 420 charges one power per new cell; a path the power cannot pay is refused whole (`MoveRsp` does not move the team
-  on an error). A hinder (event type 101) stops the walk until strength, spirit and technique reach its needs; a
-  fight cell stops it until its level is passed. First arrival pays the cell event's FirstAward once. The server does
-  not check that cells are adjacent. 429 refuses at the highest level any hinder or story asks for [INFER].
+  on an error). First arrival pays the cell event's FirstAward once. The walk starts where the team stands (a first
+  path cell equal to it is skipped) and ends, with `Err: 0` and `TeamPos` where it stopped, at the first step that
+  breaks a rule: a cell that does not share a side with the last one [INFER: the maps put hinders and fights on
+  corners, map 2 cells 28, 57 and 88, that a diagonal step would skip]; a new hinder cell (event type 101) while
+  strength, spirit and technique are below its needs (`CheckAttr`); a new cell after a fight cell whose level is not
+  passed (`CheckFightPass`), also when the team stands on that fight cell: from there only the start and cells it has
+  been on are open. Ending the walk instead of an error keeps `MoveRsp` moving the team (it answers nothing else);
+  the log line `player.anniversary.note` (`walk_cut`, the reason and the path) shows each cut. The stock client's path
+  format (the native `GridMapMgr`) was not read: whether it lists the cell the team stands on and every cell of the
+  walk is not checked on a phone (2026-11-21). 429 refuses at the highest level any hinder or story asks for [INFER].
 - 480: `done * 1000 >= ProcessPoint * total` over the exploratory degrees (`ProcessSatisfy`).
 - 424: the first call also sets 83/1 (the client never does), so the letter plays once. 425 pays the item the screen
   previews (6-28-55-4 is head frame 55: task 11/55 holds the time).
