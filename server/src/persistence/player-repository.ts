@@ -252,6 +252,7 @@ import {
   shopOperationalWeek,
   shopShelfKey,
   unitPrice,
+  unitPrice2,
   type GoodsConfig,
   type ShopCatalog,
   type ShopTabConfig,
@@ -8719,14 +8720,22 @@ export class PlayerRepository {
         buyNum: counters.total,
       });
       price = unitPrice(config, priceIndex, discount) * buyNum;
-      if (price > 0) {
-        deductShopMoney(player, config.moneyType, price, updatedMoneyIds);
+      // Price2 is a second currency the goods costs too (UI_ShopTips shows both and caps the count by both).
+      const price2 =
+        config.moneyType2 === undefined
+          ? 0
+          : unitPrice2(config, priceIndex, discount) * buyNum;
+      const spends: [number, number][] = [[config.moneyType, price]];
+      if (price2 > 0) spends.push([config.moneyType2!, price2]);
+      for (const [moneyType, amount] of spends) {
+        if (amount <= 0) continue;
+        deductShopMoney(player, moneyType, amount, updatedMoneyIds);
         // The anniversary missions of AchieveType 259 count the tokens spent in the event shops.
         const missionTables = EventMissionCatalog.tryLoadDefault();
-        if (missionTables?.spentMoney.has(config.moneyType)) {
+        if (missionTables?.spentMoney.has(moneyType)) {
           // Roll the day first, count, and push the new progress now (tasks 85/18-20 follow the spending).
           refreshEventMissions(player, missionTables);
-          bumpMission(player, MISSION_COUNTER.spent(config.moneyType), price);
+          bumpMission(player, MISSION_COUNTER.spent(moneyType), amount);
           if (refreshEventMissions(player, missionTables)) missionTasksChanged = true;
         }
       }

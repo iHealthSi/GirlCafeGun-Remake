@@ -42,6 +42,9 @@ export interface GoodsConfig {
   weight: number;
   moneyType: number;
   sellingPrice: number[];
+  /** Price2: a second currency the goods also costs (GoodsLogicC MoneyType2, SellingPrice2; UI_ShopTips shows both). */
+  moneyType2?: number;
+  sellingPrice2?: number[];
   refreshLimitNum: number | null;
   dailyLimitNum: number | null;
   weekLimitNum: number | null;
@@ -193,6 +196,7 @@ export function parseGoods(content: string): Map<number, GoodsConfig> {
     const goodsId = parseIntOrNull(columns[2]);
     const gdplnx = parseGdplnx(columns[3]);
     const price = parsePrice(columns[7]);
+    const price2 = parsePrice(columns[8]);
     if (goodsId === null || !gdplnx || !price) continue;
     goods.set(goodsId, {
       shopType: parseIntOrNull(columns[0]) ?? 0,
@@ -203,6 +207,7 @@ export function parseGoods(content: string): Map<number, GoodsConfig> {
       weight: parseIntOrNull(columns[6]) ?? 0,
       moneyType: price.moneyType,
       sellingPrice: price.prices,
+      ...(price2 ? { moneyType2: price2.moneyType, sellingPrice2: price2.prices } : {}),
       refreshLimitNum: parseIntOrNull(columns[9]),
       dailyLimitNum: parseIntOrNull(columns[10]),
       weekLimitNum: parseIntOrNull(columns[11]),
@@ -281,7 +286,9 @@ export function isGoodsInWindow(goods: GoodsConfig, nowSeconds: number): boolean
  * only for tokens of its own event (no diamonds, gold or price 0: `event-shops.test.ts`), so keeping it open gives
  * nothing for free. Shop ids: the `ShopId` column of the event's top table (armed survey: the third value of
  * `Param`). Left closed: the Concert shops 30013 and 30014 (one goods each costs 10 diamonds) and the shops of
- * events with no server part (lottery, monopoly, harvest, battle pass, Lida supply).
+ * events with no server part (lottery 30029/30044, harvest 30018, battle pass 30008/30009, Lida supply 30007/30026).
+ * The monopoly event shares 30023 and 30028 with variegated tower 4 and the Railgun collab, so its dice goods 32267
+ * sells too (for tokens; the monopoly board is not served).
  */
 export const OPEN_EVENT_SHOPS: ReadonlySet<number> = new Set([
   // Tower.txt towers 1 (and its rerun 201), 5, 9, 10, 12-19, 21, 101-107, 303.
@@ -445,6 +452,18 @@ export function nextPriceIndex(
     index = counters.buyNum + 1;
   }
   return Math.min(index, config.sellingPrice.length);
+}
+
+/** The Price2 part of one goods at a price step (UI_ShopTips: SellingPrice2[priceidx] * discount / 100, up). */
+export function unitPrice2(
+  config: GoodsConfig,
+  priceIndex: number,
+  discount: number,
+): number {
+  const prices = config.sellingPrice2 ?? [];
+  if (prices.length === 0) return 0;
+  const base = prices[Math.min(Math.max(priceIndex, 1), prices.length) - 1]!;
+  return Math.ceil((base * discount) / 100);
 }
 
 export function unitPrice(

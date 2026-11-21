@@ -57,6 +57,8 @@
    单次刷新 > 累计）取阶梯价，`ceil(price × discount / 100) × buynum`；
 4. 扣费：钻石（免费 3 + 付费 12）与金币（免费 2 + 付费 17）按客户端
    `CheckDiamond`/`CheckGold` 语义合并扣（免费优先），其它货币单 id 扣；
+   配了 `Price2` 的商品同时扣第二种货币（同一阶梯序号与折扣，客户端
+   `UI_ShopTips` 两种都显示、可买数量受两种余额限制），任一不足整单拒绝；
 5. 发货：`[G,D,P,L,GoodsNum×buynum]` 走 `grantAwards`（genre 15 已知货币
    直接入钱包，其余入背包；实例 genre 1/2/3/4 逐件入库）；
 6. 计数落库。

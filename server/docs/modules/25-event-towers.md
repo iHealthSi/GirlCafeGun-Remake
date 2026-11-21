@@ -131,8 +131,11 @@ their goods (`shopOpenNow`, `goodsOpenNow`), and reports a countdown end 30 days
 the events the event list page serves whose goods all cost the event's own tokens (tested: no diamonds, gold or price
 0). The client opens the shop with its event (`M.SHOPS` in `event_list.lua`); the server is not told which event is
 open, so it keeps them all open. Closed: the Concert shops 30013 and 30014 (goods 31301 and 31401 cost 10 diamonds),
-and the shops of events with no server part (lottery 30029/30044, monopoly, harvest 30018, battle pass 30008/30009,
-the Lida supply shops 30007/30026 that sell for diamonds and gold). Most tokens come from the `FixAward` of the
+and the shops of events with no server part (lottery 30029/30044, harvest 30018, battle pass 30008/30009, the Lida
+supply shops 30007/30026 that sell for diamonds and gold). The monopoly event shares 30023 and 30028 with variegated
+tower 4 and the Railgun collab, so its dice goods 32267 sells too (for tokens; the board is not served). 160 goods of
+11 of these shops also cost a `Price2` token: the buy charges both (it charged only `Price1` before). Four furniture
+goods (30310, 33132, 32231, 32518) stay unsold: each item matches two furniture rows, which the shop buy refuses. Most tokens come from the `FixAward` of the
 event's levels; a few only from achievements, missions or the hub's Challenge awards (money 76 in 30033, 64 in 30023,
 73 in 30032, 85 in 30042, part of 68 in 30025), so those goods wait for whatever pays that table.
 

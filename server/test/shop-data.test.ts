@@ -66,6 +66,8 @@ it("parses ladder prices, discount lists and time windows", () => {
   const config = goods.get(30_101)!;
   expect(config.moneyType).toBe(5);
   expect(config.sellingPrice).toEqual([60, 90, 120]);
+  expect(config.moneyType2).toBe(6);
+  expect(config.sellingPrice2).toEqual([20, 30]);
   expect(config.totalLimitNum).toBe(6);
   expect(config.discountList).toEqual([
     { weight: 1, discount: 10 },

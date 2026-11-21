@@ -12,8 +12,8 @@ import {
 import { account, current, fixture, money } from "./helpers/named-fixture.js";
 
 const catalog = ShopCatalog.loadDefault();
-// Diamonds (3 free, 12 paid) and gold (2, 17): what an event shop must never ask for.
-const COMMON_MONEY = new Set([2, 3, 12, 17]);
+// Diamonds (3 free, 12 paid, 18 iOS paid) and gold (2, 17): what an event shop must never ask for.
+const COMMON_MONEY = new Set([2, 3, 12, 17, 18]);
 const NOW = new Date("2026-11-21T12:00:00+08:00").getTime();
 const NOW_SECONDS = Math.floor(NOW / 1_000);
 
@@ -36,6 +36,13 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
           Math.min(...config.sellingPrice),
           `goods ${config.goodsId}`,
         ).toBeGreaterThan(0);
+        // Price2, a second currency the goods costs too.
+        if (config.moneyType2 !== undefined) {
+          expect(COMMON_MONEY.has(config.moneyType2), `goods ${config.goodsId}`).toBe(
+            false,
+          );
+          expect(Math.min(...(config.sellingPrice2 ?? [0]))).toBeGreaterThan(0);
+        }
       }
     }
   });
@@ -75,7 +82,10 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
   it("sells every goods of every open event shop once (buy out), for its tokens only", async () => {
     const tokens = new Set<number>();
     for (const shopId of OPEN_EVENT_SHOPS)
-      for (const { moneyType } of catalog.goodsForShop(shopId)) tokens.add(moneyType);
+      for (const { moneyType, moneyType2 } of catalog.goodsForShop(shopId)) {
+        tokens.add(moneyType);
+        if (moneyType2 !== undefined) tokens.add(moneyType2);
+      }
     const { repository } = await fixture({
       money: Object.fromEntries([...tokens].map((id) => [id, 10_000_000])),
     });
@@ -89,6 +99,10 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
         failures.push(`${shopId}: lists ${list.goodsList.length}`);
       for (const config of catalog.goodsForShop(shopId)) {
         const before = money(current(repository), config.moneyType);
+        const before2 =
+          config.moneyType2 === undefined
+            ? 0
+            : money(current(repository), config.moneyType2);
         try {
           await repository.buyShopGoods(
             account,
@@ -101,6 +115,11 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
           bought += 1;
           if (money(current(repository), config.moneyType) >= before)
             failures.push(`${config.goodsId}: not charged`);
+          if (
+            config.moneyType2 !== undefined &&
+            money(current(repository), config.moneyType2) >= before2
+          )
+            failures.push(`${config.goodsId}: Price2 not charged`);
         } catch (error) {
           failures.push(`${shopId}/${config.goodsId}: ${String(error)}`);
         }
@@ -124,6 +143,27 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
       expect(count).toBeGreaterThanOrEqual(commonBefore[index]!),
     );
   }, 300_000);
+
+  it("charges Price2 too, and refuses a goods when the second currency is short", async () => {
+    // Goods 30101 of shop 30001: 60 of money 5 and 20 of money 6 at the first price step.
+    const goods = catalog.getGoods(30_101)!;
+    expect([
+      goods.moneyType,
+      goods.sellingPrice[0],
+      goods.moneyType2,
+      goods.sellingPrice2?.[0],
+    ]).toEqual([5, 60, 6, 20]);
+    const short = await fixture({ money: { 5: 1_000 } });
+    await expect(
+      short.repository.buyShopGoods(account, catalog, 30_001, 30_101, 1, NOW),
+    ).rejects.toThrow(/insufficient_funds/);
+    expect(money(current(short.repository), 5)).toBe(1_000);
+    const { repository } = await fixture({ money: { 5: 1_000, 6: 1_000 } });
+    await repository.buyShopGoods(account, catalog, 30_001, 30_101, 1, NOW);
+    expect([money(current(repository), 5), money(current(repository), 6)]).toEqual([
+      940, 980,
+    ]);
+  });
 
   it("lists and sells an event shop's goods for its token, and refuses the closed Concert shop", async () => {
     const { repository } = await fixture({ money: { 5: 1_000, 6: 1_000 } });
