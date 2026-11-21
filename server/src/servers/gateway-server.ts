@@ -4061,8 +4061,13 @@ export function createGatewayServer({
             // replays of the same level produce different stats and must
             // settle normally.
             const settlementKey = JSON.stringify(chapterCall.parameters);
+            const settlementNow = Date.now();
+            for (const [key, entry] of context.settlementResponses) {
+              if (entry.expiresAt <= settlementNow)
+                context.settlementResponses.delete(key);
+            }
             const cached = context.settlementResponses.get(settlementKey);
-            if (cached && cached.expiresAt > Date.now() && !context.activeChapter) {
+            if (cached && !context.activeChapter) {
               send(
                 COMMAND.NTF_S2C_CALL,
                 0,
@@ -4211,6 +4216,10 @@ export function createGatewayServer({
               response,
               expiresAt: Date.now() + SETTLEMENT_CACHE_TTL_MS,
             });
+            if (context.settlementResponses.size > 64)
+              context.settlementResponses.delete(
+                context.settlementResponses.keys().next().value!,
+              );
             send(COMMAND.NTF_S2C_CALL, 0, makeServerLuaCall("ChapterMsg", response));
             logger.info("lua.callback", {
               peer,
