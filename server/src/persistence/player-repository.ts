@@ -80,11 +80,13 @@ import {
   pickCardChoices,
   nextLevelRecord,
   pickPondSlot,
+  positional,
   readEventTowerRun,
   reachedGoal,
   reportScore,
   rollTowerAwards,
   towerItemTask,
+  whole,
   type CardTowerBuff,
   type CardTowerCard,
   type CardTowerInfo,
@@ -93,6 +95,28 @@ import {
   type EventTowerState,
   type TowerInfo,
 } from "../game-data/event-tower-data.js";
+import {
+  ACTIVITY_TYPE,
+  BOSS_TASK,
+  BUFF_TASK,
+  COOP_TASK,
+  LINKAGE_TASK,
+  MICRO_DIFF_MAX,
+  MICRO_TASK,
+  MIX_TASK,
+  NAMED_ERROR,
+  NAMED_FAMILIES,
+  NamedTowerCatalog,
+  namedLevelKey,
+  namedTowerErrorReply,
+  namedTowerReadOnly,
+  readNamedRun,
+  type LinkagePondSlot,
+  type NamedFamily,
+  type NamedLevel,
+  type NamedTowerRequest,
+  type NamedTowerState,
+} from "../game-data/named-tower-data.js";
 import {
   characterCardDecompositionReward,
   MAX_CARD_DECOMPOSITION_COUNT,
@@ -552,6 +576,8 @@ export interface Player {
   promise?: PromiseState;
   /** The open or last event tower run (resent settlements replay its reply). */
   eventTower?: EventTowerState;
+  /** The same for the named-field event towers (micro, armed survey, mixed online, buff, linkage, anniversary). */
+  namedTower?: NamedTowerState;
 }
 
 export interface PersistedState {
@@ -2977,6 +3003,631 @@ interface TowerLevelRef {
   levelId: number;
 }
 
+// ================================================================ named-field event towers
+
+/**
+ * The micro tower, armed survey, mixed online, buff tower, linkage, second
+ * anniversary tower and boss challenge (named-tower-data.ts): MicroClimbTower.lua,
+ * CoopClientEvent.lua, MixOnlineLogic.lua, BuffTowerLogic.lua,
+ * LinkageActivityLogic.lua, SecondAnniversaryTower.lua and BossChallengeLogic.lua
+ * of the 0.1.3 client. Enter, Pass and Fail work like 54 to 56; the open run is
+ * kept in player.namedTower.
+ */
+type NamedStep = Extract<NamedTowerRequest, { kind: "enter" | "pass" | "fail" }>;
+
+function namedState(player: Player): NamedTowerState {
+  return (player.namedTower ??= {});
+}
+
+/** The mixed online event the server serves: task 68/1001, or the first one. */
+function mixActivityId(player: Player, catalog: NamedTowerCatalog): number {
+  const stored = towerTask(player, 68, MIX_TASK.currentId);
+  return catalog.mixActivities.includes(stored)
+    ? stored
+    : (catalog.mixActivities[0] ?? 0);
+}
+
+/** The Railgun event the client opens: task 63/3001, or the first one. */
+function linkageActivityId(player: Player, catalog: NamedTowerCatalog): number {
+  const stored = towerTask(player, 63, LINKAGE_TASK.actId);
+  return catalog.linkageIds.includes(stored) ? stored : (catalog.linkageIds[0] ?? 0);
+}
+
+function resolveNamedLevel(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  request: NamedStep,
+): NamedLevel | null {
+  if (request.family === "mix")
+    return catalog.level("mix", mixActivityId(player, catalog), request.node, 0);
+  const level = catalog.level(
+    request.family,
+    request.towerId,
+    request.levelId,
+    request.diff,
+  );
+  // The mission nodes of the linkage map (LevelType 3) are claimed, not fought.
+  return level && !(request.family === "linkage" && level.type === 3) ? level : null;
+}
+
+function namedRecordFirst(
+  player: Player,
+  family: NamedFamily,
+  level: NamedLevel,
+): { first: boolean; before: number } {
+  const before = towerTask(player, family.group, family.recordKey(level));
+  const bit = family.recordBit(level);
+  return {
+    before,
+    first: bit >= 0 ? ((before >>> bit) & 1) === 0 : before <= 0,
+  };
+}
+
+/** Raises the stored progress of linkage missions (AchievementOther) from what the player state shows. */
+function refreshLinkageMissions(
+  player: Player,
+  catalog: NamedTowerCatalog,
+  bump: { clears?: number; vigour?: number } = {},
+): void {
+  const rows = catalog.linkageMissions.get(linkageActivityId(player, catalog));
+  if (!rows) return;
+  const achievements = ActivityAchievementCatalog.loadDefault();
+  const ids = [rows.daily, ...rows.states.flat(), ...catalog.linkageNodeMissions];
+  for (const id of ids) {
+    const config = achievements.achievement(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id);
+    if (!config) continue;
+    const key = String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id));
+    const stored = player.taskValues[key] ?? 0;
+    let progress = achievementProgress(stored);
+    // Mission types 110 (clears of an activity, counts [n, activity type]) and 24 (vigour spent) have no
+    // other source; [INFER] they count this event's fights.
+    if (config.type === 110 && config.counts[1] === ACTIVITY_TYPE.linkage)
+      progress += bump.clears ?? 0;
+    if (config.type === 24) progress += bump.vigour ?? 0;
+    // 135: affection level of one girl [level, girl]; 45: owning one card [genre, detail, particular, ...].
+    if (config.type === 135) {
+      const girl = player.girls.find(({ girlId }) => girlId === config.counts[1]);
+      progress = Math.max(progress, girl?.level ?? 0);
+    }
+    if (config.type === 45) {
+      const [genre, detail, particular] = config.counts;
+      const owned = player.inventory.some(
+        (item) =>
+          item.genre === genre &&
+          item.detail === detail &&
+          item.particular === particular &&
+          item.count > 0,
+      );
+      progress = Math.max(progress, owned ? requiredAchievementCount(config) : 0);
+    }
+    if (progress === achievementProgress(stored)) continue;
+    player.taskValues[key] = makeAchievementTaskValue(
+      progress,
+      hasClaimedAchievement(stored),
+    );
+  }
+}
+
+/**
+ * Seeds the tasks the client (or the family code) reads before any call: the
+ * linkage event id 63/3001, without which the client never shows the tile, and
+ * the mixed online event id 68/1001. Idempotent; does nothing when the tables
+ * are not loaded.
+ */
+function reconcileNamedTowerSeeds(player: Player): void {
+  const catalog = NamedTowerCatalog.tryLoadDefault();
+  if (!catalog) return;
+  const linkage = catalog.linkageIds[0];
+  if (linkage && towerTask(player, 63, LINKAGE_TASK.actId) === 0)
+    setTowerTask(player, 63, LINKAGE_TASK.actId, linkage);
+  const mix = catalog.mixActivities[0];
+  if (mix && towerTask(player, 68, MIX_TASK.currentId) === 0)
+    setTowerTask(player, 68, MIX_TASK.currentId, mix);
+  refreshLinkageMissions(player, catalog);
+}
+
+function fieldRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function namedAwardRows(awards: readonly (readonly number[])[]): number[][] {
+  return awards.map((award) => award.slice(0, 5));
+}
+
+/** Applies one request of these families. Throws EventTowerError for a refusal. */
+function applyNamedTowerRequest(
+  player: Player,
+  request: NamedTowerRequest,
+  catalog: NamedTowerCatalog,
+  random: (maxExclusive: number) => number,
+): TowerOutcome {
+  const outcome: TowerOutcome = {
+    response: {},
+    itemGuids: new Set(),
+    moneyIds: new Set(),
+    girlIds: new Set(),
+    experience: null,
+  };
+  const finishAwards = (): void => {
+    const reconciliation = reconcileGirlAppearanceState(player, outcome.itemGuids);
+    for (const girlId of reconciliation.updatedGirlIds) outcome.girlIds.add(girlId);
+    reconcileGirlFetterUnlocks(player);
+  };
+  const state = namedState(player);
+
+  switch (request.kind) {
+    case "echo":
+      outcome.response = { [request.field]: request.value };
+      return outcome;
+
+    case "mixSpCount":
+      // [INFER] no client code or table says what the SP count counts.
+      outcome.response = { spCount: 0 };
+      return outcome;
+
+    case "secondBarrage":
+    case "coopEventReward":
+      outcome.response = [];
+      return outcome;
+
+    case "mixBarrage": {
+      const sizes = catalog.barrageSizes;
+      if (
+        request.message &&
+        request.message.every((index, column) => index <= (sizes[column] ?? 0))
+      ) {
+        const list = (state.barrage ??= []);
+        list.push(request.message);
+        if (list.length > 100) list.shift();
+      }
+      outcome.response = (state.barrage ?? []).map((content) => ({
+        roleid: player.roleId,
+        rolename: player.name,
+        content,
+      }));
+      return outcome;
+    }
+
+    case "mixCartoon": {
+      // UI_CoopEventInfoSP plays a cartoon node of the mixed event itself and tells the server afterwards.
+      const activity = mixActivityId(player, catalog);
+      const level = catalog.level("mix", activity, request.node, 0);
+      const family = NAMED_FAMILIES.mix;
+      if (!level || !catalog.mixCartoons.has(`${activity}:${request.node}`)) {
+        outcome.response = [];
+        return outcome;
+      }
+      const { first, before } = namedRecordFirst(player, family, level);
+      if (!first) {
+        outcome.response = [];
+        return outcome;
+      }
+      grantTowerAwards(player, level.firstAwards, outcome);
+      setTowerTask(
+        player,
+        family.group,
+        family.recordKey(level),
+        (before | (1 << family.recordBit(level))) >>> 0,
+      );
+      finishAwards();
+      outcome.response = namedAwardRows(level.firstAwards);
+      return outcome;
+    }
+
+    case "coopSaveSp": {
+      const run = readNamedRun(state);
+      const sp = run?.family === "coop" ? run.sp : undefined;
+      if (!sp || sp.settled) {
+        outcome.response = { tbAward: [] };
+        return outcome;
+      }
+      sp.settled = true;
+      const paid: number[][] = [];
+      if (request.save) {
+        if (sp.payout && sp.payout[4] > 0) {
+          grantTowerAwards(player, [sp.payout], outcome);
+          paid.push([...sp.payout]);
+        }
+        const best = towerTask(player, 68, COOP_TASK.maxScore);
+        if (request.maxDamage > best)
+          setTowerTask(player, 68, COOP_TASK.maxScore, request.maxDamage);
+      }
+      finishAwards();
+      outcome.response = { tbAward: paid };
+      return outcome;
+    }
+
+    case "scoreAward": {
+      const awards = (
+        request.family === "buff" ? catalog.buffAwards : catalog.bossAwards
+      ).get(request.towerId);
+      if (!awards) throw refuse(NAMED_ERROR.invalid, "no_score_awards");
+      const group = NAMED_FAMILIES[request.family].group;
+      const gotKey = request.family === "buff" ? BUFF_TASK.got : BOSS_TASK.got;
+      let total: number;
+      if (request.family === "buff") {
+        total = towerTask(player, group, BUFF_TASK.total);
+      } else {
+        // BossChallengeLogic:GetTotalScore: the best score of each level over its difficulties, summed.
+        const best = new Map<number, number>();
+        for (const level of catalog.eventLevels("boss", request.towerId)) {
+          const score = towerTask(
+            player,
+            group,
+            BOSS_TASK.score + (level.levelId - 1) * BOSS_TASK.diffCount + level.diff,
+          );
+          best.set(level.levelId, Math.max(best.get(level.levelId) ?? 0, score));
+        }
+        total = [...best.values()].reduce((sum, score) => sum + score, 0);
+      }
+      const got = towerTask(player, group, gotKey);
+      const due = awards.filter((row) => row.score > got && row.score <= total);
+      if (due.length === 0)
+        throw refuse(
+          total <= got ? NAMED_ERROR.gotAward : NAMED_ERROR.point,
+          total <= got ? "nothing_new" : "score_too_low",
+        );
+      const granted: number[][] = [];
+      for (const row of due) {
+        grantTowerAwards(player, row.awards, outcome);
+        granted.push(...namedAwardRows(row.awards));
+      }
+      setTowerTask(player, group, gotKey, Math.max(...due.map((row) => row.score)));
+      finishAwards();
+      outcome.response = { tbAward: granted };
+      return outcome;
+    }
+
+    case "linkageMission": {
+      const rows = catalog.linkageMissions.get(linkageActivityId(player, catalog));
+      const achievements = ActivityAchievementCatalog.loadDefault();
+      const config = achievements.achievement(
+        ACTIVITY_ACHIEVEMENT_TASK_GROUP,
+        request.missionId,
+      );
+      const listed =
+        rows &&
+        (request.missionId === rows.daily ||
+          (request.stateId >= 1 &&
+            request.stateId <= 4 &&
+            rows.states[request.stateId - 1]!.includes(request.missionId)));
+      if (!rows || !config || !listed)
+        throw refuse(NAMED_ERROR.invalid, "unknown_mission");
+      // IsMissionStateComp: a state opens when every mission of the states before it is claimed.
+      for (let state = 1; state < request.stateId; state++)
+        for (const id of rows.states[state - 1]!) {
+          const value =
+            player.taskValues[
+              String(makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, id))
+            ] ?? 0;
+          if (!hasClaimedAchievement(value))
+            throw refuse(NAMED_ERROR.noAward, "state_locked");
+        }
+      refreshLinkageMissions(player, catalog);
+      const key = String(
+        makeAchievementTaskId(ACTIVITY_ACHIEVEMENT_TASK_GROUP, config.id),
+      );
+      const value = player.taskValues[key] ?? 0;
+      if (hasClaimedAchievement(value))
+        throw refuse(NAMED_ERROR.gotAward, "already_claimed");
+      if (achievementProgress(value) < requiredAchievementCount(config))
+        throw refuse(NAMED_ERROR.noAward, "not_completed");
+      if (!config.awards) throw refuse(NAMED_ERROR.invalid, "unsupported_award");
+      // 15-96 (richman points) has no AutoUse rule here and stays an inventory stack.
+      grantTowerAwards(player, config.awards, outcome);
+      player.taskValues[key] = makeAchievementTaskValue(
+        achievementProgress(value),
+        true,
+      );
+      finishAwards();
+      outcome.response = { tbReward: namedAwardRows(config.awards) };
+      return outcome;
+    }
+
+    case "linkageGacha": {
+      // The pond draw of the Railgun gacha screen: one token per draw, slots of TowerPond.txt.
+      const slots = catalog.linkagePonds.get(request.pondId);
+      const token = catalog.linkageToken;
+      if (!slots || !token) throw refuse(NAMED_ERROR.pondEmpty, "unknown_pond");
+      const slotKey = (pond: number, position: number): number =>
+        LINKAGE_TASK.gacha + (pond - 1) * LINKAGE_TASK.pondSize + position;
+      const left = (pond: number, list: readonly LinkagePondSlot[]): number =>
+        list.reduce(
+          (total, slot, index) =>
+            total +
+            Math.max(0, slot.count - towerTask(player, 63, slotKey(pond, index + 1))),
+          0,
+        );
+      // LinkageActivityLogic:IsPondUnlock: the last pond opens when every earlier one is empty.
+      const lastPond = Math.max(...catalog.linkagePonds.keys());
+      if (request.pondId === lastPond)
+        for (const [pond, list] of catalog.linkagePonds)
+          if (pond !== lastPond && left(pond, list) > 0)
+            throw refuse(NAMED_ERROR.pondEmpty, "pond_locked");
+      const wallet = player.money.find(({ id }) => id === token.moneyId);
+      if (left(request.pondId, slots) === 0)
+        throw refuse(NAMED_ERROR.pondEmpty, "pond_exhausted");
+      if ((wallet?.count ?? 0) < token.cost)
+        throw refuse(NAMED_ERROR.point, "not_enough_tokens");
+      if (wallet) wallet.count -= token.cost;
+      outcome.moneyIds.add(token.moneyId);
+      const records = slots.map((_, index) =>
+        towerTask(player, 63, slotKey(request.pondId, index + 1)),
+      );
+      const items: number[][] = [];
+      for (let draw = 0; draw < token.times; draw++) {
+        const pick = pickPondSlot(slots, records, random);
+        if (pick < 0) break;
+        records[pick] = records[pick]! + 1;
+        setTowerTask(player, 63, slotKey(request.pondId, pick + 1), records[pick]!);
+        const slot = slots[pick]!;
+        grantTowerAwards(player, [slot.award], outcome);
+        // UI_RailgunGacha:OnGachaRsp treats a sixth value as "special" for its effect.
+        items.push(slot.special ? [...slot.award, 1] : [...slot.award]);
+      }
+      finishAwards();
+      outcome.response = { tbItem: items };
+      return outcome;
+    }
+
+    case "enter": {
+      const family = NAMED_FAMILIES[request.family];
+      const level = resolveNamedLevel(player, catalog, request);
+      if (!level) throw refuse(NAMED_ERROR.invalid, "unknown_level");
+      let cardGuids: number[] = [];
+      if (level.type !== 2) {
+        if (
+          request.formationId <= 0 ||
+          !player.formations.some(({ id }) => id === request.formationId)
+        )
+          throw refuse(NAMED_ERROR.formation, "unknown_formation");
+        if (towerVigour(player) < towerEnergyCost(player, level.cost))
+          throw refuse(NAMED_ERROR.vigour, "insufficient_vigour");
+        const cost = level.otherCost;
+        if (
+          cost &&
+          (player.money.find(({ id }) => id === cost.moneyId)?.count ?? 0) < cost.count
+        )
+          throw refuse(NAMED_ERROR.noToken, "insufficient_tokens");
+        cardGuids = fightRoster(player, request.formationId);
+      }
+      // A resent request while the same fight is open keeps its run.
+      const open = readNamedRun(state);
+      if (
+        !open?.active ||
+        open.family !== family.key ||
+        open.tower !== level.tower ||
+        open.level !== level.levelId ||
+        open.diff !== level.diff
+      ) {
+        state.run = {
+          id: randomUUID(),
+          family: family.key,
+          tower: level.tower,
+          level: level.levelId,
+          diff: level.diff,
+          node: level.node,
+          active: true,
+          activityType: family.activityType,
+          formationId: request.formationId,
+          cardGuids,
+          resultCmd: 0,
+          reply: null,
+        };
+      }
+      const data: Record<string, number> = {};
+      for (const field of family.echo) {
+        data[field] =
+          field === "nType"
+            ? family.activityType
+            : (whole(request.body[field]) ?? (field === "nodeId" ? request.node : 0));
+      }
+      outcome.response = { tbData: data, tbDrop: [], tbDropItems: [] };
+      return outcome;
+    }
+
+    case "pass": {
+      const family = NAMED_FAMILIES[request.family];
+      const level = resolveNamedLevel(player, catalog, request);
+      if (!level) throw refuse(NAMED_ERROR.invalid, "unknown_level");
+      const run = readNamedRun(state);
+      if (
+        !run ||
+        run.family !== family.key ||
+        run.tower !== level.tower ||
+        run.level !== level.levelId ||
+        run.diff !== level.diff
+      )
+        throw refuse(NAMED_ERROR.invalid, "no_matching_entry");
+      if (!run.active) {
+        // The client resends a settlement until it hears back: replay, never pay twice.
+        if (run.resultCmd !== family.pass || run.reply === null)
+          throw refuse(NAMED_ERROR.invalid, "entry_already_closed");
+        outcome.response = structuredClone(run.reply);
+        return outcome;
+      }
+
+      const cost = level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
+      spendTowerVigour(player, cost, outcome, true);
+      if (level.otherCost) {
+        const wallet = player.money.find(({ id }) => id === level.otherCost!.moneyId);
+        if (!wallet || wallet.count < level.otherCost.count)
+          throw refuse(NAMED_ERROR.noToken, "insufficient_tokens");
+        wallet.count -= level.otherCost.count;
+        outcome.moneyIds.add(wallet.id);
+      }
+
+      const { first, before } = namedRecordFirst(player, family, level);
+      const awards: number[][] = rollTowerAwards(level, first, run.id);
+      grantTowerAwards(player, awards, outcome);
+      const bit = family.recordBit(level);
+      setTowerTask(
+        player,
+        family.group,
+        family.recordKey(level),
+        bit >= 0 ? (before | (1 << bit)) >>> 0 : before + 1,
+      );
+
+      const reply: Record<string, unknown> = {
+        nMasterExp: level.masterExp,
+        nCardExp: level.cardExp,
+        newGoalIds: [] as number[],
+        isPass: true,
+      };
+
+      switch (family.key) {
+        case "micro": {
+          // Goal flags are bits of 59/300 + level * 5 + diff; the level's score sums the reached goals' points.
+          const slot = level.levelId * MICRO_DIFF_MAX + level.diff;
+          const goals =
+            catalog.microGoals.get(
+              namedLevelKey(level.tower, level.levelId, level.diff),
+            ) ?? [];
+          let bits = towerTask(player, family.group, MICRO_TASK.goals + slot);
+          let score = towerTask(player, family.group, MICRO_TASK.score + slot);
+          const fresh: number[] = [];
+          for (const goal of goals) {
+            if (
+              ((bits >>> goal.id) & 1) === 1 ||
+              !reachedGoal(request.body.tbGoals, goal.id)
+            )
+              continue;
+            bits = (bits | (1 << goal.id)) >>> 0;
+            score += goal.points;
+            grantTowerAwards(player, goal.rewards, outcome);
+            awards.push(...goal.rewards.map((award) => [...award, 100]));
+            fresh.push(goal.id);
+          }
+          setTowerTask(player, family.group, MICRO_TASK.goals + slot, bits);
+          setTowerTask(player, family.group, MICRO_TASK.score + slot, score);
+          reply.newGoalIds = fresh;
+          break;
+        }
+        case "coop": {
+          // OtherCost levels are the SP levels: the pass counts the kills, 339 pays them once.
+          const kill = level.killAward;
+          const kills = kill
+            ? (whole(
+                positional(fieldRecord(request.body.tbKillMonster).tbKillMonster)?.[
+                  kill.attribute
+                ],
+              ) ?? 0)
+            : 0;
+          if (level.type === 3 && kill) {
+            const count = Math.min(kills, kill.max);
+            run.sp = {
+              kills,
+              payout:
+                count > 0
+                  ? [
+                      kill.award[0],
+                      kill.award[1],
+                      kill.award[2],
+                      kill.award[3],
+                      kill.award[4] * count,
+                    ]
+                  : null,
+              settled: false,
+            };
+          }
+          reply.spKillNum = kills;
+          reply.curScore = kills;
+          break;
+        }
+        case "buff": {
+          // A level's score is the points of the buffs chosen for the run (positions in BuffTowerBuff), kept at its best.
+          const scores =
+            catalog.buffScores.get(`${level.tower}:${level.levelId}:${level.diff}`) ??
+            [];
+          const chosen = positional(request.body.tbBuffs) ?? [];
+          let score = 0;
+          for (const entry of chosen) score += scores[(whole(entry) ?? 0) - 1] ?? 0;
+          const key =
+            BUFF_TASK.score + (level.levelId - 1) * BUFF_TASK.diffCount + level.diff;
+          const best = towerTask(player, family.group, key);
+          if (score > best) {
+            setTowerTask(player, family.group, key, score);
+            setTowerTask(
+              player,
+              family.group,
+              BUFF_TASK.total,
+              towerTask(player, family.group, BUFF_TASK.total) + score - best,
+            );
+          }
+          break;
+        }
+        case "boss": {
+          // [INFER] no client code holds the formula: half of MaxScore for a clear, the rest by the health left.
+          const rate = Math.min(1, Math.max(0, Number(request.body.leftHpRate) || 0));
+          const score = Math.round(level.maxScore * (0.5 + 0.5 * rate));
+          const key =
+            BOSS_TASK.score + (level.levelId - 1) * BOSS_TASK.diffCount + level.diff;
+          const isNew = score > towerTask(player, family.group, key);
+          if (isNew) setTowerTask(player, family.group, key, score);
+          reply.tbRet = [Number(request.body.useTime) || 0, rate, score, isNew];
+          break;
+        }
+        case "linkage":
+          if (level.type !== 2)
+            refreshLinkageMissions(player, catalog, {
+              clears: level.type === 0 ? 1 : 0,
+              vigour: cost,
+            });
+          break;
+        default:
+          break;
+      }
+
+      if (level.masterExp > 0) {
+        outcome.experience = applyPlayerExperience(player, level.masterExp);
+        if (outcome.experience.vigourRecovery > 0) outcome.moneyIds.add(MONEY_VIGOUR);
+      }
+      if (level.type !== 2 && run.cardGuids.length > 0)
+        recordTowerFight(player, {
+          id: run.id,
+          tower: run.tower,
+          level: run.level,
+          active: false,
+          activityType: run.activityType,
+          node: run.node,
+          formationId: run.formationId,
+          cardGuids: run.cardGuids,
+          resultCmd: family.pass,
+          reply: null,
+        });
+      finishAwards();
+
+      // Micro reads tbAwards, every other family tbData; both are always arrays.
+      reply.tbData = awards;
+      reply.tbAwards = awards;
+      run.active = false;
+      run.resultCmd = family.pass;
+      run.reply = reply;
+      outcome.response = reply;
+      return outcome;
+    }
+
+    case "fail": {
+      // Several Fail requests carry no event id, so the open run of the family decides.
+      const family = NAMED_FAMILIES[request.family];
+      const run = readNamedRun(state);
+      if (run?.active && run.family === family.key) {
+        const level = catalog.level(run.family, run.tower, run.level, run.diff);
+        const cost =
+          !level || level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
+        spendTowerVigour(player, cost, outcome, false);
+        run.active = false;
+        run.resultCmd = family.fail;
+        run.reply = {};
+      }
+      outcome.response = {};
+      return outcome;
+    }
+  }
+}
+
 function fullTeamHealth(player: Player, group: number): void {
   for (let team = 1; team <= BOSS_RUSH_TEAMS; team++) {
     setTowerTask(player, group, BOSS_RUSH_TASK.hp + team, 100);
@@ -4716,6 +5367,7 @@ export class PlayerRepository {
         reconcileChapterStarTaskValues(player);
         reconcileMaximumFightPower(player);
         this.#activities.reconcile(player);
+        reconcileNamedTowerSeeds(player);
         if (player.cafe.pets)
           new CafePetRuntime(
             player,
@@ -4770,6 +5422,7 @@ export class PlayerRepository {
       reconcileChapterStarTaskValues(player);
       reconcileMaximumFightPower(player);
       this.#activities.reconcile(player);
+      reconcileNamedTowerSeeds(player);
       reconcileHeadpatCharges(player.taskValues, now);
       state.players[safeAccount] = player;
       if (this.#welcomeGifts)
@@ -4833,6 +5486,7 @@ export class PlayerRepository {
       reconcileMaximumFightPower(player);
       reconcileGirlFetterUnlocks(player);
       this.#activities.reconcile(player, now);
+      reconcileNamedTowerSeeds(player);
       reconcilePlayerPhoneEvents(player, now);
       player.lastLoginAt = new Date(now).toISOString();
     });
@@ -5934,6 +6588,28 @@ export class PlayerRepository {
     achievementId: number,
   ): Promise<AchievementAwardResult> {
     return this.#claimAchievementAward(account, ACHIEVEMENT_TASK_GROUP, achievementId);
+  }
+
+  /**
+   * GetConverAchieveAward: a claim of Mission/AchievementOther by id from the
+   * Railgun mission screen (and the cafe talk phone). The linkage missions are
+   * brought up to date first (named tower counters).
+   */
+  async claimOtherAchievementAward(
+    account: string,
+    achievementId: number,
+  ): Promise<AchievementAwardResult> {
+    const catalog = NamedTowerCatalog.tryLoadDefault();
+    if (catalog)
+      await this.#store.update((state) => {
+        const player = state.players[account];
+        if (player) refreshLinkageMissions(player, catalog);
+      });
+    return this.#claimAchievementAward(
+      account,
+      ACTIVITY_ACHIEVEMENT_TASK_GROUP,
+      achievementId,
+    );
   }
 
   async #claimAchievementAward(
@@ -7839,6 +8515,77 @@ export class PlayerRepository {
         account,
         command: request.command,
         tower: request.towerId,
+      });
+    const { itemGuids, moneyIds, girlIds } = outcome;
+    return {
+      player: snapshot,
+      response: outcome.response,
+      updatedItems: snapshot.inventory.filter(({ guid }) => itemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id }) => moneyIds.has(id)),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
+      experienceUpdate: outcome.experience,
+      rejected: null,
+    };
+  }
+
+  /**
+   * The named-field event towers (named-tower-data.ts): micro tower, armed
+   * survey, mixed online, buff tower, linkage, second anniversary and boss
+   * challenge. A refusal leaves the save unchanged and returns the client's
+   * error reply.
+   */
+  async handleNamedTowerRequest(
+    account: string,
+    request: NamedTowerRequest,
+    options: { random?: (maxExclusive: number) => number } = {},
+  ): Promise<EventTowerResult> {
+    const catalog = NamedTowerCatalog.loadDefault();
+    const random = options.random ?? ((max: number) => randomInt(max));
+    const readOnly = namedTowerReadOnly(request);
+    let player: Player | undefined;
+    let outcome: TowerOutcome | undefined;
+    try {
+      if (readOnly) {
+        player = this.#store.snapshot().players[account];
+        if (!player) throw new Error(`Unknown player account: ${account}`);
+        outcome = applyNamedTowerRequest(player, request, catalog, random);
+      } else {
+        await this.#store.update((state) => {
+          const draft = state.players[account];
+          if (!draft) throw new Error(`Unknown player account: ${account}`);
+          outcome = applyNamedTowerRequest(draft, request, catalog, random);
+          player = draft;
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof EventTowerError)) throw error;
+      const current = this.#store.snapshot().players[account];
+      if (!current) throw new Error(`Unknown player account: ${account}`);
+      this.#logger.warn("player.named_tower.rejected", {
+        account,
+        command: request.command,
+        kind: request.kind,
+        reason: error.reason,
+        code: error.code,
+      });
+      return {
+        player: current,
+        response: namedTowerErrorReply(request, error.code),
+        updatedItems: [],
+        updatedMoney: [],
+        updatedGirls: [],
+        experienceUpdate: null,
+        rejected: { code: error.code, reason: error.reason },
+      };
+    }
+    if (!player || !outcome)
+      throw new Error(`Failed to handle named tower request: ${account}`);
+    const snapshot = structuredClone(player);
+    if (!readOnly)
+      this.#logger.info("player.named_tower", {
+        account,
+        command: request.command,
+        kind: request.kind,
       });
     const { itemGuids, moneyIds, girlIds } = outcome;
     return {

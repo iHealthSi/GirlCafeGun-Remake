@@ -31,6 +31,13 @@ import {
   parseEventTowerCall,
 } from "../game-data/event-tower-data.js";
 import {
+  NAMED_COMMAND,
+  NamedTowerCatalog,
+  namedTowerErrorReply,
+  namedTowerReadOnly,
+  parseNamedTowerCall,
+} from "../game-data/named-tower-data.js";
+import {
   LUA_COMMAND_CARD_LEVEL_UP_COMMON,
   parseCardEnhancementRequest,
 } from "../game-data/card-enhancement-data.js";
@@ -759,6 +766,10 @@ export function createGatewayServer({
     logger.warn("event_tower.tables_unavailable", {
       message: String(EventTowerCatalog.loadError),
     });
+  if (!NamedTowerCatalog.tryLoadDefault())
+    logger.warn("named_tower.tables_unavailable", {
+      message: String(NamedTowerCatalog.loadError),
+    });
   const chapterCatalog = ChapterCatalog.loadDefault();
   const gachaCatalog = GachaCatalog.loadDefault();
   const weaponGachaCatalog = GachaCatalog.loadDefault(0);
@@ -926,10 +937,12 @@ export function createGatewayServer({
     async function claimAchievementAward(
       activityId: number | null,
       achievementId: number,
+      other = false,
     ): Promise<void> {
       try {
-        const result =
-          activityId === null
+        const result = other
+          ? await players.claimOtherAchievementAward(context.account, achievementId)
+          : activityId === null
             ? await players.claimAchievementAward(context.account, achievementId)
             : await players.claimActivityAchievementAward(
                 context.account,
@@ -1760,6 +1773,14 @@ export function createGatewayServer({
             await claimAchievementAward(activityId, achievementId);
             return;
           }
+        }
+        if (call?.method === "GetConverAchieveAward") {
+          const parameters =
+            call.parameters && typeof call.parameters === "object"
+              ? (call.parameters as Record<string, unknown>)
+              : {};
+          await claimAchievementAward(null, Number(parameters.nId), true);
+          return;
         }
         if (call?.method === "AchievementGetAward") {
           const parameters =
@@ -3746,6 +3767,89 @@ export function createGatewayServer({
             command: request.command,
             feature: "event.tower",
             tower: request.towerId,
+            rejected: result.rejected?.reason,
+          });
+          return;
+        }
+        // WriteReportLog: the client sends it and waits for nothing.
+        if (luaCommand === NAMED_COMMAND.reportLog) {
+          logger.info("lua.accepted", {
+            peer,
+            account: context.account,
+            command: luaCommand,
+          });
+          return;
+        }
+        const namedTower =
+          call?.method === "LuaCall" ? parseNamedTowerCall(call.parameters) : null;
+        if (namedTower) {
+          const { request, settled } = namedTower;
+          // The reply goes back the way the request came: Pass and Fail inside DoSettle (252).
+          const answer = (body: unknown): void => {
+            const reply = { sCmd: request.command, tbParam: body };
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall(
+                "LuaCall",
+                settled ? { sCmd: LUA_COMMAND_DO_SETTLE, tbParam: reply } : reply,
+              ),
+            );
+          };
+          let result: Awaited<ReturnType<typeof players.handleNamedTowerRequest>>;
+          try {
+            result = await players.handleNamedTowerRequest(context.account, request);
+          } catch (error) {
+            logger.error("lua.named_tower_failed", {
+              peer,
+              account: context.account,
+              command: request.command,
+              kind: request.kind,
+              message:
+                error instanceof Error ? (error.stack ?? error.message) : String(error),
+            });
+            answer(namedTowerErrorReply(request, TOWER_ERROR.invalid));
+            return;
+          }
+          context.player = result.player;
+          // The client's reply handlers re-read money, items and task values, so they go out first.
+          for (const money of result.updatedMoney) {
+            send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+          }
+          if (result.updatedItems.length > 0) {
+            send(
+              COMMAND.ITEM_UPDATE_NTF,
+              0,
+              makeItemUpdateNotification(result.updatedItems),
+            );
+          }
+          sendGirlUpdates(result.updatedGirls);
+          if (!result.rejected && !namedTowerReadOnly(request)) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          if (
+            result.experienceUpdate &&
+            (result.experienceUpdate.addedExperience > 0 ||
+              result.experienceUpdate.levelsGained > 0)
+          ) {
+            send(
+              COMMAND.PLAYER_UPDATE_NTF,
+              0,
+              makePlayerUpdateNotification(result.player),
+            );
+          }
+          answer(result.response);
+          logger.info("lua.callback", {
+            peer,
+            account: context.account,
+            method: "LuaCall",
+            command: request.command,
+            feature: "event.named_tower",
+            kind: request.kind,
             rejected: result.rejected?.reason,
           });
           return;

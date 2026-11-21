@@ -126,6 +126,7 @@ describe("named-field event tower tables", () => {
     expect(missions.daily).toBe(5700);
     expect(missions.states.map((ids) => ids.length)).toEqual([10, 10, 10, 10]);
     expect(catalog.linkagePonds.get(1)![0]).toMatchObject({ special: true, count: 1 });
+    expect(catalog.linkageNodeMissions).toEqual([5741, 5742, 5743]);
   });
 
   it("pays each family's event currency into the wallet its top table names", () => {
@@ -158,7 +159,7 @@ describe("named-field event tower tables", () => {
             "money",
           );
           expect(
-            allowed!.has(effect!.kind === "money" ? effect.moneyId : -1),
+            allowed.has(effect?.kind === "money" ? effect.moneyId : -1),
             `${key} ${level.tower}:${award.join("-")}`,
           ).toBe(true);
           checked++;

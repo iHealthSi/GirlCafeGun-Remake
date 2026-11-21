@@ -352,6 +352,8 @@ export class NamedTowerCatalog {
   readonly mixCartoons = new Set<string>();
   readonly linkageIds: number[] = [];
   readonly linkageMissions = new Map<number, LinkageMissionRows>();
+  /** The missions the map's mission nodes (LinkageLevel type 3, ExtendParam) wait for. */
+  readonly linkageNodeMissions: number[] = [];
   readonly linkagePonds = new Map<number, LinkagePondSlot[]>();
   linkageToken: { times: number; cost: number; moneyId: number } | null = null;
   /** BarrageText.txt: how many texts each of the four columns has. */
@@ -492,6 +494,9 @@ export class NamedTowerCatalog {
         states: [1, 2, 3, 4].map((state) => numbers(row[`State${state}Mission`])),
       });
     }
+    for (const row of read("linkageactivity/linkagelevel.txt"))
+      if (int(row.LevelType) === 3 && int(row.ExtendParam) > 0)
+        this.linkageNodeMissions.push(int(row.ExtendParam));
     for (const row of read("linkageactivity/towerpond.txt")) {
       const pond = int(row.PondId);
       const award = parseAwards(row.Item)[0];
