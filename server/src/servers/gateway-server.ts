@@ -15,6 +15,7 @@ import {
   clubParameters,
   clubTaskSyncValues,
   isClubmateRoleId,
+  LUA_COMMAND_ITEM_BOX_OPEN,
   LUA_COMMAND_REQUEST_PLAYER_INFO,
 } from "../game-data/club-data.js";
 import { dailySignUpOperationalDate } from "../game-data/daily-sign-up-data.js";
@@ -3274,6 +3275,16 @@ export function createGatewayServer({
               COMMAND.NTF_S2C_CALL,
               0,
               makeServerLuaCall("CallClientTip", [result.tip]),
+            );
+          }
+          if (result.rewardBox.length > 0) {
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: LUA_COMMAND_ITEM_BOX_OPEN,
+                tbParam: result.rewardBox.map((award) => award.slice(0, 5)),
+              }),
             );
           }
           logger.info("club.callback", {

@@ -180,7 +180,7 @@ async function fixture() {
   function lua(
     command: number,
     tbParam?: unknown,
-    until: "reply" | "tip" = "reply",
+    until: "reply" | "tip" | number = "reply",
   ): Promise<GamePacket[]> {
     const body: Record<string, unknown> = { sCmd: command };
     if (tbParam !== undefined) body.tbParam = tbParam;
@@ -193,7 +193,8 @@ async function fixture() {
         const call = callback(packet);
         if (until === "tip") return call?.method === "CallClientTip";
         const parameters = call?.parameters as { sCmd?: number } | null;
-        return call?.method === "LuaCall" && parameters?.sCmd === command;
+        const awaited = typeof until === "number" ? until : command;
+        return call?.method === "LuaCall" && parameters?.sCmd === awaited;
       },
     );
   }
@@ -304,13 +305,24 @@ describe("offline clubs over TCP", () => {
       await f.lua(10_001, CREATE_REQUEST);
       const goldBefore =
         f.players.get(account)!.money.find(({ id }) => id === MONEY_GOLD)?.count ?? 0;
-      expect(luaReply(await f.lua(10_020), 10_020)).toEqual({});
+      // The reply, then the "items received" popup that also clears the
+      // clan screen's daily-reward marker (LuaCall 75).
+      const daily = await f.lua(10_020, undefined, 75);
+      expect(luaReply(daily, 10_020)).toEqual({});
+      expect(luaReply(daily, 75)).toEqual([
+        [15, 14, 1, 1, 5],
+        [15, 1, 1, 1, 2_000],
+      ]);
       let player = f.players.get(account)!;
       expect(player.money.find(({ id }) => id === MONEY_CLUB_COIN)?.count).toBe(5);
       expect(player.money.find(({ id }) => id === MONEY_GOLD)?.count).toBe(
         goldBefore + 2_000,
       );
       await f.lua(10_020);
+      // A second claim the same day pays nothing and shows no popup.
+      expect(
+        (await f.players.handleClubRequest(account, 10_020, undefined)).rewardBox,
+      ).toEqual([]);
       expect(
         f.players.get(account)!.money.find(({ id }) => id === MONEY_CLUB_COIN)?.count,
       ).toBe(5);

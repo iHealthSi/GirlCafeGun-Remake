@@ -906,6 +906,8 @@ export interface ClubRequestResult {
   tip: string | null;
   /** The club was dissolved by its timer during this request. */
   dissolved: boolean;
+  /** Items for the "items received" popup (LuaCall 75 ItemBox_Open); empty = none. */
+  rewardBox: BaseAward[];
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
   updatedGirls: GirlState[];
@@ -5039,6 +5041,7 @@ export class PlayerRepository {
     let response: unknown;
     let tip: string | null = null;
     let dissolved = false;
+    let rewardBox: BaseAward[] = [];
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedGirlIds = new Set<number>();
@@ -5063,6 +5066,7 @@ export class PlayerRepository {
         );
         response = outcome.response;
         tip = outcome.tip;
+        rewardBox = outcome.rewardBox ?? [];
       } catch (error) {
         if (!(error instanceof ClubError)) throw error;
         // The club functions check before they write, so a refusal changes
@@ -5091,6 +5095,7 @@ export class PlayerRepository {
       response,
       tip,
       dissolved,
+      rewardBox,
       updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => updatedGirlIds.has(girlId)),
@@ -5104,7 +5109,7 @@ export class PlayerRepository {
     now: number,
     updatedItemGuids: Set<number>,
     updatedMoneyIds: Set<number>,
-  ): { response: unknown; tip: string | null } {
+  ): { response: unknown; tip: string | null; rewardBox?: BaseAward[] } {
     const club = player.club;
     const reply = (response: unknown, tip: string | null = null) => ({ response, tip });
     switch (command) {
@@ -5164,7 +5169,10 @@ export class PlayerRepository {
             updatedMoneyIds,
           );
         }
-        return reply({});
+        // The original server showed what was received (LuaCall 75); that
+        // popup is also what clears the clan screen's daily-reward marker
+        // (ItemBox:OnOpenBox calls UI_Club:RefreshDailyNew).
+        return { response: {}, tip: null, rewardBox: awards ?? [] };
       }
       case LUA_COMMAND_CLUB_DISSOLVE:
         requestClubDissolve(player, parameters, now);

@@ -94,6 +94,8 @@ export const CLUB_BOSS_TIMES_TASK_ID = (1 << 16) | 552;
 export const CLUB_DAILY_AWARD_DAY_TASK_ID = (1 << 16) | 35;
 /** LuaCall.RequestPlayerInfo: UI_ClubMember sends it when a member's head is tapped. */
 export const LUA_COMMAND_REQUEST_PLAYER_INFO = 101;
+/** LuaCall.ItemBox_Open: server push of the "items received" popup, [[G, D, P, L, N], ...]. */
+export const LUA_COMMAND_ITEM_BOX_OPEN = 75;
 /** Achievement 2050 "create or join any club" (achieveType 106, group 6). */
 export const CLUB_ACHIEVEMENT_TYPE = 106;
 
