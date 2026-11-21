@@ -142,14 +142,17 @@ export function missionDay(nowMs: number): number {
 
 /** The progress counters this server keeps for the event missions. */
 export const MISSION_COUNTER = {
-  vigour: "vigour",
+  /** Vigour, kills and level difficulties are counted per mission group: the concert missions (group 70)
+   * and the anniversary missions (group 85) belong to different events that share level ids. */
+  vigour: (group: number): string => `vigour:${group}`,
   musicGame: "musicgame",
   clear: (issue: number, type: number): string => `clear:${issue}:${type}`,
   special: (issue: number, type: number): string => `sp:${issue}:${type}`,
   level: (issue: number, type: number, level: number): string =>
     `level:${issue}:${type}:${level}`,
-  diff: (level: number, diff: number): string => `diff:${level}:${diff}`,
-  kills: (issue: number): string => `kills:${issue}`,
+  diff: (group: number, level: number, diff: number): string =>
+    `diff:${group}:${level}:${diff}`,
+  kills: (group: number, issue: number): string => `kills:${group}:${issue}`,
   gain: (money: number): string => `gain:${money}`,
   spent: (money: number): string => `spent:${money}`,
   interest: (issue: number): string => `interest:${issue}`,
@@ -161,7 +164,7 @@ export function missionCounterKey(row: EventMissionRow): string | null {
   const [a = 0, b = 0, c = 0] = row.counts;
   switch (row.type) {
     case 24:
-      return MISSION_COUNTER.vigour;
+      return MISSION_COUNTER.vigour(row.group);
     case 192:
       return MISSION_COUNTER.clear(a, b);
     case 181:
@@ -169,9 +172,9 @@ export function missionCounterKey(row: EventMissionRow): string | null {
     case 219:
       return MISSION_COUNTER.level(a, b, c);
     case 184:
-      return MISSION_COUNTER.diff(a, b);
+      return MISSION_COUNTER.diff(row.group, a, b);
     case 183:
-      return MISSION_COUNTER.kills(b);
+      return MISSION_COUNTER.kills(row.group, b);
     case 176:
       return MISSION_COUNTER.gain(b);
     case 259:

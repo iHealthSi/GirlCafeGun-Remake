@@ -98,6 +98,7 @@ import {
 } from "../game-data/event-tower-data.js";
 import {
   EventMissionCatalog,
+  EVENT_MISSION_GROUP,
   MISSION_COUNTER,
   MISSION_ERROR,
   bumpMission,
@@ -2081,6 +2082,22 @@ function takeTowerItem(
   return true;
 }
 
+/**
+ * Draws left in a pond: a negative Count is unlimited (the client treats it so in GetPondLeftNum), so one such
+ * slot makes the whole pond unlimited.
+ */
+function pondStockLeft(
+  slots: readonly { count: number }[],
+  records: readonly number[],
+): number {
+  let total = 0;
+  for (const [index, slot] of slots.entries()) {
+    if (slot.count < 0) return Number.POSITIVE_INFINITY;
+    total += Math.max(0, slot.count - (records[index] ?? 0));
+  }
+  return total;
+}
+
 function pondSlotKey(tower: TowerInfo, pondId: number, slot: number): number {
   return tower.layout.offset + NODE_TASK.pondRecord + (pondId - 1) * POND_SIZE + slot;
 }
@@ -2446,10 +2463,7 @@ function applyEventTowerRequest(
       const records = slots.map((_, index) =>
         towerTask(player, group, pondSlotKey(tower, request.pondId, index + 1)),
       );
-      const left = slots.reduce(
-        (total, slot, index) => total + Math.max(0, slot.count - records[index]!),
-        0,
-      );
+      const left = pondStockLeft(slots, records);
       if (left < Math.max(1, token.times))
         throw refuse(TOWER_ERROR.pondEmpty, "pond_exhausted");
       if (wallet) wallet.count -= token.cost;
@@ -3202,6 +3216,7 @@ function reconcileNamedTowerSeeds(player: Player): void {
   // The concert exchange season the client reads (task 74/1): the first, unless the page chose another.
   const exchange = [...catalog.exchangeSeasons.keys()][0];
   if (exchange && towerTask(player, 74, 1) === 0) setTowerTask(player, 74, 1, exchange);
+  rollExchangeDay(player);
   refreshMissions(player);
 }
 
@@ -3229,7 +3244,33 @@ const EXCHANGE_TASK = {
 /** ui.Error.20045 (event window) and 20043 (insufficient tokens). */
 const EXCHANGE_ERROR = { window: 20045, tokens: 20043 } as const;
 
-const MISSION_FAMILIES: ReadonlySet<string> = new Set(["music", "second", "boss"]);
+/** The listing counter 74/4 counts per day (04:00 Shanghai). */
+function rollExchangeDay(player: Player): void {
+  const mission = missionState(player);
+  const day = missionDay(Date.now());
+  if (mission.exchangeDay === day) return;
+  mission.exchangeDay = day;
+  setTowerTask(player, EXCHANGE_TASK.group, EXCHANGE_TASK.listingCount, 0);
+}
+
+/** Only the first buff tower event is the concert challenge; the later ones have no missions here. */
+function missionCounted(family: NamedFamily, level: NamedLevel): boolean {
+  return (
+    MISSION_FAMILIES.has(family.key) && (family.key !== "buff" || level.tower === 1)
+  );
+}
+
+/**
+ * The families whose fights feed the event missions, with the mission group that counts them: the concert
+ * tower and the concert challenge (the buff tower, event 1) feed the concert missions, the second anniversary
+ * tower and the boss challenge the anniversary missions.
+ */
+const MISSION_FAMILIES: ReadonlyMap<string, number> = new Map([
+  ["music", EVENT_MISSION_GROUP.music],
+  ["buff", EVENT_MISSION_GROUP.music],
+  ["second", EVENT_MISSION_GROUP.month],
+  ["boss", EVENT_MISSION_GROUP.month],
+]);
 
 function refreshMissions(player: Player): void {
   const missions = EventMissionCatalog.tryLoadDefault();
@@ -3248,7 +3289,8 @@ function recordMissionPass(
   body: Record<string, unknown>,
   vigour: number,
 ): void {
-  bumpMission(player, MISSION_COUNTER.vigour, vigour);
+  const group = MISSION_FAMILIES.get(family.key) ?? 0;
+  bumpMission(player, MISSION_COUNTER.vigour(group), vigour);
   const issue =
     family.key === "music"
       ? (catalog.musicIssueOfLevel.get(level.levelId) ?? 0)
@@ -3258,11 +3300,11 @@ function recordMissionPass(
   if (level.type === 0) {
     bumpMission(player, MISSION_COUNTER.clear(issue, type));
     const kills = whole(fieldRecord(body.tbKillMonster).totalkillMonster) ?? 0;
-    bumpMission(player, MISSION_COUNTER.kills(issue), kills);
+    bumpMission(player, MISSION_COUNTER.kills(group, issue), kills);
   }
   if (level.type === 1) bumpMission(player, MISSION_COUNTER.special(issue, type));
   bumpMission(player, MISSION_COUNTER.level(issue, type, level.levelId));
-  bumpMission(player, MISSION_COUNTER.diff(level.levelId, level.diff));
+  bumpMission(player, MISSION_COUNTER.diff(group, level.levelId, level.diff));
 }
 
 /** Interest level 71 belongs to the first concert issue (tasks 1/554-556), 72 to the next (557-559). */
@@ -3543,6 +3585,11 @@ function chessBossFailed(
   chessSet(player, CHESS_TASK.teamHp[team - 1]!, 0);
   chessSet(player, CHESS_TASK.fightCache, 0);
   const map = chessCurrentMap(player, catalog);
+  // The team is out: it leaves the grid, so no boss targets it again.
+  if (map) {
+    const cell = chessCellOf(player, map, CHESS_CELL.team[team - 1]!);
+    if (cell > 0) chessSet(player, CHESS_TASK.grid + cell, CHESS_CELL.empty);
+  }
   if (map && !chessTeamAlive(player, 1) && !chessTeamAlive(player, 2)) {
     chessLose(player);
     chessMapEnded(player, catalog, outcome);
@@ -3692,7 +3739,16 @@ function applyChessBoard(
         );
         return;
       }
-      if (target !== CHESS_CELL.empty) return fail(CHESS_ERROR.move);
+      // The client's path finder walks over other bosses, walls and obstacles (warchesstower.lua), and it
+      // stops asking for boss moves after an error: such a move is answered as done and the boss stays put.
+      if (target !== CHESS_CELL.empty) {
+        chessSet(
+          player,
+          CHESS_TASK.bossMove,
+          moved | (CHESS_PHASE.boss * 2 ** CHESS_PHASE.shift),
+        );
+        return;
+      }
       chessSet(
         player,
         CHESS_TASK.bossMove,
@@ -3946,18 +4002,9 @@ function applyNamedTowerRequest(
       const slotKey = (pond: number, position: number): number =>
         LINKAGE_TASK.gacha + (pond - 1) * LINKAGE_TASK.pondSize + position;
       const left = (pond: number, list: readonly LinkagePondSlot[]): number =>
-        list.reduce(
-          (total, slot, index) =>
-            total +
-              // A negative Count is unlimited (the client treats it so in GetPondLeftNum).
-              slot.count <
-            0
-              ? Number.POSITIVE_INFINITY
-              : Math.max(
-                  0,
-                  slot.count - towerTask(player, 63, slotKey(pond, index + 1)),
-                ),
-          0,
+        pondStockLeft(
+          list,
+          list.map((_, index) => towerTask(player, 63, slotKey(pond, index + 1))),
         );
       // LinkageActivityLogic:IsPondUnlock: the last pond opens when every earlier one is empty.
       const lastPond = Math.max(...catalog.linkagePonds.keys());
@@ -4030,6 +4077,7 @@ function applyNamedTowerRequest(
       const key = MUSIC_GAME_TASK.score + request.gameId;
       if (request.score > towerTask(player, MUSIC_GAME_TASK.group, key))
         setTowerTask(player, MUSIC_GAME_TASK.group, key, request.score);
+      refreshMissions(player);
       bumpMission(player, MISSION_COUNTER.musicGame);
       // Ratings 1 C, 2 B, 3 A, 4 S: a play counts for every rating up to its own (AchieveType 191).
       for (let rating = 1; rating <= Math.min(4, request.rating); rating++)
@@ -4090,7 +4138,9 @@ function applyNamedTowerRequest(
       );
       switch (request.op) {
         case "refresh":
-          // Nobody else lists collection pieces here: the board stays empty.
+          // Nobody else lists collection pieces here: the board stays empty. The client stops sending 381 once
+          // the day's count is at the limit, so the count starts again here as well (and at login).
+          rollExchangeDay(player);
           outcome.response = { tbData: [] };
           return outcome;
         case "log":
@@ -4107,12 +4157,7 @@ function applyNamedTowerRequest(
         case "listing": {
           if (!season || request.typeId < 1 || request.typeId > 4)
             throw refuse(EXCHANGE_ERROR.window, "no_season");
-          const mission = missionState(player);
-          const day = missionDay(Date.now());
-          if (mission.exchangeDay !== day) {
-            mission.exchangeDay = day;
-            setTowerTask(player, group, EXCHANGE_TASK.listingCount, 0);
-          }
+          rollExchangeDay(player);
           const flags = towerTask(player, group, EXCHANGE_TASK.listingFlags);
           const bit = 1 << request.typeId;
           if (request.cancel) {
@@ -4272,6 +4317,9 @@ function applyNamedTowerRequest(
         return outcome;
       }
 
+      // Start the mission day first: the roll clears the counters of the day, so it must not come after a count.
+      const counted = missionCounted(family, level);
+      if (counted) refreshMissions(player);
       const wallet = walletSnapshot(player);
       const cost = level.type === 2 ? 0 : towerEnergyCost(player, level.cost);
       spendTowerVigour(player, cost, outcome, true);
@@ -4453,7 +4501,7 @@ function applyNamedTowerRequest(
         default:
           break;
       }
-      if (MISSION_FAMILIES.has(family.key)) {
+      if (counted) {
         bumpWalletChange(player, wallet);
         recordMissionPass(player, catalog, family, level, request.body, cost);
         refreshMissions(player);
@@ -4500,8 +4548,10 @@ function applyNamedTowerRequest(
         run.active = false;
         run.resultCmd = family.fail;
         run.reply = {};
-        if (level && family.key === "music" && level.type === 6)
+        if (level && family.key === "music" && level.type === 6) {
+          refreshMissions(player);
           settleInterest(player, level, 0);
+        }
         if (level && family.key === "chess" && level.type === 1)
           chessBossFailed(player, catalog, request.body, outcome);
       }
@@ -8577,6 +8627,7 @@ export class PlayerRepository {
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
     const updatedFurniture: CafeFurnitureState[] = [];
+    let missionTasksChanged = false;
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
@@ -8636,8 +8687,13 @@ export class PlayerRepository {
       if (price > 0) {
         deductShopMoney(player, config.moneyType, price, updatedMoneyIds);
         // The anniversary missions of AchieveType 259 count the tokens spent in the event shops.
-        if (EventMissionCatalog.tryLoadDefault()?.spentMoney.has(config.moneyType))
+        const missionTables = EventMissionCatalog.tryLoadDefault();
+        if (missionTables?.spentMoney.has(config.moneyType)) {
+          // Roll the day first, count, and push the new progress now (tasks 85/18-20 follow the spending).
+          refreshEventMissions(player, missionTables);
           bumpMission(player, MISSION_COUNTER.spent(config.moneyType), price);
+          if (refreshEventMissions(player, missionTables)) missionTasksChanged = true;
+        }
       }
       grantAwards(
         player,
@@ -8690,7 +8746,8 @@ export class PlayerRepository {
       counters.total += buyNum;
       counters.shelf += buyNum;
       if (shelfEntry) shelfEntry.bought += buyNum;
-      taskValuesChanged = incrementDailyMissionProgress(player, 108, 1, now);
+      taskValuesChanged =
+        incrementDailyMissionProgress(player, 108, 1, now) || missionTasksChanged;
       result = buildShopGoodsList(player, catalog, shopId, now);
     });
     if (!player || !result) {

@@ -1145,8 +1145,7 @@ export function namedTowerReadOnly(request: NamedTowerRequest): boolean {
     request.kind === "secondBarrage" ||
     request.kind === "coopEventReward" ||
     request.kind === "fan" ||
-    (request.kind === "exchange" &&
-      (request.op === "refresh" || request.op === "log")) ||
+    (request.kind === "exchange" && request.op === "log") ||
     (request.kind === "musicGame" && request.op !== "complete") ||
     (request.kind === "mixBarrage" && request.message === null)
   );

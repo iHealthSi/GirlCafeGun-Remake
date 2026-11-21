@@ -144,7 +144,9 @@ describe("slice 4 tables and requests", () => {
       nError: 5,
     });
     expect(namedTowerErrorReply(named(354, {}), 0)).toEqual({ tbNewGirlList: [] });
-    expect(namedTowerReadOnly(named(380, {}))).toBe(true);
+    // 380 rolls the day of the listing counter, so it is not read-only; the log is.
+    expect(namedTowerReadOnly(named(380, {}))).toBe(false);
+    expect(namedTowerReadOnly(named(383, {}))).toBe(true);
     expect(namedTowerReadOnly(named(382, {}))).toBe(false);
     expect(namedTowerReadOnly(named(389, {}))).toBe(true);
     expect(namedTowerReadOnly(named(388, { gameId: 1, score: 1 }))).toBe(false);
@@ -245,7 +247,7 @@ describe("event missions", () => {
     } as Parameters<typeof refreshEventMissions>[0];
     const noon = Date.UTC(2026, 10, 20, 6, 0, 0);
     refreshEventMissions(player, missions, noon);
-    bumpMission(player, MISSION_COUNTER.vigour, 120);
+    bumpMission(player, MISSION_COUNTER.vigour(70), 120);
     refreshEventMissions(player, missions, noon);
     const key = String((70 << 16) | 1);
     // Mission 1 (daily, spend 100 vigour) is done: progress 120, not claimed.
@@ -268,8 +270,8 @@ describe("claims, exchange, music game and the chess board", () => {
     await store.update((state) => {
       state.players[account]!.eventMissions = {
         day: missionDay(Date.now()),
-        total: { vigour: 250 },
-        today: { vigour: 250 },
+        total: { "vigour:70": 250, "vigour:85": 250 },
+        today: { "vigour:70": 250, "vigour:85": 250 },
       };
     });
     const one = await repository.handleNamedTowerRequest(
@@ -333,7 +335,7 @@ describe("claims, exchange, music game and the chess board", () => {
     // Mission 1: 20 vigour spent so far. Mission 4 (192 [1,19,3]): one ACT clear of issue 1.
     expect(task(player, 70, 1) >>> 1).toBe(20);
     expect(task(player, 70, 4) >>> 1).toBe(1);
-    expect(player.eventMissions?.total["kills:1"]).toBe(40);
+    expect(player.eventMissions?.total["kills:70:1"]).toBe(40);
   });
 
   it("serves the concert exchange: refresh, listing, award", async () => {
