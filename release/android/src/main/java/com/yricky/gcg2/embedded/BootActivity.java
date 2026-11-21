@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.*;
 import android.os.*;
+import android.util.Log;
 import android.view.*;
 import android.widget.*;
 import com.zirenmidori.gcg.release.*;
@@ -14,6 +15,7 @@ import org.json.*;
 
 /** Local-only bootstrap. Unity never runs before recovery and data provisioning. */
 public final class BootActivity extends Activity {
+    private static final String TAG="GcgBootUpdate";
     private final ExecutorService worker=Executors.newSingleThreadExecutor();
     private TextView status,downloadSummary;private Button retry;
     private ProgressBar downloadProgress,working;
@@ -96,11 +98,20 @@ public final class BootActivity extends Activity {
                 if(!GcgServerService.isSupported())throw new IOException("GCG Offline requires Android 7 or newer and an ARM device");
                 ReleaseBridge.getAccount(this);
                 File pending=new File(ReleaseStore.root(this),"pending.gcgupdate");
-                if(pending.isFile()){
-                    show("Finishing approved app update…");File apk=ReleaseEngine.importUpdate(this,pending,false,this::show);
+                // A server that answers means the game still runs and uses its files: updates wait for a cold start.
+                boolean live=serverAnswers();
+                if(live)Log.i(TAG,"local server is running; updates wait for the next cold start");
+                if(pending.isFile()&&!live){
+                    show("Finishing approved app update…");File apk=null;
+                    try{apk=ReleaseEngine.importUpdate(this,pending,false,this::show);}
+                    catch(IOException failed){setAside(pending,failed);}
                     if(apk!=null){runOnUiThread(()->{startActivity(new Intent(this,UpdateActivity.class).putExtra("pending",true));finish();});return;}
                 }
                 ReleaseEngine.bootstrap(this,new BootProgress());
+                if(!live){
+                    try{Log.i(TAG,"update inbox: "+ReleaseInbox.applyAll(this,this::show,line->Log.i(TAG,line)));}
+                    catch(IOException inbox){Log.w(TAG,"update inbox skipped",inbox);}
+                }
                 runOnUiThread(()->{if(!closed){hideProgress();working.setVisibility(View.VISIBLE);}});showNow("Starting local game server…");
                 if(!bound){Intent intent=new Intent(this,GcgServerService.class);bound=getApplicationContext().bindService(intent,CONNECTION,Context.BIND_AUTO_CREATE);if(!bound)throw new IOException("Cannot start local server");}
                 long deadline=SystemClock.elapsedRealtime()+30000;
@@ -108,6 +119,17 @@ public final class BootActivity extends Activity {
                 throw new IOException("Local server did not become ready. Retry to continue.");
             }catch(Exception e){showNow(e.getMessage()==null?e.getClass().getSimpleName():e.getMessage());runOnUiThread(()->{if(!closed){starting=false;hideProgress();retry.setVisibility(View.VISIBLE);}});}
         });
+    }
+    private static boolean serverAnswers(){
+        try(Socket socket=new Socket()){socket.connect(new InetSocketAddress("127.0.0.1",28080),250);return true;}catch(IOException stopped){return false;}
+    }
+    /** An approved update that cannot apply must not keep the game from starting: keep it aside with its reason. */
+    private void setAside(File pending,IOException why){
+        Log.w(TAG,"approved update could not apply; it is set aside",why);
+        try{
+            File dir=ReleaseIO.dir(new File(ReleaseStore.root(this),"failed"));String name=System.currentTimeMillis()+"-pending.gcgupdate";
+            ReleaseIO.rename(pending,new File(dir,name));ReleaseIO.atomic(new File(dir,name+".txt"),ReleaseIO.utf8(why.getMessage()+"\n"));
+        }catch(IOException moveError){Log.w(TAG,"cannot set the failed update aside",moveError);if(!pending.delete())Log.w(TAG,"cannot remove the failed update");}
     }
     private boolean isReady(){
         try{
