@@ -391,6 +391,66 @@
       "source": "setting.u:assets/_game/settinggen/activities/bosschallenge/bosschallengescore.txt",
       "sha256": "c5bb4bd6e101849236ae0842e1ea3791eaa309972314b8ebbaf94e8140a04047",
       "bytes": 954
+    },
+    "musicactivity/musictowertotal.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/musicactivity/musictowertotal.txt",
+      "sha256": "c6e15b68c6bf5f461bffe8f5f1f011278b7e9caa47f0393bc32c32f78417e7b1",
+      "bytes": 711
+    },
+    "musicactivity/musictower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/musicactivity/musictower.txt",
+      "sha256": "b170806c0482ebbeae134a2bb64a034f5f36225c5edb147e6be99bc7dfd54d38",
+      "bytes": 618
+    },
+    "musicactivity/musiclevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/musicactivity/musiclevel.txt",
+      "sha256": "edea9b6a1fffae48705a3a892770a13858659285be26f3273afc303432ff92dd",
+      "bytes": 12449
+    },
+    "concertexchange/timelist.txt": {
+      "source": "setting.u:assets/_game/settinggen/concertexchange/timelist.txt",
+      "sha256": "15c31abe94659335337e5b160ce49743ca5588982051953750386f7cdb0a8432",
+      "bytes": 353
+    },
+    "concertexchange/rewardlist.txt": {
+      "source": "setting.u:assets/_game/settinggen/concertexchange/rewardlist.txt",
+      "sha256": "2c8e010f6b684fe3ef4a5beffda2ce9c154b4f1317d82a3ed6bc7d889e6b9313",
+      "bytes": 921
+    },
+    "eventmission/musicmission.txt": {
+      "source": "setting.u:assets/_game/settinggen/mission/musicmission.txt",
+      "sha256": "557211852bb5567124162084043dcc2c80f8f71297e68565b06205957e70025d",
+      "bytes": 15893
+    },
+    "eventmission/monthmission.txt": {
+      "source": "setting.u:assets/_game/settinggen/mission/monthmission.txt",
+      "sha256": "9fcd57e5b39f2c4242dae487e23badd8e084910ffb874907065225e1041a0b69",
+      "bytes": 5156
+    },
+    "warchesstower/warchesstower.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/warchesstower/warchesstower.txt",
+      "sha256": "bbb9abcdb6362c76e49a640b8c99eaddfd2adb99a283e39bf5c54c55094816e1",
+      "bytes": 819
+    },
+    "warchesstower/warchesstowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/warchesstower/warchesstowerlevel.txt",
+      "sha256": "75381d41a537280580439d02775c3046b69adcecf18b0aef60d6dbc4e3c08eb2",
+      "bytes": 13946
+    },
+    "warchesstower/chessmap.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/warchesstower/chessmap.txt",
+      "sha256": "0b69dd001be918ee5505b24c1c3a619373214215068d85c813207f0af5922992",
+      "bytes": 2028
+    },
+    "warchesstower/chessboss.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/warchesstower/chessboss.txt",
+      "sha256": "231d648d26ce66b99fa465ac3169a2710482a6ab0bc98b1da02415aabbd0e4c4",
+      "bytes": 4145
+    },
+    "warchesstower/spitem.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/warchesstower/spitem.txt",
+      "sha256": "a8a59502d7556f9eca3a118e388a4c37eaeb309fd02cdc908f057fdf7a4901bd",
+      "bytes": 271
     }
   }
 }

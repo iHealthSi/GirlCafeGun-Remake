@@ -1,0 +1,5 @@
+INT	STR	STR	STR	STR	STR	STR	INT	INT	STR	INT	INT	STR
+id	开始时间	结束时间	清除数据时间	活动界面显示图标	活动界面选中图标	多个同时开时使用的bg	商店ID	角色卡加成buffID	使用的代币	帮助图ID	常规活动ID	换皮界面
+Id	BeginTime	EndTime	ClearTime	Icon	IconPress	NormalBg	ShopId	CardBuffId	MoneyType	HelpId	NormalActivityId	UIPrefab
+1	2022-02-23-0800	2022-03-16-0400	2022-03-19-0400	Poster/fightmode_missionWarChess_normal_Mul.png	Poster/fightmode_missionWarChess_press_Mul.png	Poster/event_tower_01_Mul.png	30046	1400	89|90	3000|1103	276	
+2	2022-04-27-0800	2022-05-18-0400	2022-05-21-0400	Poster/fightmode_missionWarChess2_normal_Mul.png	Poster/fightmode_missionWarChess2_press_Mul.png	Poster/event_tower_01_Mul.png	30047	1500	93|94	3010|1104	285	UI_XmasEvent2_2

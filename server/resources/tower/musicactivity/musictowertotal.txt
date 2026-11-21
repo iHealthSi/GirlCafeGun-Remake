@@ -1,0 +1,5 @@
+INT		STR	STR	STR	INT	STR	INT	INT	STR	STR	STR
+	备注	开始时间	结束时间	清除数据时间	商店ID	使用的代币	加成buffID	帮助图ID	活动界面显示图标	活动界面选中图标	多个同时开时使用的bg
+Id		BeginTime	EndTime	ClearTime	ShopId	MoneyType	CardBuffId	HelpId	Icon	IconPress	NormalBg
+1	上半期	2020-07-24-0800	2020-08-25-0400	2020-08-29-0400	30013	41	1001	1100	Poster/fightmode_concert01_normal_Mul.png	Poster/fightmode_concert01_press_Mul.png	Poster/event_tower_01_Mul.png
+2	下半期	2020-08-09-0400	2020-08-25-0400	2020-08-29-0400	30014	41|42	1002	1101	Poster/fightmode_concert02_normal_Mul.png	Poster/fightmode_concert02_press_Mul.png	Poster/event_tower_01_Mul.png

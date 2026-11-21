@@ -1,0 +1,77 @@
+INT	INT	INT	INT	INT	STR	INTARR	INT	INTARR	STRARR	STR	STR	STR	STR	STR	STR	STR	NUL
+任务ID(groupid 70,taskid最高65535,不能重复用)	前置任务ID，0表示没有	任务类型(1,每日任务, 2,紧急任务, 3,一次性任务)	紧急任务持续时间(秒)	玩家等级	关卡解锁	执行次数	成就类型(成就触发方式)	辅助变量	奖励道具ID	任务title	语言包ID	任务描述	任务未完成，跳转到界面或场景	开始时间[202006101000]	结束时间[202006101000]	任务图标	备注
+missionId	preMissionId	missionType	missionTime	level	ChapterLimit	missionMax	achieveType	assistparam	awardsList	missionTitle	missionDescID	missionDesc	target	startTime	endTime	missionIcon	Desc
+1	0	1		0		[100]	24	[1]	[15-60-1-1-100]		eventmission.musicmissionId.54	消耗100点体力	dostring;MusicActivityLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+2	0	1		0		[200]	24	[1]	[15-60-1-1-250]		eventmission.musicmissionId.55	消耗200点体力	dostring;MusicActivityLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+3	0	1		0		[1]	179	[1]	[10-1-1-2-1]		eventmission.musicmissionId.57	进行1次应援	dostring;GirlSupport:OpenUIFansTowerMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+4	0	1		0		[1,19,3]	192	[3]	[8-6-1-15-1,15-1-1-1-1000]		eventmission.musicmissionId.60	完成上期act关卡3次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008090400]	Item/icon_mission_05	
+5	0	1		0		[1,19,6]	192	[3]	[8-6-1-15-1,15-68-1-1-1]		eventmission.musicmissionId.61	完成上期act关卡6次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008090400]	Item/icon_mission_05	
+6	0	1		0		[300,41]	176	[1]	[8-6-1-15-1,15-1-1-1-1000]		eventmission.musicmissionId.62	获得300枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008090400]	Item/icon_mission_05	
+7	0	1		0		[600,41]	176	[1]	[8-6-1-15-1,15-68-1-1-1]		eventmission.musicmissionId.63	获得600枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008090400]	Item/icon_mission_05	
+8	0	1		0		[1]	178	[1]	[15-68-1-1-1,15-1-1-1-1000]		eventmission.musicmissionId.56	游玩1次UI音游	CloseAndOpen_UI;UI_MusicSelect	[202007240800]	[202008090400]	Item/icon_mission_05	
+9	0	1		0		[1,1]	177	[1]	[15-66-1-1-100]		eventmission.musicmissionId.59	游玩1次狂野打击乐	dostring;MusicActivityLogic:GetInterestTower(71)	[202007240800]	[202008090400]	Item/icon_mission_05	
+10	0	1		0		[1]	180	[1]	[15-66-1-1-100]		eventmission.musicmissionId.58	进行1次线索交换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008090400]	Item/icon_mission_05	
+11	0	1		0		[2,19,3]	192	[3]	[8-6-1-15-1,15-1-1-1-1000]		eventmission.musicmissionId.65	完成下期act关卡3次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+12	0	1		0		[2,19,6]	192	[3]	[8-6-1-15-1,15-69-1-1-1]		eventmission.musicmissionId.66	完成下期act关卡6次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+13	0	1		0		[300,42]	176	[1]	[8-6-1-15-1,15-1-1-1-1000]		eventmission.musicmissionId.67	获得300枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+14	0	1		0		[600,42]	176	[1]	[8-6-1-15-1,15-69-1-1-1]		eventmission.musicmissionId.68	获得600枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+15	0	1		0		[1]	178	[1]	[15-69-1-1-1,15-1-1-1-1000]		eventmission.musicmissionId.56	游玩1次UI音游	CloseAndOpen_UI;UI_MusicSelect	[202008090400]	[202008250400]	Item/icon_mission_05	
+16	0	1		0		[1,2]	177	[1]	[15-67-1-1-100]		eventmission.musicmissionId.64	游玩1次弹幕迪斯科	dostring;MusicActivityLogic:GetInterestTower(72)	[202008090400]	[202008250400]	Item/icon_mission_05	
+17	0	1		0		[1]	180	[1]	[8-6-1-15-1,15-67-1-1-40]		eventmission.musicmissionId.58	进行1次线索交换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202008090400]	[202008250400]	Item/icon_mission_05	
+71	0	1		0		[2]	180	[1]	[8-6-1-15-1,15-67-1-1-80]		eventmission.musicmissionId.69	进行2次线索交换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202008090400]	[202008250400]	Item/icon_mission_05	
+																	
+18	0	3		0		[1,1,1,20,3]	45	[1]	[7-2-3-1-90,7-2-3-2-30,7-2-3-3-15]		eventmission.musicmissionId.20	获得 群青之翼·洛可可	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+19	0	3		0		[1,19,3]	181	[3]	[7-2-3-1-30,7-2-3-2-10,7-2-3-3-5]		eventmission.musicmissionId.21	完成上期sp关卡3次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+20	0	3		0		[1,19,10]	192	[3]	[15-2-1-1-20,7-1-3-3-5]		eventmission.musicmissionId.22	完成上期act关卡10次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+21	0	3		0		[1,19,30]	192	[3]	[15-2-1-1-20,7-3-1-3-5,7-2-3-1-30]		eventmission.musicmissionId.23	完成上期act关卡30次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+22	0	3		0		[1,19,50]	192	[3]	[15-2-1-1-20,7-1-3-4-1,7-2-3-2-10]		eventmission.musicmissionId.24	完成上期act关卡50次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+23	0	3		0		[1,19,80]	192	[3]	[15-2-1-1-20,7-3-1-4-1,7-2-3-3-5]		eventmission.musicmissionId.25	完成上期act关卡80次	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+24	0	3		0		[500,1]	183	[1]	[15-2-1-1-20,7-1-3-3-5]		eventmission.musicmissionId.26	在act关卡中累计消灭500名敌人	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+25	0	3		0		[1500,1]	183	[1]	[15-2-1-1-20,7-3-1-3-5,7-2-3-3-5]		eventmission.musicmissionId.27	在act关卡中累计消灭1500名敌人	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+26	0	3		0		[3000,1]	183	[1]	[15-2-1-1-20,7-1-3-4-1,7-2-3-1-30]		eventmission.musicmissionId.28	在act关卡中累计消灭3000名敌人	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+27	0	3		0		[5000,1]	183	[1]	[15-2-1-1-20,7-3-1-4-1,7-2-3-2-10]		eventmission.musicmissionId.29	在act关卡中累计消灭5000名敌人	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+28	0	3		0		[3000,41]	176	[1]	[15-2-1-1-20,7-1-3-3-5]		eventmission.musicmissionId.30	累计获得3000枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+29	0	3		0		[6000,41]	176	[1]	[15-2-1-1-20,7-3-1-3-5,7-2-3-2-10]		eventmission.musicmissionId.31	累计获得6000枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+30	0	3		0		[9000,41]	176	[1]	[15-2-1-1-20,7-1-3-4-1,7-2-3-3-5]		eventmission.musicmissionId.32	累计获得9000枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+31	0	3		0		[13000,41]	176	[1]	[15-2-1-1-20,7-3-1-4-1,7-2-3-1-30]		eventmission.musicmissionId.33	累计获得13000枚群青之翼代币	dostring;MusicActivityLogic:GetTower(1)	[202007240800]	[202008250400]	Item/icon_mission_05	
+32	0	3		0		[1,50]	186	[2]	[15-2-1-1-20,15-1-1-1-20000]		eventmission.musicmissionId.34	狂野打击乐最高分达到50	dostring;MusicActivityLogic:GetInterestTower(71)	[202007240800]	[202008250400]	Item/icon_mission_05	
+33	0	3		0		[1,100]	186	[2]	[15-2-1-1-20,15-1-1-1-40000]		eventmission.musicmissionId.35	狂野打击乐最高分达到100	dostring;MusicActivityLogic:GetInterestTower(71)	[202007240800]	[202008250400]	Item/icon_mission_05	
+34	0	3		0		[1,150]	186	[2]	[15-2-1-1-20,15-1-1-1-60000]		eventmission.musicmissionId.36	狂野打击乐最高分达到150	dostring;MusicActivityLogic:GetInterestTower(71)	[202007240800]	[202008250400]	Item/icon_mission_05	
+																	
+35	0	3		0		[1,1,15,20,3]	45	[1]	[7-2-6-1-90,7-2-6-2-30,7-2-6-3-15]		eventmission.musicmissionId.37	获得 少女星辰·阿尼娅	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+36	0	3		0		[2,19,3]	181	[3]	[7-2-6-1-30,7-2-6-2-10,7-2-6-3-5]		eventmission.musicmissionId.38	完成下期sp关卡3次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+37	0	3		0		[2,19,10]	192	[3]	[15-2-1-1-20,7-1-6-3-5]		eventmission.musicmissionId.39	完成下期act关卡10次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+38	0	3		0		[2,19,30]	192	[3]	[15-2-1-1-20,7-3-1-3-5,7-2-6-1-30]		eventmission.musicmissionId.40	完成下期act关卡30次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+39	0	3		0		[2,19,50]	192	[3]	[15-2-1-1-20,7-1-6-4-1,7-2-6-2-10]		eventmission.musicmissionId.41	完成下期act关卡50次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+40	0	3		0		[2,19,80]	192	[3]	[15-2-1-1-20,7-3-1-4-1,7-2-6-3-5]		eventmission.musicmissionId.42	完成下期act关卡80次	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+41	0	3		0		[500,2]	183	[1]	[15-2-1-1-20,7-1-6-3-5]		eventmission.musicmissionId.43	在act关卡中累计消灭500名敌人	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+42	0	3		0		[1500,2]	183	[1]	[15-2-1-1-20,7-3-1-3-5,7-2-6-3-5]		eventmission.musicmissionId.44	在act关卡中累计消灭1500名敌人	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+43	0	3		0		[3000,2]	183	[1]	[15-2-1-1-20,7-1-6-4-1,7-2-6-1-30]		eventmission.musicmissionId.45	在act关卡中累计消灭3000名敌人	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+44	0	3		0		[5000,2]	183	[1]	[15-2-1-1-20,7-3-1-4-1,7-2-6-2-10]		eventmission.musicmissionId.46	在act关卡中累计消灭5000名敌人	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+45	0	3		0		[3000,42]	176	[1]	[15-2-1-1-20,7-1-6-3-5]		eventmission.musicmissionId.47	累计获得3000枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+46	0	3		0		[6000,42]	176	[1]	[15-2-1-1-20,7-3-1-3-5,7-2-6-2-10]		eventmission.musicmissionId.48	累计获得6000枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+47	0	3		0		[9000,42]	176	[1]	[15-2-1-1-20,7-1-6-4-1,7-2-6-3-5]		eventmission.musicmissionId.49	累计获得9000枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+48	0	3		0		[13000,42]	176	[1]	[15-2-1-1-20,7-3-1-4-1,7-2-6-1-30]		eventmission.musicmissionId.50	累计获得13000枚少女星辰代币	dostring;MusicActivityLogic:GetTower(2)	[202008090400]	[202008250400]	Item/icon_mission_05	
+49	0	3		0		[2,50]	186	[2]	[15-2-1-1-20,15-1-1-1-20000]		eventmission.musicmissionId.51	趣味关卡最高分达到50	dostring;MusicActivityLogic:GetInterestTower(72)	[202008090400]	[202008250400]	Item/icon_mission_05	
+50	0	3		0		[2,100]	186	[2]	[15-2-1-1-20,15-1-1-1-40000]		eventmission.musicmissionId.52	趣味关卡最高分达到100	dostring;MusicActivityLogic:GetInterestTower(72)	[202008090400]	[202008250400]	Item/icon_mission_05	
+51	0	3		0		[2,150]	186	[2]	[15-2-1-1-20,15-1-1-1-60000]		eventmission.musicmissionId.53	趣味关卡最高分达到150	dostring;MusicActivityLogic:GetInterestTower(72)	[202008090400]	[202008250400]	Item/icon_mission_05	
+																	
+52	0	3		0		[1,1,1]	184	[3]	[15-2-1-1-20,7-2-3-1-30]		eventmission.musicmissionId.1	通关挑战关卡1 	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+53	0	3		0		[2,1,1]	184	[3]	[15-2-1-1-20,7-2-3-2-10]		eventmission.musicmissionId.2	通关挑战关卡2 	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+54	0	3		0		[3,1,1]	184	[3]	[15-2-1-1-20,7-2-3-3-5]		eventmission.musicmissionId.3	通关挑战关卡3	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+55	0	3		0		[4,1,1]	184	[3]	[15-2-1-1-20,7-2-6-1-30]		eventmission.musicmissionId.4	通关挑战关卡4	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+56	0	3		0		[5,1,1]	184	[3]	[15-2-1-1-20,7-2-6-2-10]		eventmission.musicmissionId.5	通关挑战关卡5	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+57	0	3		0		[6,1,1]	184	[3]	[15-2-1-1-20,7-2-6-3-5]		eventmission.musicmissionId.6	通关挑战关卡6	dostring;MusicChallengeLogic:GetTower()	[202007240800]	[202008250400]	Item/icon_mission_05	
+58	0	3		0		[1000]	187	[1]	[15-2-1-1-20,7-2-3-1-30,7-2-6-1-30]		eventmission.musicmissionId.7	累计消耗1000个应援棒	dostring;GirlSupport:OpenUIFansTowerMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+59	0	3		0		[3000]	187	[1]	[15-2-1-1-20,7-2-3-2-10,7-2-6-2-10]		eventmission.musicmissionId.8	累计消耗3000个应援棒	dostring;GirlSupport:OpenUIFansTowerMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+60	0	3		0		[6000]	187	[1]	[15-2-1-1-20,7-2-3-3-5,7-2-6-3-5]		eventmission.musicmissionId.9	累计消耗6000个应援棒	dostring;GirlSupport:OpenUIFansTowerMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+61	0	3		0		[30]	188	[1]	[15-2-1-1-20,7-1-3-3-5,7-1-6-3-5]		eventmission.musicmissionId.10	累计消耗30个集换道具	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+62	0	3		0		[60]	188	[1]	[15-2-1-1-20,15-1-1-1-100000,11-2-210-1-1]		eventmission.musicmissionId.11	累计消耗60个集换道具	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+63	0	3		0		[90]	188	[1]	[15-2-1-1-20,7-1-3-4-1,7-1-6-4-1]		eventmission.musicmissionId.12	累计消耗90个集换道具	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+64	0	3		0		[6]	189	[1]	[15-2-1-1-20,7-3-1-3-5]		eventmission.musicmissionId.13	完成6次集换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+65	0	3		0		[12]	189	[1]	[15-2-1-1-20,15-1-1-1-50000,11-2-209-1-1]		eventmission.musicmissionId.14	完成12次集换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+66	0	3		0		[18]	189	[1]	[15-2-1-1-20,7-3-1-4-1,11-2-208-1-1]		eventmission.musicmissionId.15	完成18次集换	dostring;ConcertExchange:OpenUIConcertExchangeMain()	[202007240800]	[202008250400]	Item/icon_mission_05	
+67	0	3		0		[3,5]	191	[2]	[15-2-1-1-20,15-1-1-1-50000,11-1-43-3-1]		eventmission.musicmissionId.16	在音游中获得5次A评价或以上	CloseAndOpen_UI;UI_MusicSelect	[202007240800]	[202008250400]	Item/icon_mission_05	
+68	0	3		0		[3,10]	191	[2]	[15-2-1-1-20,7-3-1-3-5,11-1-44-3-1]		eventmission.musicmissionId.17	在音游中获得10次A评价或以上	CloseAndOpen_UI;UI_MusicSelect	[202007240800]	[202008250400]	Item/icon_mission_05	
+69	0	3		0		[3,15]	191	[2]	[15-2-1-1-20,15-1-1-1-50000,11-1-45-3-1]		eventmission.musicmissionId.18	在音游中获得15次A评价或以上	CloseAndOpen_UI;UI_MusicSelect	[202007240800]	[202008250400]	Item/icon_mission_05	
+70	0	3		0		[4,3]	191	[2]	[15-2-1-1-40,7-3-1-4-1,15-1-1-1-100000]		eventmission.musicmissionId.19	在音游中获得3次S评价	CloseAndOpen_UI;UI_MusicSelect	[202007240800]	[202008250400]	Item/icon_mission_05	

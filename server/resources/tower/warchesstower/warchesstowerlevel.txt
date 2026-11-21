@@ -1,0 +1,116 @@
+INT	INT	INT	INT	STR	STR	STR	STR	INT	INT	STR	INT	INT	INT	INT	BOOL	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INT	INTARR	INTARR
+小塔ID（可以理解为某一期）	小关ID	关卡类型0普通 1挑战关 2剧情关直接播剧情 3星级目标奖励	扩展参数	前缀名	名称	关卡信息描述	备注	解锁关卡（完成哪一关后解锁本关 0表示不需要前置关卡）	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	解锁哪一关才显示	体力消耗	地图ID	推荐战力	关闭等级压制	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	能量掉落概率≥1 时有起效	怪物属性	推荐属性
+Id	LevelId	LevelType	ExtendParam	PreName	Name	LevelInfoDesc		PreLevelId	StoryType	StoryName	UnlockShow	PreCost	MapId	Zhanli	CloseLevelSuppress	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	DropEnRd	MonsterAttr	RecommendAttr
+1	1	0		WarChess1.Title.Act1	WarChess1.Name.Act1		ACT1	[0]			0	10	30001	8000		13	904	300	1	[15-1-1-1-10000]	[15-129-1-1-24-10000,15-130-1-1-10-10000]				[15-1-1-1-10000]		10				[6]	
+1	2	0		WarChess1.Title.Act2	WarChess1.Name.Act2		ACT2	[1]			0	15	30002	13000		44	904	300	1	[1-6-12-3-1]	[15-129-1-1-42-10000,15-130-1-1-15-10000]				[1-6-12-3-1]		15				[6]	
+1	3	0		WarChess1.Title.Act3	WarChess1.Name.Act3		ACT3	[2]			0	20	30003	18000		65	904	300	1	[7-8-1-4-1]	[15-129-1-1-60-10000,15-130-1-1-20-10000]				[7-8-1-4-1]		20				[6]	
+																																
+1	4	2		WarChess1.Title.Ep1	WarChess1.Name.Ep1		EP1	[0]	0	activityhypercafewars/hcw_0101	0									[15-2-1-1-20]												
+1	5	2		WarChess1.Title.Ep2	WarChess1.Name.Ep2		EP2	[3]	0	activityhypercafewars/hcw_0102	0									[15-2-1-1-20]												
+1	6	2		WarChess1.Title.Ep3	WarChess1.Name.Ep3		EP3	[25]	0	activityhypercafewars/hcw_0103	0									[15-2-1-1-20]												
+1	7	2		WarChess1.Title.Ep4	WarChess1.Name.Ep4		EP4	[28]	0	activityhypercafewars/hcw_0104	0									[15-2-1-1-20]												
+1	8	2		WarChess1.Title.Ep5	WarChess1.Name.Ep5		EP5	[27]	0	activityhypercafewars/hcw_0105	0									[15-2-1-1-20]												
+																																
+1	9	2	1	WarChess1.Le1			列拉金1	[29]	0	activityhypercafewars/hcw_enteract_le0101	0																					
+1	10	2	1	WarChess1.Le2			列拉金2	[34]	0	activityhypercafewars/hcw_enteract_le0102	0																					
+1	11	2	1	WarChess1.Le3			列拉金3	[36]	0	activityhypercafewars/hcw_enteract_le0103	0																					
+1	12	2	1	WarChess1.Le4			列拉金4	[36]	0	activityhypercafewars/hcw_enteract_le0104	0																					
+1	13	2	2	WarChess1.Al1			安洛瑟1	[27]	0	activityhypercafewars/hcw_enteract_al0101	0																					
+1	14	2	2	WarChess1.Al2			安洛瑟2	[30]	0	activityhypercafewars/hcw_enteract_al0102	0																					
+1	15	2	2	WarChess1.Al3			安洛瑟3	[30]	0	activityhypercafewars/hcw_enteract_al0103	0																					
+1	16	2	2	WarChess1.Al4			安洛瑟4	[35]	0	activityhypercafewars/hcw_enteract_al0104	0																					
+1	17	2	3	WarChess1.Fu1			弗内乌斯1	[26]	0	activityhypercafewars/hcw_enteract_fu0101	0																					
+1	18	2	3	WarChess1.Fu2			弗内乌斯2	[31]	0	activityhypercafewars/hcw_enteract_fu0102	0																					
+1	19	2	3	WarChess1.Fu3			弗内乌斯3	[33]	0	activityhypercafewars/hcw_enteract_fu0103	0																					
+1	20	2	3	WarChess1.Fu4			弗内乌斯4	[37]	0	activityhypercafewars/hcw_enteract_fu0104	0																					
+1	21	2	4	WarChess1.In1			荷稻1	[28]	0	activityhypercafewars/hcw_enteract_in0101	0																					
+1	22	2	4	WarChess1.In2			荷稻2	[32]	0	activityhypercafewars/hcw_enteract_in0102	0																					
+1	23	2	4	WarChess1.In3			荷稻3	[38]	0	activityhypercafewars/hcw_enteract_in0103	0																					
+1	24	2	4	WarChess1.In4			荷稻4	[38]	0	activityhypercafewars/hcw_enteract_in0104	0																					
+																																
+1	25	1		WarChess1.Easy.1	WarChess1.Le.Boss		列拉金_简单1					0	30011	11000		32	904	300													[0]	[1]
+1	26	1		WarChess1.Easy.1	WarChess1.Fu.Boss		弗内乌斯_简单1					0	30013	11000		32	904	300													[2]	[0]
+1	27	1		WarChess1.Easy.2	WarChess1.Al.Boss		安洛瑟_简单2					0	30012	12000		38	904	300													[3]	[4]
+1	28	1		WarChess1.Easy.2	WarChess1.In.Boss		荷稻_简单2					0	30014	12000		38	904	300													[0]	[1]
+1	29	1		WarChess1.Easy.3	WarChess1.Le.Boss		列拉金_简单3					0	30011	13000		44	904	300													[0]	[1]
+1	30	1		WarChess1.Easy.3	WarChess1.Al.Boss		安洛瑟_简单3					0	30012	13000		44	904	300													[3]	[4]
+1	31	1		WarChess1.Easy.3	WarChess1.Fu.Boss		弗内乌斯_简单3					0	30013	13000		44	904	300													[2]	[0]
+1	32	1		WarChess1.Easy.4	WarChess1.In.Boss		荷稻_简单4					0	30014	14000		49	904	300													[0]	[1]
+1	33	1		WarChess1.Easy.4	WarChess1.Fu.Boss		弗内乌斯_简单4					0	30013	14000		49	904	300													[2]	[0]
+1	34	1		WarChess1.Easy.4	WarChess1.Le.Boss		列拉金_简单4					0	30011	14000		49	904	300													[0]	[1]
+1	35	1		WarChess1.Easy.5	WarChess1.Al.Boss		安洛瑟_简单5					0	30012	15000		52	904	300													[3]	[4]
+1	36	1		WarChess1.Easy.5	WarChess1.Le.Boss		列拉金_简单5					0	30011	15000		52	904	300													[0]	[1]
+1	37	1		WarChess1.Easy.5	WarChess1.Fu.Boss		弗内乌斯_简单5					0	30013	15000		52	904	300													[2]	[0]
+1	38	1		WarChess1.Easy.5	WarChess1.In.Boss		荷稻_简单5					0	30014	15000		52	904	300													[0]	[1]
+1	39	1		WarChess1.Hard.1	WarChess1.Al.Boss		安洛瑟_困难1					0	30012	21000		77	904	300													[3]	[4]
+1	40	1		WarChess1.Hard.1	WarChess1.Le.Boss		列拉金_困难1					0	30011	21000		77	904	300													[0]	[1]
+1	41	1		WarChess1.Hard.1	WarChess1.In.Boss		荷稻_困难1					0	30014	21000		77	904	300													[0]	[1]
+1	42	1		WarChess1.Hard.2	WarChess1.Fu.Boss		弗内乌斯_困难2					0	30013	22000		82	904	300													[2]	[0]
+1	43	1		WarChess1.Hard.2	WarChess1.In.Boss		荷稻_困难2					0	30014	22000		82	904	300													[0]	[1]
+1	44	1		WarChess1.Hard.2	WarChess1.Al.Boss		安洛瑟_困难2					0	30012	22000		82	904	300													[3]	[4]
+1	45	1		WarChess1.Hard.3	WarChess1.Fu.Boss		弗内乌斯_困难3					0	30013	23000		86	904	300													[2]	[0]
+1	46	1		WarChess1.Hard.3	WarChess1.Le.Boss		列拉金_困难3					0	30011	23000		86	904	300													[0]	[1]
+1	47	1		WarChess1.Hard.3	WarChess1.Al.Boss		安洛瑟_困难3					0	30012	23000		86	904	300													[3]	[4]
+1	48	1		WarChess1.Hard.3	WarChess1.In.Boss		荷稻_困难3					0	30014	23000		86	904	300													[0]	[1]
+1	49	1		WarChess1.Hard.4	WarChess1.Al.Boss		安洛瑟_困难4					0	30012	24000		89	904	300													[3]	[4]
+1	50	1		WarChess1.Hard.4	WarChess1.Le.Boss		列拉金_困难4					0	30011	24000		89	904	300													[0]	[1]
+1	51	1		WarChess1.Hard.4	WarChess1.Fu.Boss		弗内乌斯_困难4					0	30013	24000		89	904	300													[2]	[0]
+1	52	1		WarChess1.Hard.4	WarChess1.In.Boss		荷稻_困难4					0	30014	24000		89	904	300													[0]	[1]
+1	53	1		WarChess1.Hard.5	WarChess1.Le.Boss		列拉金_困难5					0	30011	25000		92	904	300													[0]	[1]
+1	54	1		WarChess1.Hard.5	WarChess1.In.Boss		荷稻_困难5					0	30014	25000		92	904	300													[0]	[1]
+1	55	1		WarChess1.Hard.5	WarChess1.Fu.Boss		弗内乌斯_困难5					0	30013	25000		92	904	300													[2]	[0]
+1	56	1		WarChess1.Hard.5	WarChess1.Al.Boss		安洛瑟_困难5					0	30012	25000		92	904	300													[3]	[4]
+																																
+2	1	0		WarChess2.Title.Act1	WarChess2.Name.Act1		ACT4	[0]			0	10	30001	8000		13	904	300	1	[15-1-1-1-10000]	[15-131-1-1-24-10000,15-132-1-1-10-10000]				[15-1-1-1-10000]		10				[6]	
+2	2	0		WarChess2.Title.Act2	WarChess2.Name.Act2		ACT5	[1]			0	15	30002	13000		44	904	300	1	[1-5-12-3-1]	[15-131-1-1-42-10000,15-132-1-1-15-10000]				[1-5-12-3-1]		15				[6]	
+2	3	0		WarChess2.Title.Act3	WarChess2.Name.Act3		ACT6	[2]			0	20	30003	18000		65	904	300	1	[7-8-1-4-1]	[15-131-1-1-60-10000,15-132-1-1-20-10000]				[7-8-1-4-1]		20				[6]	
+																																
+2	4	2		WarChess2.Title.Ep1	WarChess2.Name.Ep1		EP1	[0]	0	activityhypercafewars/hcw_0201	0									[15-2-1-1-20]												
+2	5	2		WarChess2.Title.Ep2	WarChess2.Name.Ep2		EP2	[26]	0	activityhypercafewars/hcw_0202	0									[15-2-1-1-20]												
+2	6	2		WarChess2.Title.Ep3	WarChess2.Name.Ep3		EP3	[25]	0	activityhypercafewars/hcw_0203	0									[15-2-1-1-20]												
+2	7	2		WarChess2.Title.Ep4	WarChess2.Name.Ep4		EP4	[28]	0	activityhypercafewars/hcw_0204	0									[15-2-1-1-20]												
+2	8	2		WarChess2.Title.Ep5	WarChess2.Name.Ep5		EP5	[27]	0	activityhypercafewars/hcw_0205	0									[15-2-1-1-20]												
+2	9	2		WarChess2.Title.Ep6	WarChess2.Name.Ep6		EP6	[8]	0	activityhypercafewars/hcw_0206	0									[15-2-1-1-20]												
+																																
+2	10	2	1	WarChess2.Le1			列拉金1	[25]	0	activityhypercafewars/hcw_enteract_le0201	0																					
+2	11	2	1	WarChess2.Le2			列拉金2	[29]	0	activityhypercafewars/hcw_enteract_le0202	0																					
+2	14	2	2	WarChess2.Al1			安洛瑟1	[27]	0	activityhypercafewars/hcw_enteract_al0201	0																					
+2	15	2	2	WarChess2.Al2			安洛瑟2	[30]	0	activityhypercafewars/hcw_enteract_al0202	0																					
+2	16	2	2	WarChess2.Al3			安洛瑟3	[30]	0	activityhypercafewars/hcw_enteract_al0203	0																					
+2	17	2	2	WarChess2.Al4			安洛瑟4	[35]	0	activityhypercafewars/hcw_enteract_al0204	0																					
+2	18	2	3	WarChess2.Fu1			弗内乌斯1	[26]	0	activityhypercafewars/hcw_enteract_fu0201	0																					
+2	22	2	4	WarChess2.In1			荷稻1	[28]	0	activityhypercafewars/hcw_enteract_in0201	0																					
+2	23	2	4	WarChess2.In2			荷稻2	[32]	0	activityhypercafewars/hcw_enteract_in0202	0																					
+																																
+2	25	1		WarChess1.Easy.1	WarChess2.Le.Boss		列拉金_简单1					0	30011	11000		32	904	300													[0]	[1]
+2	26	1		WarChess1.Easy.1	WarChess2.Fu.Boss		弗内乌斯_简单1					0	30013	11000		32	904	300													[2]	[0]
+2	27	1		WarChess1.Easy.2	WarChess2.Al.Boss		安洛瑟_简单2					0	30012	12000		38	904	300													[3]	[4]
+2	28	1		WarChess1.Easy.2	WarChess2.In.Boss		荷稻_简单2					0	30014	12000		38	904	300													[0]	[1]
+2	29	1		WarChess1.Easy.3	WarChess2.Le.Boss		列拉金_简单3					0	30011	13000		44	904	300													[0]	[1]
+2	30	1		WarChess1.Easy.3	WarChess2.Al.Boss		安洛瑟_简单3					0	30012	13000		44	904	300													[3]	[4]
+2	31	1		WarChess1.Easy.3	WarChess2.Fu.Boss		弗内乌斯_简单3					0	30013	13000		44	904	300													[2]	[0]
+2	32	1		WarChess1.Easy.4	WarChess2.In.Boss		荷稻_简单4					0	30014	14000		49	904	300													[0]	[1]
+2	33	1		WarChess1.Easy.4	WarChess2.Fu.Boss		弗内乌斯_简单4					0	30013	14000		49	904	300													[2]	[0]
+2	34	1		WarChess1.Easy.4	WarChess2.Le.Boss		列拉金_简单4					0	30011	14000		49	904	300													[0]	[1]
+2	35	1		WarChess1.Easy.5	WarChess2.Al.Boss		安洛瑟_简单5					0	30012	15000		52	904	300													[3]	[4]
+2	36	1		WarChess1.Easy.5	WarChess2.Le.Boss		列拉金_简单5					0	30011	15000		52	904	300													[0]	[1]
+2	37	1		WarChess1.Easy.5	WarChess2.Fu.Boss		弗内乌斯_简单5					0	30013	15000		52	904	300													[2]	[0]
+2	38	1		WarChess1.Easy.5	WarChess2.In.Boss		荷稻_简单5					0	30014	15000		52	904	300													[0]	[1]
+2	39	1		WarChess1.Hard.1	WarChess2.Al.Boss		安洛瑟_困难1					0	30012	21000		77	904	300													[3]	[4]
+2	40	1		WarChess1.Hard.1	WarChess2.Le.Boss		列拉金_困难1					0	30011	21000		77	904	300													[0]	[1]
+2	41	1		WarChess1.Hard.1	WarChess2.In.Boss		荷稻_困难1					0	30014	21000		77	904	300													[0]	[1]
+2	42	1		WarChess1.Hard.2	WarChess2.Fu.Boss		弗内乌斯_困难2					0	30013	22000		82	904	300													[2]	[0]
+2	43	1		WarChess1.Hard.2	WarChess2.In.Boss		荷稻_困难2					0	30014	22000		82	904	300													[0]	[1]
+2	44	1		WarChess1.Hard.2	WarChess2.Al.Boss		安洛瑟_困难2					0	30012	22000		82	904	300													[3]	[4]
+2	45	1		WarChess1.Hard.3	WarChess2.Fu.Boss		弗内乌斯_困难3					0	30013	23000		86	904	300													[2]	[0]
+2	46	1		WarChess1.Hard.3	WarChess2.Le.Boss		列拉金_困难3					0	30011	23000		86	904	300													[0]	[1]
+2	47	1		WarChess1.Hard.3	WarChess2.Al.Boss		安洛瑟_困难3					0	30012	23000		86	904	300													[3]	[4]
+2	48	1		WarChess1.Hard.3	WarChess2.In.Boss		荷稻_困难3					0	30014	23000		86	904	300													[0]	[1]
+2	49	1		WarChess1.Hard.4	WarChess2.Al.Boss		安洛瑟_困难4					0	30012	24000		89	904	300													[3]	[4]
+2	50	1		WarChess1.Hard.4	WarChess2.Le.Boss		列拉金_困难4					0	30011	24000		89	904	300													[0]	[1]
+2	51	1		WarChess1.Hard.4	WarChess2.Fu.Boss		弗内乌斯_困难4					0	30013	24000		89	904	300													[2]	[0]
+2	52	1		WarChess1.Hard.4	WarChess2.In.Boss		荷稻_困难4					0	30014	24000		89	904	300													[0]	[1]
+2	53	1		WarChess1.Hard.5	WarChess2.Le.Boss		列拉金_困难5					0	30011	25000		92	904	300													[0]	[1]
+2	54	1		WarChess1.Hard.5	WarChess2.In.Boss		荷稻_困难5					0	30014	25000		92	904	300													[0]	[1]
+2	55	1		WarChess1.Hard.5	WarChess2.Fu.Boss		弗内乌斯_困难5					0	30013	25000		92	904	300													[2]	[0]
+2	56	1		WarChess1.Hard.5	WarChess2.Al.Boss		安洛瑟_困难5					0	30012	25000		92	904	300													[3]	[4]

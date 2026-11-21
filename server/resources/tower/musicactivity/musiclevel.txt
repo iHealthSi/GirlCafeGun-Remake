@@ -1,0 +1,66 @@
+INT	INT	INT	INT	STR	INT	STR	STR	STR	STR	STR	INT	INTARR	INT	STR	INT	INT	INT	BOOL	INT	INT	INT	INT	INTARR2	INTARR2	INTARR2	INT	INTARR2	INTARR2	INT	INT	INT	INT	INT	INTARR	INTARR
+小关ID	难度	关卡类型0普通 1挑战关 2剧情关直接播剧情 3星级任务 4Dr关 5relay 6趣味关卡	扩展参数	开启时间（有些关卡有自己独立的开启时间）	未解锁如何显示（1隐藏2置灰）	分支上显示的图片	前缀名	名称	关卡信息描述	备注	解锁关卡（完成哪一关后解锁本关 0表示不需要前置关卡）	Relay通关解锁[rId-tId]	关卡内剧情播放类型（1 关卡前剧情，2关卡后剧情,3关卡前后剧情）	剧情文件	体力消耗	地图ID	推荐战力	关闭等级压制	敌人难度 用以定义每关怪物的默认等级	怪物强度	关卡时间（秒）	随机奖励掉落次数	首次通关奖励	结算固定奖励	结算随机奖励	怪物死亡掉落配置	怪物列表	显示奖励	刷怪ID	店长获得经验	卡牌获得经验	血包掉落概率≥1 时有起效	能量掉落概率≥1 时有起效	怪物属性	推荐属性
+LevelId	Diff	LevelType	ExtendParam	BeginTime	LockShowType	BranchImg	PreName	Name	LevelInfoDesc		PreLevelId	PreRelay	StoryType	StoryName	PreCost	MapId	Zhanli	CloseLevelSuppress	EnemyLevel	MonsterStrength	LevelTime	RandDropNum	FirstAward	FixAward	RandomAward	MonsterDrop	DropItemMonsters	ShowRewards	RefreshMonsterId	MasterExp	CardExp	DropHpRd	DropEnRd	MonsterAttr	RecommendAttr
+1	1	2					SeasonTower1Level.PreName1	SeasonTower1Level.Name1	SeasonTower1.LevelDesc1	common_ep	[0]		0	activitytowerconcert/activitytowerconcert_commonep									[15-2-1-1-20]												
+2	1	2					SeasonTower1Level.PreName2	SeasonTower1Level.Name2	SeasonTower1.LevelDesc2	jazz_ep1	[1]		0	activitytowerconcert/activitytowerconcert_jazzep01									[15-2-1-1-20]												
+3	1	2					SeasonTower1Level.PreName3	SeasonTower1Level.Name3	SeasonTower1.LevelDesc3	ep2	[0]	[1-1,1-2]	0	activitytowerconcert/activitytowerconcert_jazzep02									[15-2-1-1-20]												
+4	1	2					SeasonTower1Level.PreName4	SeasonTower1Level.Name4	SeasonTower1.LevelDesc4	ep3	[0]	[2-1,2-2,2-4]	0	activitytowerconcert/activitytowerconcert_jazzep03									[15-2-1-1-20]												
+5	1	2					SeasonTower1Level.PreName5	SeasonTower1Level.Name5	SeasonTower1.LevelDesc5	ep4	[0]	[3-1,3-2]	0	activitytowerconcert/activitytowerconcert_jazzep04									[15-2-1-1-20]												
+6	1	2					SeasonTower1Level.PreName6	SeasonTower1Level.Name6	SeasonTower1.LevelDesc6	ep1_1s1	[17]		0	activitytowerconcert/activitytowerconcert_jazzep01_1s1									[15-2-1-1-20]												
+7	1	2					SeasonTower1Level.PreName7	SeasonTower1Level.Name7	SeasonTower1.LevelDesc7	ep2_1s1	[18]		0	activitytowerconcert/activitytowerconcert_jazzep02_1s1									[15-2-1-1-20]												
+8	1	2					SeasonTower1Level.PreName8	SeasonTower1Level.Name8	SeasonTower1.LevelDesc8	ep3_1s1	[19]		0	activitytowerconcert/activitytowerconcert_jazzep03_1s1									[15-2-1-1-20]												
+9	1	2					SeasonTower1Level.PreName9	SeasonTower1Level.Name9	SeasonTower1.LevelDesc9	ep3_1s2	[8]		0	activitytowerconcert/activitytowerconcert_jazzep03_1s2									[15-2-1-1-20]												
+10	1	2					SeasonTower1Level.PreName10	SeasonTower1Level.Name10	SeasonTower1.LevelDesc10	ep3_2s1	[20]		0	activitytowerconcert/activitytowerconcert_jazzep03_2s1									[15-2-1-1-20]												
+11	1	2					SeasonTower1Level.PreName11	SeasonTower1Level.Name11	SeasonTower1.LevelDesc11	ep3_2s2	[10]		0	activitytowerconcert/activitytowerconcert_jazzep03_2s2									[15-2-1-1-20]												
+12	1	2					SeasonTower1Level.PreName12	SeasonTower1Level.Name12	SeasonTower1.LevelDesc12	jazz_end	[5]		0	activitytowerconcert/activitytowerconcert_commonepj									[15-2-1-1-20]												
+13	1	0					SeasonTower1Level.PreName13	SeasonTower1Level.Name13	SeasonTower1.LevelDesc13	act_1	[2]				10	14011	6000		2	903	300	1	[9-4-1-3-1]	[15-66-1-1-25-10000]		101		[15-66-1-1-1]		10				[0]	[1]
+14	1	0					SeasonTower1Level.PreName51	SeasonTower1Level.Name51	SeasonTower1.LevelDesc51	act_2	[3]				20	14011	12000		32	904	300	1	[1-1-20-3-1]	[15-66-1-1-70-10000]		101		[15-66-1-1-1]		20				[0]	[1]
+15	1	0					SeasonTower1Level.PreName52	SeasonTower1Level.Name52	SeasonTower1.LevelDesc52	act_3	[4]				30	14011	16600		55	904	300	1	[10-1-1-3-1]	[15-66-1-1-150-10000]		101		[15-66-1-1-1]		30				[0]	[1]
+16	1	1					SeasonTower1Level.PreName14	SeasonTower1Level.Name14	SeasonTower1.LevelDesc14	jazz_boss1	[12]				0	14013	8100		8	904	300	1	[15-2-1-1-20]			101				0				[0]	[1]
+16	2	1					SeasonTower1Level.PreName14	SeasonTower1Level.Name14	SeasonTower1.LevelDesc14	jazz_boss2	[12]				0	14013	15050		48	904	300	1	[9-4-3-3-1]			101				0				[0]	[1]
+16	3	1					SeasonTower1Level.PreName14	SeasonTower1Level.Name14	SeasonTower1.LevelDesc14	jazz_boss3	[12]				0	14013	20100		70	904	300	1	[7-7-1-4-1]			101				0				[0]	[1]
+17	1	4	1				SeasonTower1Level.PreName15	SeasonTower1Level.Name15	SeasonTower1.LevelDesc15	dr1-1	[0]	[1-4]			0	14001	6000		1	904	300	1	[15-2-1-1-20]			101				0				[0]	[1]
+18	1	4	2				SeasonTower1Level.PreName16	SeasonTower1Level.Name16	SeasonTower1.LevelDesc16	dr2-1	[0]	[2-3]			0	14002	6000		48	904	300	1	[15-2-1-1-20]			101				0				[0]	[1]
+19	1	4	3				SeasonTower1Level.PreName17	SeasonTower1Level.Name17	SeasonTower1.LevelDesc17	dr3-1	[0]	[3-3]			0	14003	6000		48	904	300	1	[15-2-1-1-20]			101				0				[0]	[1]
+20	1	4	4				SeasonTower1Level.PreName18	SeasonTower1Level.Name18	SeasonTower1.LevelDesc18	dr3-2	[0]	[3-4]			0	14004	6000		19	904	300	1	[15-2-1-1-20]			101				0				[0]	[1]
+																																			
+25	1	2					SeasonTower1Level.PreName19	SeasonTower1Level.Name19	SeasonTower1.LevelDesc19	r&r_ep1	[1]		0	activitytowerconcert/activitytowerconcert_rrep01									[15-2-1-1-20]												
+26	1	2					SeasonTower1Level.PreName20	SeasonTower1Level.Name20	SeasonTower1.LevelDesc20	ep2	[0]	[4-1,4-2]	0	activitytowerconcert/activitytowerconcert_rrep02									[15-2-1-1-20]												
+27	1	2					SeasonTower1Level.PreName21	SeasonTower1Level.Name21	SeasonTower1.LevelDesc21	ep3	[0]	[5-1,5-2,5-4]	0	activitytowerconcert/activitytowerconcert_rrep03									[15-2-1-1-20]												
+28	1	2					SeasonTower1Level.PreName22	SeasonTower1Level.Name22	SeasonTower1.LevelDesc22	ep4	[0]	[6-1,6-2]	0	activitytowerconcert/activitytowerconcert_rrep04									[15-2-1-1-20]												
+29	1	2					SeasonTower1Level.PreName23	SeasonTower1Level.Name23	SeasonTower1.LevelDesc23	ep4_1s1	[40]		0	activitytowerconcert/activitytowerconcert_rrep04_1s1									[15-2-1-1-20]												
+30	1	2					SeasonTower1Level.PreName24	SeasonTower1Level.Name24	SeasonTower1.LevelDesc24	ep5_1s1	[41]		0	activitytowerconcert/activitytowerconcert_rrep05_1s1									[15-2-1-1-20]												
+31	1	2					SeasonTower1Level.PreName25	SeasonTower1Level.Name25	SeasonTower1.LevelDesc25	ep6_1s1	[0]	[6-3]	0	activitytowerconcert/activitytowerconcert_rrep06_1s1									[15-2-1-1-20]												
+32	1	2					SeasonTower1Level.PreName26	SeasonTower1Level.Name26	SeasonTower1.LevelDesc26	ep6_1s2	[42]		0	activitytowerconcert/activitytowerconcert_rrep06_1s2									[15-2-1-1-20]												
+33	1	2					SeasonTower1Level.PreName27	SeasonTower1Level.Name27	SeasonTower1.LevelDesc27	ep6_2s1	[0]	[6-4]	0	activitytowerconcert/activitytowerconcert_rrep06_2s1									[15-2-1-1-20]												
+34	1	2					SeasonTower1Level.PreName28	SeasonTower1Level.Name28	SeasonTower1.LevelDesc28	ep6_2s2	[33]		0	activitytowerconcert/activitytowerconcert_rrep06_2s2									[15-2-1-1-20]												
+35	1	2					SeasonTower1Level.PreName29	SeasonTower1Level.Name29	SeasonTower1.LevelDesc29	r&r_end	[28]		0	activitytowerconcert/activitytowerconcert_commoneprr									[15-2-1-1-20]												
+36	1	0					SeasonTower1Level.PreName30	SeasonTower1Level.Name30	SeasonTower1.LevelDesc30	act_1	[25]				10	14012	6000		2	903	300	1	[9-4-1-3-1]	[15-67-1-1-25-10000]		101		[15-67-1-1-1]		10				[3]	[4]
+37	1	0					SeasonTower1Level.PreName53	SeasonTower1Level.Name53	SeasonTower1.LevelDesc53	act_2	[26]				20	14012	12000		32	904	300	1	[1-15-20-3-1]	[15-67-1-1-70-10000]		101		[15-67-1-1-1]		20				[3]	[4]
+38	1	0					SeasonTower1Level.PreName54	SeasonTower1Level.Name54	SeasonTower1.LevelDesc54	act_3	[27]				30	14012	16600		55	904	300	1	[10-1-1-3-1]	[15-67-1-1-150-10000]		101		[15-67-1-1-1]		30				[3]	[4]
+39	1	1					SeasonTower1Level.PreName31	SeasonTower1Level.Name31	SeasonTower1.LevelDesc31	r&r_boss1	[35]				0	14014	8100		8	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+39	2	1					SeasonTower1Level.PreName31	SeasonTower1Level.Name31	SeasonTower1.LevelDesc31	r&r_boss2	[35]				0	14014	15050		48	904	300	1	[9-4-3-3-1]			101				0				[3]	[4]
+39	3	1					SeasonTower1Level.PreName31	SeasonTower1Level.Name31	SeasonTower1.LevelDesc31	r&r_boss3	[35]		2	activitytowerconcert/activitytowerconcert_rrsp	0	14014	20100		70	904	300	1	[7-7-1-4-1]			101				0				[3]	[4]
+40	1	4	5				SeasonTower1Level.PreName32	SeasonTower1Level.Name32	SeasonTower1.LevelDesc32	dr4-1	[0]	[4-4]			0	14005	6000		19	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+41	1	4	6				SeasonTower1Level.PreName33	SeasonTower1Level.Name33	SeasonTower1.LevelDesc33	dr5-1	[0]	[5-3]	2	activitytowerconcert/activitytowerconcert_dr5_1	0	14006	6000		19	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+42	1	4	7				SeasonTower1Level.PreName34	SeasonTower1Level.Name34	SeasonTower1.LevelDesc34	dr6-1	[31]				0	14007	6000		19	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+43	1	4	8				SeasonTower1Level.PreName35	SeasonTower1Level.Name35	SeasonTower1.LevelDesc35	dr6-2	[34]				0	14008	6000		19	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+44	1	2					SeasonTower1Level.PreName36	SeasonTower1Level.Name36	SeasonTower1.LevelDesc36	ending	[0]	[7-3]	0	activitytowerconcert/activitytowerconcert_ending									[15-2-1-1-20]												
+																																			
+50	1	2					SeasonTower1Level.PreName37	SeasonTower1Level.Name37	SeasonTower1.LevelDesc37	jazz_ep5	[52]		0	activitytowerconcert/activitytowerconcert_jazzep05									[15-2-1-1-20]												
+51	1	2					SeasonTower1Level.PreName38	SeasonTower1Level.Name38	SeasonTower1.LevelDesc38	r&r_ep5	[53]		0	activitytowerconcert/activitytowerconcert_rrep05									[15-2-1-1-20]												
+52	1	4	9				SeasonTower1Level.PreName39	SeasonTower1Level.Name39	SeasonTower1.LevelDesc39	dr7-1	[0]	[7-1]			0	14009	6300		48	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+53	1	4	10				SeasonTower1Level.PreName40	SeasonTower1Level.Name40	SeasonTower1.LevelDesc40	dr7-2	[0]	[7-2]			0	14010	6300		48	904	300	1	[15-2-1-1-20]			101				0				[3]	[4]
+																																			
+54	1	5	1				SeasonTower1Level.PreName41	SeasonTower1Level.Name41	SeasonTower1.LevelDesc41	relay1	[13]		0																						
+55	1	5	2				SeasonTower1Level.PreName42	SeasonTower1Level.Name42	SeasonTower1.LevelDesc42	relay2	[14]		0																						
+56	1	5	3				SeasonTower1Level.PreName43	SeasonTower1Level.Name43	SeasonTower1.LevelDesc43	relay3	[15]		0																						
+57	1	5	4				SeasonTower1Level.PreName44	SeasonTower1Level.Name44	SeasonTower1.LevelDesc44	relay4	[36]		0																						
+58	1	5	5				SeasonTower1Level.PreName45	SeasonTower1Level.Name45	SeasonTower1.LevelDesc45	relay5	[37]		0																						
+59	1	5	6				SeasonTower1Level.PreName46	SeasonTower1Level.Name46	SeasonTower1.LevelDesc46	relay6	[38]		0																						
+60	1	5	7				SeasonTower1Level.PreName47	SeasonTower1Level.Name47	SeasonTower1.LevelDesc47	relay7	[39]		0																						
+																																			
+71	1	6				BG/bg_concertwuxia.png	SeasonTower1Level.PreName48	SeasonTower1Level.Name48	SeasonTower1.LevelDesc48	ex1	[13]				0	14015	0		30	901	90	1	[15-66-1-1-20-30,15-66-1-1-20-60,15-66-1-1-20-90,15-66-1-1-20-120,15-66-1-1-20-150,15-1-1-1-1000-180,15-1-1-1-1000-210,15-1-1-1-1000-240,15-1-1-1-1000-270,15-1-1-1-1000-300]	[15-66-1-1-80]		101				0				[0]	[1]
+72	1	6				BG/bg_concertwuxia.png	SeasonTower1Level.PreName49	SeasonTower1Level.Name49	SeasonTower1.LevelDesc49	ex2	[36]				0	14016	0		30	901	90	1	[15-67-1-1-20-30,15-67-1-1-20-60,15-67-1-1-20-90,15-67-1-1-20-120,15-67-1-1-20-150,15-1-1-1-1000-180,15-1-1-1-1000-210,15-1-1-1-1000-240,15-1-1-1-1000-270,15-1-1-1-1000-300]	[15-67-1-1-80]		101				0				[0]	[1]
+																																			
+73	1	7				BG/bg_concert1.png	SeasonTower1Level.PreName50	SeasonTower1Level.Name50	SeasonTower1.LevelDesc50		[0]																								

@@ -1,0 +1,4 @@
+INT	STR	STR	STR	STR	STR	STR	INT	INTARR
+期数id	开启时间	结束时间	藏品条件1[代币id,数量]	藏品条件2	藏品条件3	藏品条件4	每天挂牌限制次数	赠送奖励
+ID	StartTime	EndTime	Collection1	Collection2	Collection3	Collection4	MaxListing	Award
+1	[202007240800]	[202008250400]	[37,1]	[38,1]	[39,1]	[40,1]	5	[15-1-1-1-1000]

@@ -1,0 +1,24 @@
+INT	INT	INT	INT	INT	STR	INTARR	INT	INTARR	STRARR	STR	STR	STR	STR	STR	STR	STR	NUL
+任务ID(groupid 70,taskid最高65535,不能重复用)	前置任务ID，0表示没有	任务类型(1,每日任务, 2,一次性任务)	任务活动类型(1,周年任务；2，二周年任务)	玩家等级	关卡解锁	执行次数	成就类型(成就触发方式)	辅助变量	奖励道具ID	任务title	语言包ID	任务描述	任务未完成，跳转到界面或场景	开始时间[202006101000]	结束时间[202006101000]	任务图标	备注
+missionId	preMissionId	missionType	missionEvent	level	ChapterLimit	missionMax	achieveType	assistparam	awardsList	missionTitle	missionDescID	missionDesc	target	startTime	endTime	missionIcon	Desc
+1	0	1	2	0		[150]	24	[1]	[15-125-1-1-1]		eventmission.2ndanniversarymissionId.1	消耗150点体力	dostring;SecondAnniversaryTower:GetTower()	[202111190800]	[202112230400]	Item/icon_mission_05	
+2	0	1	2	0		[300]	24	[1]	[15-125-1-1-1]		eventmission.2ndanniversarymissionId.2	消耗300点体力	dostring;SecondAnniversaryTower:GetTower()	[202111190800]	[202112230400]	Item/icon_mission_05	
+3	0	1	2	0		[1,27,1]	192	[3]	[15-123-1-1-70]		eventmission.2ndanniversarymissionId.3	通关一次【喜剧溯回歌·始】ACT关卡	dostring;SecondAnniversaryTower:GetTower()	[202111190800]	[202112070400]	Item/icon_mission_05	
+4	0	1	2	0		[2,27,1]	192	[3]	[15-124-1-1-70]		eventmission.2ndanniversarymissionId.4	通关一次【喜剧溯回歌·终】ACT关卡	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+																	
+5	0	2	2	0		[200,15,123,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.5	累计获得200个浑噩诗章	dostring;SecondAnniversaryTower:GetTower(1)	[202111190800]	[202112230400]	Item/icon_mission_05	
+6	0	2	2	0		[500,15,123,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.6	累计获得500个浑噩诗章	dostring;SecondAnniversaryTower:GetTower(1)	[202111190800]	[202112230400]	Item/icon_mission_05	
+7	0	2	2	0		[1000,15,123,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.7	累计获得1000个浑噩诗章	dostring;SecondAnniversaryTower:GetTower(1)	[202111190800]	[202112230400]	Item/icon_mission_05	
+8	0	2	2	0		[2000,15,123,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.8	累计获得2000个浑噩诗章	dostring;SecondAnniversaryTower:GetTower(1)	[202111190800]	[202112230400]	Item/icon_mission_05	
+9	0	2	2	0		[5000,15,123,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.9	累计获得5000个浑噩诗章	dostring;SecondAnniversaryTower:GetTower(1)	[202111190800]	[202112230400]	Item/icon_mission_05	
+10	0	2	2	0		[200,15,124,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.10	累计获得200个醒悟剧篇	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+11	0	2	2	0		[500,15,124,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.11	累计获得500个醒悟剧篇	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+12	0	2	2	0		[1000,15,124,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.12	累计获得1000个醒悟剧篇	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+13	0	2	2	0		[2000,15,124,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.13	累计获得2000个醒悟剧篇	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+14	0	2	2	0		[5000,15,124,1,1]	45	[1]	[15-2-1-1-30]		eventmission.2ndanniversarymissionId.14	累计获得5000个醒悟剧篇	dostring;SecondAnniversaryTower:GetTower(2)	[202112070800]	[202112230400]	Item/icon_mission_05	
+15	0	2	2	0		[1,28,1,1]	219	[4]	[15-2-1-1-50]		eventmission.2ndanniversarymissionId.15	【试炼技斗场】幽河关卡任意难度挑战成功	dostring;BossChallengeLogic:GetTower()	[202111260400]	[202112230400]	Item/icon_mission_05	
+16	0	2	2	0		[1,28,2,1]	219	[4]	[15-2-1-1-50]		eventmission.2ndanniversarymissionId.16	【试炼技斗场】平原关卡任意难度挑战成功	dostring;BossChallengeLogic:GetTower()	[202111260400]	[202112230400]	Item/icon_mission_05	
+17	0	2	2	0		[1,28,3,1]	219	[4]	[15-2-1-1-50]		eventmission.2ndanniversarymissionId.17	【试炼技斗场】乐土关卡任意难度挑战成功	dostring;BossChallengeLogic:GetTower()	[202111260400]	[202112230400]	Item/icon_mission_05	
+18	0	2	2	0		[20,85]	259	[1]	[15-2-1-1-60]		eventmission.2ndanniversarymissionId.18	累计消耗20个陈述歌章	dostring;UI.CloseAndOpen('UI_2ndAnniversaryShop', 30042)	[202111190800]	[202112230400]	Item/icon_mission_05	
+19	0	2	2	0		[50,85]	259	[1]	[15-2-1-1-60]		eventmission.2ndanniversarymissionId.19	累计消耗50个陈述歌章	dostring;UI.CloseAndOpen('UI_2ndAnniversaryShop', 30042)	[202111190800]	[202112230400]	Item/icon_mission_05	
+20	0	2	2	0		[80,85]	259	[1]	[15-2-1-1-60]		eventmission.2ndanniversarymissionId.20	累计消耗80个陈述歌章	dostring;UI.CloseAndOpen('UI_2ndAnniversaryShop', 30042)	[202111190800]	[202112230400]	Item/icon_mission_05	
