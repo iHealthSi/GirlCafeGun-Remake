@@ -13,6 +13,7 @@ class FakePhone:
 
     def __init__(self, save=None, daily=None, debuggable=True):
         self.save, self.daily, self.debuggable, self.stops = save, dict(daily or {}), debuggable, 0
+        self.corrupt_after_write = False
 
     def check(self):
         if not self.debuggable:
@@ -26,7 +27,8 @@ class FakePhone:
     def read_daily(self, name): return self.daily[name]
 
     def write_save(self, source):
-        self.save, self.daily = Path(source).read_bytes(), {}
+        body = Path(source).read_bytes()
+        self.save, self.daily = body + (b'x' if self.corrupt_after_write else b''), {}
         return ''
 
     def remove_save(self):
@@ -86,6 +88,14 @@ def test_save_tool():
         run(phone, store, 'push', str(folder / 'state.json'))
         assert phone.save == first and len(save_tool.saves(store)) == 3
         print('ok push: by a part of the name and by file; the save that was on the phone is stored first')
+
+        phone.save = second
+        phone.corrupt_after_write = True
+        msg = stops(lambda: run(phone, store, 'push', str(folder / 'state.json')))
+        assert msg and 'differs' in msg and 'removed the bad copy' in msg, msg
+        assert phone.save is None and any(r['sha256'] == save_tool.sha(second) for r in save_tool.saves(store))
+        phone.save, phone.corrupt_after_write = first, False
+        print('ok push: a read-back mismatch removes the bad save and keeps the earlier one on the computer')
 
         assert 'names 0 saves' in stops(lambda: run(phone, store, 'push', 'nothing-like-this'))
         assert 'names 3 saves' in stops(lambda: run(phone, store, 'push', '20'))
