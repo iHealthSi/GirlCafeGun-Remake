@@ -271,8 +271,64 @@ Enter `{tbData: {fields of the request}, tbDrop: [], tbDropItems: []}`. Errors: 
   the map nodes claim through `GetConverAchieveAward` (new gateway branch, `claimOtherAchievementAward`). Types 29, 220,
   221 (training, richman) have no source: those missions never complete. The last gacha pond opens when the others are
   empty.
-- Not served: Music, WarChess, the first Anniversary, Month_Mission 436 (second anniversary mission screen), the
-  ranking tower, 535 only for `BossChallenge` (206 is not).
+- Not served after slice 3: Music, WarChess (slice 4 below), the first Anniversary, the ranking tower, 535 only for
+  `BossChallenge` (206 is not).
 - Shared records (the client's keys carry no event id): armed survey events share 68/10+, buff events 64/5008...,
   mixed events 68/1002, second anniversary events one task with one bit each. `named-tower-data.test.ts` lists them.
 - Seeds: `reconcileNamedTowerSeeds` sets 63/3001 and 68/1001 to the first event at login (`getOrCreate`, `markLogin`).
+
+## Slice 4: concert, event missions, war chess
+
+Tables (`resources/tower/`, byte copies): `musicactivity/` (total, tower, level), `concertexchange/`, `eventmission/`
+(MusicMission, MonthMission), `warchesstower/`.
+
+**Concert tower, 371-373** (family `music`, `NAMED_FAMILIES`): group 64, clear bit `diff - 1` of `4100 + level`.
+Enter echoes the request `nType` (19 tower, 21 interest levels). Level types 5 (relay) and 7 (music select) are
+screens: refused. Type 4 (fixed team) sends no formation and costs nothing. Type 6 (interest, levels 71/72): the
+fight tickets are tasks 1/554-556 (first issue) and 557-559 (next): gained, played, best score. Items 15-68 and 15-69
+add to 554 and 557 (`TOWER_ITEM_TASKS`). Enter is refused with error 11 when no ticket is left, the settlement (pass
+or fail) uses one, a pass pays the `FirstAward` steps `[g-d-p-l-n-score]` for the score reached every run
+(`LevelManager:GetScoreReward`) and the fixed award. 373 answers `{}`; `MusicActivityLogic:OnFailTower` does not exist
+in the client script, so the nil call after the DoSettle reply is a Lua error that cannot be avoided (the stored
+settlement is cleared before it). 391 (relay log) and 282 (BGM log) are accepted without a reply, the relay choices
+(64/6000-6998, 6999) are written by the client. 138 is the cafe music (cafe runtime).
+
+**Missions, 374 (group 70) and 436 (group 85, the second anniversary screen).** Request `{Type, nId}` or
+`{Type, tbList}`; reply `{Type, tbItem}`, refusal `{Error, Type}` (20002 unknown, 20003 not done, 20005 claimed). A
+list pays what is ready. Value = progress * 2 + claimed. `event-mission-data.ts` keeps counters in
+`player.eventMissions` (`total`, `today`; daily rows (missionType 1) read `today`, the day changes at 04:00 Shanghai
+and zeroes daily values). Fed by the fights of the concert, second anniversary and boss challenge (24 vigour, 192
+act clears [issue, type, n], 181 SP clears, 219 clears of a level, 184 [level, diff], 183 kills (`totalkillMonster`),
+176 tokens gained (wallet diff of the settlement), 177 interest plays, 191 music game ratings, 178 music game plays)
+and by shop purchases (259 tokens spent: only for the money ids the tables name). Read from the save: 45 (wallet
+coins by what came in, else inventory), 186 (best interest score), 189 (exchange count, 74/2). No source, never
+completes: 179 idol support, 180 and 187/188 collection trading, the pressing mission rows (none in the table).
+"Issue" of a concert level = the MusicTowerTotal id its MusicTower row lists it under; of the others the `Id` column.
+
+**Concert exchange, 380-384.** Season task 74/1 (seeded to the first row at login; the page may write another).
+380 `{tbData: []}`, 383 `{tbList: []}` (nobody else here), 384 `{Error: 20122}` (the client then removes the entry),
+381 `{Error: 0, Type, TypeId}`: `Type` 0 lists (flag bit `TypeId` of 74/3, daily counter 74/4, limit `MaxListing`), 1
+cancels. 382 [INFER] takes one of each collection currency (money 37-40), pays the first rare reward not yet received
+(TaskId order, flag bit `TaskId % 30` of `74/(10 + TaskId / 30)`) and one random basic reward, 74/2 += 1, reply
+`{Items}`; short of a piece: error 20043. The hub opens through FanEvent_GetList (354): answered `{tbNewGirlList: []}`,
+357 `{tbList: []}`; 355 and 356 (the idol vote screens) stay unanswered.
+
+**Music game, 388-390.** 388 keeps the best score in 1/(3100 + gameId) (no reply, the client handler is empty), counts
+the plays and ratings for the missions. 389 answers an array indexed by game id `[null, {pos: 0, score}]` (pos 0 =
+not ranked), 390 `{musicId, tbList: []}`. The GameRank list calls of the result screens are not served.
+
+**War chess, 536-539** (family `chess`, group 97, clear count `110 + level`). 536-538 as the other families (echo `nId`,
+`nLevelId`, `nFormationId`); 539 is the board, sub-command `nType`: 1 start `{id, mapId, diff, team1, team2}` (grid ids;
+birth cells checked, hard maps need the easy pass bit), 2 reset, 3 move a team (adjacent empty cell, or a boss), 4 end
+the player round, 5 boss move `{tbMove}` or, without it, the next round, 7 item (consumes the SpItem item, `skill` 1/2
+steps, 3 obstacle, 4 freeze), 8 best rounds. Reply `{nType, nError?}`. The client never sends 536 for a boss fight
+(type 1 levels, formation 5106/5107 = team 1/2): the server pushes the 536 reply itself after a team moves onto a boss
+or a boss moves onto a team, and opens the run. The fight settles through 537/538 inside DoSettle: a win moves the team
+onto the boss's cell and removes the boss, the last boss ends the map (pushed `{nType: 6, tbInfo}`), a loss takes the
+team out, both teams out lose the map. Cells, steps, round, health, boss health are the task values of
+`warchesstower.lua`. [INFER] one step per team and round, a boss on the cafe loses the map, the hard map score
+(1000 - 50 per round - 20 per item), items are consumed.
+
+**Review fixes of slice 3** (landed with slice 4): linkage type 45 reads `[count, G, D, P, L]`, 339 answers the bare list
+(`CoopClientEvent.tbSpAward`), refused coop and mixed online passes answer with empty success fields, negative pond
+`Count` is unlimited, the linkage daily mission ignores the state lock and resets daily.
