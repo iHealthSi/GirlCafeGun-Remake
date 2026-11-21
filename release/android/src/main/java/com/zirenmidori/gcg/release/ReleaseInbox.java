@@ -23,23 +23,28 @@ public final class ReleaseInbox {
         if(files==null)return new File[0];
         Arrays.sort(files,Comparator.comparing(File::getName));return files;
     }
+    /** A closed boot screen interrupts its thread; the file lock then fails. That is no fault of the package: stop and
+     *  leave every remaining package in the inbox for the next start. */
+    private static void stopIfInterrupted()throws InterruptedIOException{
+        if(Thread.currentThread().isInterrupted())throw new InterruptedIOException("Updates stopped: the boot screen closed; packages stay for the next start");
+    }
     private static String reason(Exception e){return e.getMessage()==null?e.getClass().getSimpleName():e.getMessage();}
     private static String stamp(){return new java.text.SimpleDateFormat("yyyyMMdd-HHmmss",Locale.ROOT).format(new Date());}
     /** Applies every qualifying package; throws only when the inbox itself or the result file is unusable. */
-    public static JSONObject applyAll(Context c,ReleaseDownload.Progress progress,Log log)throws IOException{
+    public static synchronized JSONObject applyAll(Context c,ReleaseDownload.Progress progress,Log log)throws IOException{
         File inbox=inbox(c);Set<String> handled=new HashSet<>();
         JSONArray applied=new JSONArray(),failed=new JSONArray(),waiting=new JSONArray();
         JSONObject state=ReleaseStore.state(c);String before=state==null?null:state.optString("releaseId",null),current=before;
         try{
             if(current!=null)for(int round=0;round<MAX_ROUNDS;round++){
-                File next=null;String id=null;
+                stopIfInterrupted();File next=null;String id=null;
                 for(File f:packages(inbox,handled)){
                     ReleaseManifest m;
                     try{
                         m=ReleaseEngine.inspect(c,f,false);
                         if(!m.kind.equals("delta")||!m.packs.isEmpty())throw new IOException("Not an offline data delta");
                         if(m.json.optJSONObject("apk")!=null)throw new IOException("APK updates need the Update screen");
-                    }catch(IOException e){quarantine(inbox,f,e,handled,failed,log);continue;}
+                    }catch(IOException|RuntimeException e){stopIfInterrupted();quarantine(inbox,f,e,handled,failed,log);continue;}
                     if(m.json.optString("baseReleaseId").equals(current)){next=f;id=m.releaseId;break;}
                 }
                 if(next==null)break;
@@ -50,7 +55,7 @@ public final class ReleaseInbox {
                     JSONObject now=ReleaseStore.state(c);
                     if(now==null||!id.equals(now.optString("releaseId")))throw new IOException("Release marker did not move to "+id);
                     current=id;
-                }catch(IOException e){handled.remove(name);quarantine(inbox,next,e,handled,failed,log);continue;}
+                }catch(IOException|RuntimeException e){stopIfInterrupted();handled.remove(name);quarantine(inbox,next,e,handled,failed,log);continue;}
                 JSONObject row=new JSONObject().put("file",name).put("releaseId",id);
                 try{File done=ReleaseIO.dir(new File(ReleaseStore.external(c),"updates/applied"));File target=new File(done,name);
                     if(target.exists()&&!target.delete())throw new IOException("Cannot replace "+target.getName());

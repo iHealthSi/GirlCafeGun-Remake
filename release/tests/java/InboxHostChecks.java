@@ -55,6 +55,19 @@ final class InboxHostChecks {
             UpdaterHostTest.yes(ReleaseStore.state(c).getString("releaseId").equals("0.1.0"),"release unchanged");
             UpdaterHostTest.yes(r.getJSONArray("waiting").length()==1&&r.getJSONArray("failed").length()==0&&new File(ReleaseInbox.inbox(c),"later.gcgupdate").isFile(),"waiting, not failed");
         });
+        UpdaterHostTest.test("an interrupted boot run stops and leaves valid packages in the inbox",()->{
+            Context c=UpdaterHostTest.context("inbox-interrupt");UpdaterHostTest.state(c,"0.1.0");UpdaterHostTest.write(UpdaterHostTest.external(c,"a.u"),UpdaterHostTest.b("old"));
+            drop(c,"good.gcgupdate",delta("0.1.1","0.1.0","a.u","new"),content("a.u","new"),keys);
+            Thread.currentThread().interrupt();
+            boolean stopped=false;
+            try{ReleaseInbox.applyAll(c,s->{},QUIET);}catch(InterruptedIOException expected){stopped=true;}finally{Thread.interrupted();}
+            UpdaterHostTest.yes(stopped,"run stops with InterruptedIOException");
+            UpdaterHostTest.yes(new File(ReleaseInbox.inbox(c),"good.gcgupdate").isFile(),"valid package stays in the inbox");
+            UpdaterHostTest.yes(!new File(ReleaseInbox.inbox(c),"failed").exists(),"nothing set aside");
+            UpdaterHostTest.yes(ReleaseStore.state(c).getString("releaseId").equals("0.1.0")&&UpdaterHostTest.text(UpdaterHostTest.external(c,"a.u")).equals("old"),"nothing applied");
+            JSONObject r=ReleaseInbox.applyAll(c,s->{},QUIET);
+            UpdaterHostTest.yes(r.getJSONArray("applied").length()==1&&ReleaseStore.state(c).getString("releaseId").equals("0.1.1"),"the next start applies it");
+        });
         UpdaterHostTest.test("boot inbox ignores partial copies and records an empty run",()->{
             Context c=UpdaterHostTest.context("inbox-empty");UpdaterHostTest.state(c,"0.1.0");
             UpdaterHostTest.write(new File(ReleaseInbox.inbox(c),".x.gcgupdate.part"),UpdaterHostTest.b("half"));
