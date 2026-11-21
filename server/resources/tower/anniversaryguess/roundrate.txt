@@ -1,0 +1,6 @@
+INT	INT	INT	STR	INT
+����id	��Ů	����(1��������2��ʾ��ʲô3��ʾ��ʲô��֮4����)	��ʾ����	����(100)
+ID	GirlId	Type	Tip	Rate
+1	7	2	UI_AnniversaryGuess.special1	50
+1	12	3	UI_AnniversaryGuess.special2	50
+1	1	4	UI_AnniversaryGuess.special3	50

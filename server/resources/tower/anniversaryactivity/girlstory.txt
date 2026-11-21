@@ -1,0 +1,55 @@
+INT	STR	STR	STR	INT	INTARR	INTARR	INTARR	INT	INT	STR
+少女ID	剧情文件	剧情名字（UI表）	图标	好感度条件	技能条件[技能1-技能2-技能3]	通关条件[id-levelid]	剧情奖励	不能送礼	解锁时间	介绍
+GirlId	Story	Name	Icon	LoveLevel	SkillLevel	TowerLevel	Reward	NoGift	UnlockTime	Desc
+1	activityanniversary/anniversary01_girl01_01	activityanniversary.anniversary01_girl01_0100		1			[15-2-1-1-5]			ui.AnniversaryStory.Girl01.Desc
+1	activityanniversary/anniversary01_girl01_02	activityanniversary.anniversary01_girl01_0200		2			[15-2-1-1-5]			
+1	activityanniversary/anniversary01_girl01_03	activityanniversary.anniversary01_girl01_0300		3			[15-2-1-1-5]			
+2	activityanniversary/anniversary01_girl02_01	activityanniversary.anniversary01_girl02_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl02.Desc
+2	activityanniversary/anniversary01_girl02_02	activityanniversary.anniversary01_girl02_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+2	activityanniversary/anniversary01_girl02_03	activityanniversary.anniversary01_girl02_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+3	activityanniversary/anniversary01_girl03_01	activityanniversary.anniversary01_girl03_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl03.Desc
+3	activityanniversary/anniversary01_girl03_02	activityanniversary.anniversary01_girl03_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+3	activityanniversary/anniversary01_girl03_03	activityanniversary.anniversary01_girl03_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+4	activityanniversary/anniversary01_girl04_01	activityanniversary.anniversary01_girl04_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl04.Desc
+4	activityanniversary/anniversary01_girl04_02	activityanniversary.anniversary01_girl04_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+4	activityanniversary/anniversary01_girl04_03	activityanniversary.anniversary01_girl04_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+5	activityanniversary/anniversary01_girl05_01	activityanniversary.anniversary01_girl05_0100		1			[15-2-1-1-5]		2020-11-27-0800	ui.AnniversaryStory.Girl05.Desc
+5	activityanniversary/anniversary01_girl05_02	activityanniversary.anniversary01_girl05_0200		2			[15-2-1-1-5]		2020-11-27-0800	
+5	activityanniversary/anniversary01_girl05_03	activityanniversary.anniversary01_girl05_0300		3			[15-2-1-1-5]		2020-11-27-0800	
+6	activityanniversary/anniversary01_girl06_01	activityanniversary.anniversary01_girl06_0100		1			[15-2-1-1-5]			ui.AnniversaryStory.Girl06.Desc
+6	activityanniversary/anniversary01_girl06_02	activityanniversary.anniversary01_girl06_0200		2			[15-2-1-1-5]			
+6	activityanniversary/anniversary01_girl06_03	activityanniversary.anniversary01_girl06_0300		3			[15-2-1-1-5]			
+7	activityanniversary/anniversary01_girl07_01	activityanniversary.anniversary01_girl07_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl07.Desc
+7	activityanniversary/anniversary01_girl07_02	activityanniversary.anniversary01_girl07_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+7	activityanniversary/anniversary01_girl07_03	activityanniversary.anniversary01_girl07_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+8	activityanniversary/anniversary01_girl08_01	activityanniversary.anniversary01_girl08_0100		1			[15-2-1-1-5]		2020-11-27-0800	ui.AnniversaryStory.Girl08.Desc
+8	activityanniversary/anniversary01_girl08_02	activityanniversary.anniversary01_girl08_0200		2			[15-2-1-1-5]		2020-11-27-0800	
+8	activityanniversary/anniversary01_girl08_03	activityanniversary.anniversary01_girl08_0300		3			[15-2-1-1-5]		2020-11-27-0800	
+9	activityanniversary/anniversary01_girl09_01	activityanniversary.anniversary01_girl09_0100		1			[15-2-1-1-5]		2020-11-27-0800	ui.AnniversaryStory.Girl09.Desc
+9	activityanniversary/anniversary01_girl09_02	activityanniversary.anniversary01_girl09_0200		2			[15-2-1-1-5]		2020-11-27-0800	
+9	activityanniversary/anniversary01_girl09_03	activityanniversary.anniversary01_girl09_0300		3			[15-2-1-1-5]		2020-11-27-0800	
+10	activityanniversary/anniversary01_girl10_01	activityanniversary.anniversary01_girl10_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl10.Desc
+10	activityanniversary/anniversary01_girl10_02	activityanniversary.anniversary01_girl10_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+10	activityanniversary/anniversary01_girl10_03	activityanniversary.anniversary01_girl10_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+11	activityanniversary/anniversary01_girl11_01	activityanniversary.anniversary01_girl11_0100		1			[15-2-1-1-5]			ui.AnniversaryStory.Girl11.Desc
+11	activityanniversary/anniversary01_girl11_02	activityanniversary.anniversary01_girl11_0200		2			[15-2-1-1-5]			
+11	activityanniversary/anniversary01_girl11_03	activityanniversary.anniversary01_girl11_0300		3			[15-2-1-1-5]			
+12	activityanniversary/anniversary01_girl12_01	activityanniversary.anniversary01_girl12_0100		1			[15-2-1-1-5]			ui.AnniversaryStory.Girl12.Desc
+12	activityanniversary/anniversary01_girl12_02	activityanniversary.anniversary01_girl12_0200		2			[15-2-1-1-5]			
+12	activityanniversary/anniversary01_girl12_03	activityanniversary.anniversary01_girl12_0300		3			[15-2-1-1-5]			
+14	activityanniversary/anniversary01_girl14_01	activityanniversary.anniversary01_girl14_0100		1			[15-2-1-1-5]		2020-11-27-0800	ui.AnniversaryStory.Girl14.Desc
+14	activityanniversary/anniversary01_girl14_02	activityanniversary.anniversary01_girl14_0200		2			[15-2-1-1-5]		2020-11-27-0800	
+14	activityanniversary/anniversary01_girl14_03	activityanniversary.anniversary01_girl14_0300		3			[15-2-1-1-5]		2020-11-27-0800	
+15	activityanniversary/anniversary01_girl15_01	activityanniversary.anniversary01_girl15_0100		1			[15-2-1-1-5]		2020-12-08-0800	ui.AnniversaryStory.Girl15.Desc
+15	activityanniversary/anniversary01_girl15_02	activityanniversary.anniversary01_girl15_0200		2			[15-2-1-1-5]		2020-12-08-0800	
+15	activityanniversary/anniversary01_girl15_03	activityanniversary.anniversary01_girl15_0300		3			[15-2-1-1-5]		2020-12-08-0800	
+102	activityanniversary/anniversary01_girl102nanachan01	activityanniversary.anniversary01_girl102nanachan0100	Npc/icon_n_npc4.png	0			[15-2-1-1-5]	1		ui.AnniversaryStory.Girl102.Desc
+102	activityanniversary/anniversary01_girl102nanachan02	activityanniversary.anniversary01_girl102nanachan0200	Npc/icon_n_npc4.png	0			[15-2-1-1-5]	1		
+103	activityanniversary/anniversary01_man103luozhen_01	activityanniversary.anniversary01_man103luozhen_0100	Npc/icon_n_npc103.png	0			[15-2-1-1-5]	1		ui.AnniversaryStory.Girl103.Desc
+103	activityanniversary/anniversary01_man103luozhen_02	activityanniversary.anniversary01_man103luozhen_0200	Npc/icon_n_npc103.png	0			[15-2-1-1-5]	1		
+105	activityanniversary/anniversary01_girl105katherine01	activityanniversary.anniversary01_girl105katherine0100	Npc/icon_boss_006.png	0			[15-2-1-1-5]	1		ui.AnniversaryStory.Girl105.Desc
+113	activityanniversary/anniversary01_girl113allocer01	activityanniversary.anniversary01_girl113allocer0100	Npc/icon_boss_002.png	0			[15-2-1-1-5]	1		ui.AnniversaryStory.Girl113.Desc
+999	activityanniversary/anniversary01_girl112soshichan01	activityanniversary.anniversary01_girl112soshichan0100	Npc/icon_n_npc3.png	0			[15-2-1-1-5]	1		ui.AnniversaryStory.Girl999.Desc
+999	activityanniversary/anniversary01_man108leraje_01	activityanniversary.anniversary01_man108leraje_0100	Npc/icon_n_npc3.png	0			[15-2-1-1-5]	1		
+999	activityanniversary/anniversary01_boy111forneus_01	activityanniversary.anniversary01_boy111forneus_0100	Npc/icon_n_npc3.png	0			[15-2-1-1-5]	1		
+999	activityanniversary/anniversary01_monster120jokeralice	activityanniversary.anniversary01_monster120jokeralice00	Npc/icon_n_npc3.png	0			[15-2-1-1-5]	1		

@@ -1,0 +1,4 @@
+INT	INT	INT	INT
+池子ID	一次有限池子抽取数量	一次无限池子抽取数量	抽奖消耗
+Id	LimitCount	LimitlessCount	CostItem
+1	1	1	[15-89-1-1-1]

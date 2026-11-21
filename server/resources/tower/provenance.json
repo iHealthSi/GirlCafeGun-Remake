@@ -451,6 +451,116 @@
       "source": "setting.u:assets/_game/settinggen/activities/warchesstower/spitem.txt",
       "sha256": "a8a59502d7556f9eca3a118e388a4c37eaeb309fd02cdc908f057fdf7a4901bd",
       "bytes": 271
+    },
+    "anniversaryactivity/anniversarytowerlevel.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/anniversarytowerlevel.txt",
+      "sha256": "95d3952246df41251637d4b4157fea9a27581f9f8a9b37dc4d058d55457a1164",
+      "bytes": 13409
+    },
+    "anniversaryactivity/anniversarytowergoal.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/anniversarytowergoal.txt",
+      "sha256": "ff63df9ed2df727fb23a39121a0fcc075eb362c07cf1fc2615442812a14f978d",
+      "bytes": 3076
+    },
+    "anniversaryactivity/anniversarytowergoalreward.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/anniversarytowergoalreward.txt",
+      "sha256": "7f13a70c531014c01ed683bb9854d0c07a17bffbe025b1fe6d2da03070f54f6a",
+      "bytes": 4011
+    },
+    "anniversaryactivity/anniversarydiscovery.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/anniversarydiscovery.txt",
+      "sha256": "79f9d08b242f43c8169bf5dd441e0bb542ef1a6e1780c753c9aabed985fc34b2",
+      "bytes": 1733
+    },
+    "anniversaryactivity/mapevents.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/mapevents.txt",
+      "sha256": "ad05c2cf59ce640b263f08403ea7b2c5c05458eed3cc82f3232781bc86c5c4aa",
+      "bytes": 26803
+    },
+    "anniversaryactivity/gachagame.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gachagame.txt",
+      "sha256": "f6a9444d2d6103040a5f580027e7fc54ce958bd7fb93a6c87582cb1d70fde0c4",
+      "bytes": 162
+    },
+    "anniversaryactivity/gachagamepool.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gachagamepool.txt",
+      "sha256": "ca2ee080e9f1e9ab26a68948b6eff4ea40ce330a8094c7a1bacdd7873d07c479",
+      "bytes": 1757
+    },
+    "anniversaryactivity/girlstory.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/girlstory.txt",
+      "sha256": "b0fa58447ede48d0ecefdc78fc5090128607a8dcbfc19ba81dcf4888e21951d7",
+      "bytes": 7692
+    },
+    "anniversaryactivity/puzzlecfg.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/puzzlecfg.txt",
+      "sha256": "f1f7ee8e62246b6ee9eb8a7ff5da19608dc57825e80fc7d57bff085ec54dd53a",
+      "bytes": 844
+    },
+    "anniversaryguess/timelist.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryguess/timelist.txt",
+      "sha256": "8630899460ab38fda6e0ba863798d231a4d5bd4290359d74345d00c202b69f07",
+      "bytes": 303
+    },
+    "anniversaryguess/girlconfig.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryguess/girlconfig.txt",
+      "sha256": "02a5d74bfd3d9379c6d6f34347d1efc45aa4101d49469f5a90a8f00519dedc54",
+      "bytes": 4265
+    },
+    "anniversaryguess/roundlist.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryguess/roundlist.txt",
+      "sha256": "7df54d0c64893c84d5bc0edec88892b22b65e4f9163079dd100f891a9e8dcf36",
+      "bytes": 196
+    },
+    "anniversaryguess/roundrate.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryguess/roundrate.txt",
+      "sha256": "28db8e3b013b22bda3cdca42f41609b920e3ac14e45e7c46fb6d50eca1f63ac7",
+      "bytes": 327
+    },
+    "anniversaryguess/awardlist.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryguess/awardlist.txt",
+      "sha256": "326afac053549d70b2a1c9ca75b990af576cfbf3cf4cef2b9758bd882ba03c47",
+      "bytes": 1177
+    },
+    "anniversaryactivity/gridmap1.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap1.txt",
+      "sha256": "efe260bf042cab13d04a403b0cb9cbbed42c3a9f872124fea6a10d69316c0c8c",
+      "bytes": 1189
+    },
+    "anniversaryactivity/gridmap2.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap2.txt",
+      "sha256": "fa70aefa7d9b73276782d92bb98cc043a8484cdb6ee076f578d61ca31abf851d",
+      "bytes": 1205
+    },
+    "anniversaryactivity/gridmap3.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap3.txt",
+      "sha256": "1b550d6e3a7fcf0007bbe7b69c5630279f19caf323988b04000b40ede5ba2b85",
+      "bytes": 1198
+    },
+    "anniversaryactivity/gridmap4.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap4.txt",
+      "sha256": "8f76407abdcd0290fd30c787eb5acc31da614e6bea868aa0b6ffb6927f0de58d",
+      "bytes": 1225
+    },
+    "anniversaryactivity/gridmap5.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap5.txt",
+      "sha256": "f4cfdc5738ebe2112bf2bfc679c46d0e1dffcab638dad889875f958b03e855cb",
+      "bytes": 1234
+    },
+    "anniversaryactivity/gridmap6.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap6.txt",
+      "sha256": "56c58943403cdab53f2a589062ebaba1dc17ff81e5a33206a0d51bcd54c61250",
+      "bytes": 1238
+    },
+    "anniversaryactivity/gridmap7.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap7.txt",
+      "sha256": "d76c89dbeaec153289aa7be77188a82fbac7d2995b211deaa9ce86ec46bc6a1f",
+      "bytes": 1234
+    },
+    "anniversaryactivity/gridmap8.txt": {
+      "source": "setting.u:assets/_game/settinggen/activities/anniversaryactivity/gridmap8.txt",
+      "sha256": "3650c21d3e655fb317f4ebd4835f4cd6d547962a10b508e3c7f1a4a1897eaaf2",
+      "bytes": 1238
     }
   }
 }

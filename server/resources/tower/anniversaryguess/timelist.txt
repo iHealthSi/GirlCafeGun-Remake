@@ -1,0 +1,4 @@
+INT	STR	STR	INT	INT	INT	INT
+����id	����ʱ��	����ʱ��	ÿ����Ѵ���	ÿ�γ�ȭ���Ĵ���	����ָ����	���Ѵ�������
+ID	StartTime	EndTime	DailyNum	UseNum	GoldID	MoneyID
+1	[202011261200]	[202012240359]	18	1	55	54
