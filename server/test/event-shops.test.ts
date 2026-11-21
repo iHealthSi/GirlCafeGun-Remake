@@ -72,6 +72,59 @@ describe("event shops kept open (OPEN_EVENT_SHOPS)", () => {
     expect(shopEndTime(permanent, NOW_SECONDS)).toBe(permanent.end ?? 0);
   });
 
+  it("sells every goods of every open event shop once (buy out), for its tokens only", async () => {
+    const tokens = new Set<number>();
+    for (const shopId of OPEN_EVENT_SHOPS)
+      for (const { moneyType } of catalog.goodsForShop(shopId)) tokens.add(moneyType);
+    const { repository } = await fixture({
+      money: Object.fromEntries([...tokens].map((id) => [id, 10_000_000])),
+    });
+    const common = () => [2, 3, 12, 17].map((id) => money(current(repository), id));
+    const commonBefore = common();
+    const failures: string[] = [];
+    let bought = 0;
+    for (const shopId of OPEN_EVENT_SHOPS) {
+      const list = await repository.getShopGoodsList(account, catalog, shopId, NOW);
+      if (list.goodsList.length !== catalog.goodsForShop(shopId).length)
+        failures.push(`${shopId}: lists ${list.goodsList.length}`);
+      for (const config of catalog.goodsForShop(shopId)) {
+        const before = money(current(repository), config.moneyType);
+        try {
+          await repository.buyShopGoods(
+            account,
+            catalog,
+            shopId,
+            config.goodsId,
+            1,
+            NOW,
+          );
+          bought += 1;
+          if (money(current(repository), config.moneyType) >= before)
+            failures.push(`${config.goodsId}: not charged`);
+        } catch (error) {
+          failures.push(`${shopId}/${config.goodsId}: ${String(error)}`);
+        }
+      }
+    }
+    // Known gap of the shop module, not of the event shops: these furniture items each match two furniture rows
+    // (a wall pair, Type 81/82, or a counter and its part, Type 58/59), and a shop buy grants an item that matches
+    // exactly one, so the buy is refused (unknown_goods) and charges nothing.
+    const pairs = ["30003/30310", "30031/33132", "30023/32231", "30025/32518"].map(
+      (goods) => `${goods}: ShopError: shop error: unknown_goods`,
+    );
+    expect(failures.sort()).toEqual(pairs.sort());
+    expect(bought).toBe(
+      [...OPEN_EVENT_SHOPS].reduce(
+        (sum, id) => sum + catalog.goodsForShop(id).length,
+        0,
+      ) - pairs.length,
+    );
+    // Diamonds and gold were never spent (some goods give them).
+    common().forEach((count, index) =>
+      expect(count).toBeGreaterThanOrEqual(commonBefore[index]!),
+    );
+  }, 300_000);
+
   it("lists and sells an event shop's goods for its token, and refuses the closed Concert shop", async () => {
     const { repository } = await fixture({ money: { 5: 1_000, 6: 1_000 } });
     const list = await repository.getShopGoodsList(account, catalog, 30_001, NOW);
