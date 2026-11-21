@@ -122,6 +122,9 @@ export interface ClubBossRun {
   ended: boolean;
   pass: boolean;
   score: number;
+  /** The 10017 request and its answer: a resend of it gets the same answer. */
+  endKey?: string;
+  endReply?: Record<string, unknown>;
 }
 
 export interface ClubBossPath {
@@ -152,6 +155,8 @@ export interface ClubBossState {
   /** Operational dates on which the clubmates fought. */
   simulatedDates: string[];
   run?: ClubBossRun;
+  /** The 10017 request of the last run that 10025 closed: a late resend gets no answer. */
+  lastEndKey?: string;
 }
 
 /** What a boss command or the upkeep asks the club code to apply. */
@@ -168,6 +173,12 @@ interface BossPlayer {
   roleId: number;
   taskValues: Record<string, number>;
   club?: ClubState;
+  /**
+   * Season of the claim flags (tasks (1, 44..548)). Kept on the player, not
+   * the club: a club dissolved and created again in the same season keeps
+   * its claims.
+   */
+  clubBossFlagsSeason?: number;
 }
 
 function newState(season: ClubBossSeason, today: string): ClubBossState {
@@ -285,8 +296,9 @@ export function reconcileClubBoss(player: BossPlayer, now: number): BaseAward[] 
   const time = Math.floor(now / 1_000);
   const season = clubBossSeason(time);
   const today = dailySignUpOperationalDate(now);
-  if (club.boss?.season !== season.index) {
-    club.boss = newState(season, today);
+  if (club.boss?.season !== season.index) club.boss = newState(season, today);
+  if (player.clubBossFlagsSeason !== season.index) {
+    player.clubBossFlagsSeason = season.index;
     for (const key of Object.keys(player.taskValues)) {
       const id = Number(key);
       const group = id >>> 16;
@@ -466,7 +478,8 @@ export function clubBossCommand(
       return reply({ nError: CLUB_BOSS_OK, ...view() });
     case LUA_COMMAND_CLUB_BOSS_ENTER: {
       if (!club || !state) return reply({ nError: CLUB_BOSS_NOT_JOINED });
-      if (time < season.start || time >= season.end)
+      // ClubCommon:IsClubBossOpen counts EndTime itself as open.
+      if (time < season.start || time > season.end)
         return reply({ nError: CLUB_BOSS_CLOSED });
       const gridId = position(parameter, 0);
       const levelId = position(parameter, 1);
@@ -484,13 +497,18 @@ export function clubBossCommand(
     }
     case LUA_COMMAND_CLUB_BOSS_END: {
       // A pause exit leaves the map at once: an answer would open the end
-      // screen (or an error box) on the map the player went back to.
-      if (field(parameter, "bPauseExit") === true) {
-        if (state) delete state.run;
-        return reply(undefined);
-      }
+      // screen (or an error box) on the map the player went back to. The
+      // run stays (it used no try; the next 10016 replaces it), so a pause
+      // exit the client sends again later cannot drop a newer run.
+      if (field(parameter, "bPauseExit") === true) return reply(undefined);
       if (!club) return reply({ nError: CLUB_BOSS_NOT_JOINED });
       const run = state?.run;
+      // GameManager.SendInfoToServer sends the result again until an answer
+      // in DoSettle clears it: the same request gets the same answer, and one
+      // for a run that 10025 already closed gets none.
+      const key = JSON.stringify(parameter ?? null);
+      if (run?.ended && run.endKey === key) return reply(run.endReply);
+      if ((!run || run.ended) && state?.lastEndKey === key) return reply(undefined);
       if (
         !state ||
         !run ||
@@ -506,20 +524,23 @@ export function clubBossCommand(
       run.pass = field(parameter, "bPass") === true;
       run.ended = true;
       const explored = state.grids[String(run.gridId)] ?? 0;
-      return reply({
+      run.endKey = key;
+      run.endReply = {
         bPass: run.pass,
         nScore: run.score,
         nTotalScore: state.scores[String(self.roleId)] ?? 0,
         nGridScore: isCapped(level.type)
           ? Math.min(level.total, explored + run.score)
           : explored + run.score,
-      });
+      };
+      return reply({ ...run.endReply });
     }
     case LUA_COMMAND_CLUB_BOSS_SAVE: {
       // Always answered: OnSaveDataCallback is what leaves the end screen.
       if (!club || !state) return reply({});
       const run = state.run;
       delete state.run;
+      if (run?.endKey) state.lastEndKey = run.endKey;
       const clubAwards: BaseAward[] = [];
       if (parameter === true && run?.ended) {
         const result = scoreGrid(state, stage, run.gridId, self.roleId, run.score);

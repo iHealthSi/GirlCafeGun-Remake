@@ -620,10 +620,10 @@ function parseChapterCall(call: LuaCall | null): ChapterCall | null {
 function parseClubCall(
   luaCommand: number | null,
   parameters: unknown,
-): { command: number; parameters: unknown } | null {
+): { command: number; parameters: unknown; settle: boolean } | null {
   if (luaCommand === null) return null;
   if (CLUB_COMMANDS.has(luaCommand) || CLUB_BOSS_COMMANDS.has(luaCommand))
-    return { command: luaCommand, parameters };
+    return { command: luaCommand, parameters, settle: false };
   if (luaCommand !== LUA_COMMAND_DO_SETTLE) return null;
   const wrapped =
     typeof parameters === "object" && parameters !== null
@@ -635,7 +635,7 @@ function parseClubCall(
     Number((wrapped as Record<string, unknown>).sCmd) !== LUA_COMMAND_CLUB_BOSS_END
   )
     return null;
-  return { command: LUA_COMMAND_CLUB_BOSS_END, parameters: wrapped };
+  return { command: LUA_COMMAND_CLUB_BOSS_END, parameters: wrapped, settle: true };
 }
 
 function parseNumericLuaCommand(call: LuaCall | null): number | null {
@@ -3283,13 +3283,18 @@ export function createGatewayServer({
             makeTaskValueSync(clubTaskSyncValues(result.player.taskValues)),
           );
           if (result.response !== undefined) {
+            const answer = { sCmd: clubCall.command, tbParam: result.response };
+            // A result sent through DoSettle is answered inside DoSettle: its
+            // client handler clears GameManager's resend copy, then runs 10017.
             send(
               COMMAND.NTF_S2C_CALL,
               0,
-              makeServerLuaCall("LuaCall", {
-                sCmd: clubCall.command,
-                tbParam: result.response,
-              }),
+              makeServerLuaCall(
+                "LuaCall",
+                clubCall.settle
+                  ? { sCmd: LUA_COMMAND_DO_SETTLE, tbParam: answer }
+                  : answer,
+              ),
             );
           }
           if (result.tip) {

@@ -398,35 +398,51 @@ describe("club boss commands", () => {
     expect(
       command(player, LUA_COMMAND_CLUB_BOSS_END, { bPauseExit: true }, now).response,
     ).toBeUndefined();
-    expect(player.club!.boss!.run).toBeUndefined();
-    // an end without a run is refused
-    expect(
-      command(
-        player,
-        LUA_COMMAND_CLUB_BOSS_END,
-        { bPass: true, nGridId: grid.gridId, nLevelId: grid.levelId, nScore: 1 },
-        now,
-      ).response,
-    ).toEqual({ nError: CLUB_BOSS_INVALID });
+    // the run stays (no try used); the next enter replaces it
+    expect(player.club!.boss!.run).toMatchObject({ gridId: grid.gridId, ended: false });
 
     const before = player.club!.boss!.grids[String(grid.gridId)] ?? 0;
     command(player, LUA_COMMAND_CLUB_BOSS_ENTER, [grid.gridId, grid.levelId, 1], now);
-    const failed = command(
-      player,
-      LUA_COMMAND_CLUB_BOSS_END,
-      { bPass: false, nGridId: grid.gridId, nLevelId: grid.levelId, nScore: 500 },
-      now,
-    ).response as Record<string, unknown>;
+    const result = {
+      bPass: false,
+      nGridId: grid.gridId,
+      nLevelId: grid.levelId,
+      nScore: 500,
+    };
+    const failed = command(player, LUA_COMMAND_CLUB_BOSS_END, result, now)
+      .response as Record<string, unknown>;
     expect(failed).toMatchObject({ bPass: false, nScore: 500 });
+    // the client sends the same result again until DoSettle answers: same answer
+    expect(command(player, LUA_COMMAND_CLUB_BOSS_END, result, now).response).toEqual(
+      failed,
+    );
+    // a pause exit sent again later does not drop the ended run
+    command(player, LUA_COMMAND_CLUB_BOSS_END, { bPauseExit: true }, now);
+    expect(player.club!.boss!.run).toMatchObject({ ended: true, score: 500 });
     const saved = command(player, LUA_COMMAND_CLUB_BOSS_SAVE, false, now)
       .response as Record<string, unknown>;
     expect(saved).toMatchObject({ myScore: 0, nEnterTimes: 0 });
     expect(player.club!.boss!.grids[String(grid.gridId)] ?? 0).toBe(before);
     expect(player.taskValues[CLUB_BOSS_TODAY_RUNS_TASK]).toBe(0);
+    // after 10025: the same result again gets no answer, another one an error
+    expect(
+      command(player, LUA_COMMAND_CLUB_BOSS_END, result, now).response,
+    ).toBeUndefined();
+    expect(
+      command(player, LUA_COMMAND_CLUB_BOSS_END, { ...result, nScore: 1 }, now)
+        .response,
+    ).toEqual({ nError: CLUB_BOSS_INVALID });
     // 10025 is answered even with nothing to keep (it closes the end screen)
     expect(
       command(player, LUA_COMMAND_CLUB_BOSS_SAVE, true, now).response,
     ).toBeDefined();
+    // the same result in a new run is that run's result
+    command(player, LUA_COMMAND_CLUB_BOSS_ENTER, [grid.gridId, grid.levelId, 1], now);
+    expect(
+      command(player, LUA_COMMAND_CLUB_BOSS_END, result, now).response,
+    ).toMatchObject({
+      nScore: 500,
+    });
   });
 
   it("refuses a complete grid, fights after the end, and grid rewards after the award days", () => {
@@ -450,8 +466,18 @@ describe("club boss commands", () => {
       ).response,
     ).toEqual({ nError: CLUB_BOSS_GRID_DONE });
 
-    const afterEnd = A + CLUB_BOSS_FIGHT_SECONDS * 1_000 + 3_600_000;
     const grid = openGrid(player);
+    // ClubCommon:IsClubBossOpen counts the EndTime second as open
+    const endSecond = A + CLUB_BOSS_FIGHT_SECONDS * 1_000;
+    expect(
+      command(
+        player,
+        LUA_COMMAND_CLUB_BOSS_ENTER,
+        [grid.gridId, grid.levelId, 1],
+        endSecond,
+      ).response,
+    ).toEqual({ nError: CLUB_BOSS_OK });
+    const afterEnd = endSecond + 1_000;
     expect(
       command(
         player,
@@ -537,6 +563,16 @@ describe("club boss commands", () => {
       ).toBe(0);
     expect(player.taskValues[CLUB_BOSS_TOTAL_RUNS_TASK] ?? 0).toBe(0);
     const second = claimAll(now);
+    // a club dissolved and made again in the same season keeps the claims
+    player.club = createClubState(
+      player,
+      parseCreateClubRequest(CREATE_REQUEST),
+      now + DAY,
+    );
+    upkeep(player, now + DAY);
+    const again = claimAll(now + DAY);
+    expect(again.participate.response).toEqual({ nError: CLUB_BOSS_NO_AWARD });
+    expect(again.grids.response).toEqual({ nError: CLUB_BOSS_NO_AWARD });
     expect(second.participate.response).toMatchObject({ nError: CLUB_BOSS_OK });
     expect(second.grids.response).toMatchObject({ nError: CLUB_BOSS_OK });
   });

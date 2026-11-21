@@ -253,19 +253,23 @@ describe("club boss over TCP", () => {
       ).toEqual({ nError: CLUB_BOSS_OK });
 
       // GameManager.SendInfoToServer: {sCmd: 252, tbParam: {sCmd: 10017, tbParam}};
-      // the answer comes back as 10017, the way the bounty settle answers.
-      const end = luaReply(
+      // the answer comes inside DoSettle too, whose client handler clears the
+      // resend copy and then runs the 10017 handler.
+      const result = { bPass: true, nGridId: gridId, nLevelId: levelId, nScore: pass };
+      const settled = luaReply(
         await f.lua(
           LUA_COMMAND_DO_SETTLE,
-          {
-            sCmd: LUA_COMMAND_CLUB_BOSS_END,
-            tbParam: { bPass: true, nGridId: gridId, nLevelId: levelId, nScore: pass },
-          },
-          LUA_COMMAND_CLUB_BOSS_END,
+          { sCmd: LUA_COMMAND_CLUB_BOSS_END, tbParam: result },
+          LUA_COMMAND_DO_SETTLE,
         ),
-        LUA_COMMAND_CLUB_BOSS_END,
-      );
-      expect(end).toMatchObject({ bPass: true, nScore: pass, nTotalScore: 0 });
+        LUA_COMMAND_DO_SETTLE,
+      ) as { sCmd: number; tbParam: unknown };
+      expect(settled.sCmd).toBe(LUA_COMMAND_CLUB_BOSS_END);
+      expect(settled.tbParam).toMatchObject({
+        bPass: true,
+        nScore: pass,
+        nTotalScore: 0,
+      });
 
       const saved = luaReply(await f.lua(LUA_COMMAND_CLUB_BOSS_SAVE, true), 10_025) as {
         myScore: number;
@@ -277,12 +281,12 @@ describe("club boss over TCP", () => {
         saved.clubboss.bosslist.find((grid) => grid.gridid === gridId)!.explore_score,
       ).toBeGreaterThanOrEqual(pass);
 
-      // A pause exit gets no answer: no 10017 within the wait (1.5 s).
+      // A pause exit gets no answer: no DoSettle within the wait (1.5 s).
       const after = await f
         .lua(
           LUA_COMMAND_DO_SETTLE,
           { sCmd: LUA_COMMAND_CLUB_BOSS_END, tbParam: { bPauseExit: true } },
-          LUA_COMMAND_CLUB_BOSS_END,
+          LUA_COMMAND_DO_SETTLE,
           1_500,
         )
         .catch(() => null);

@@ -557,6 +557,8 @@ export interface Player {
   club?: ClubState;
   /** Set when the player first creates a club: achievement 2050 stays done. */
   clubEverJoined?: boolean;
+  /** Club boss season of the claim flags (club-boss-data.ts). */
+  clubBossFlagsSeason?: number;
 }
 
 export interface PersistedState {
