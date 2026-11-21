@@ -37,7 +37,13 @@ M.FAMILIES = {
 		enter = function() UI.CloseAndOpen('UI_AnniversaryMain') end },
 	{ key = 'mix', label = 'Joint Event',
 		rows = function() return MixOnlineLogic and MixOnlineLogic.tbActivityConfig end,
-		enter = function() MixOnlineLogic:GetTower() end },
+		-- The server reads the running joint event from task 68/1001 (MixOnlineLogic.nTask_Id).
+		enter = function(tb)
+			if me and me.SetTaskValue and tb.Id then
+				me:SetTaskValue(MixOnlineLogic.nTask_Group or 68, MixOnlineLogic.nTask_Id or 1001, tb.Id)
+			end
+			MixOnlineLogic:GetTower()
+		end },
 	{ key = 'buff', label = 'Challenge',
 		rows = function() return BuffTowerLogic and BuffTowerLogic.tbChallengeTowerConfig end,
 		accept = function(tb) return not tb.noEntry and not tb.NoEntry end,
@@ -55,7 +61,7 @@ M.FAMILIES = {
 
 -- Families whose server part exists. A family off this list stays off the page: its calls would get no
 -- reply and its screens would wait for ever.
-M.SERVED = { tower = true }
+M.SERVED = { tower = true, micro = true, coop = true, mix = true, buff = true, linkage = true, anniversary2 = true }
 
 local DAY = 86400
 M.OPEN_DAYS = 30
