@@ -332,3 +332,76 @@ team out, both teams out lose the map. Cells, steps, round, health, boss health 
 **Review fixes of slice 3** (landed with slice 4): linkage type 45 reads `[count, G, D, P, L]`, 339 answers the bare list
 (`CoopClientEvent.tbSpAward`), refused coop and mixed online passes answer with empty success fields, negative pond
 `Count` is unlimited, the linkage daily mission ignores the state lock and resets daily.
+
+## Slice 5: the first Anniversary
+
+Code: `game-data/anniversary-data.ts` (tables, layouts, request parsing, GameRankMsg), the families `anniversary` and
+`discovery` in `game-data/named-tower-data.ts`, `applyAnniversaryRequest` in `persistence/player-repository.ts`
+(`PlayerRepository.handleAnniversaryRequest`), two branches in the gateway (the hub's LuaCalls and `GameRankMsg`).
+Tables: `resources/tower/anniversaryactivity/` (levels, goals, map events, grid maps 1 to 8, discovery maps, capsule
+pools, girl stories, puzzle boards) and `anniversaryguess/` (time list, girls, round list, round rates, awards).
+Tests: `anniversary-tower`, `anniversary-side`, `anniversary-gateway`; layouts against the Lua with
+`GCG_CLIENT_LUA_DIR`.
+
+| Call                          | Request (`tbParam`)                           | Reply (`tbParam`)                                                        |
+| ----------------------------- | --------------------------------------------- | ------------------------------------------------------------------------ |
+| 426 / 427 / 428 tower         | named fields as the other towers              | as the second anniversary: `tbData` awards, `{}` for a fail              |
+| 421 / 422 / 423 discovery     | the same plus `nMapId`; Pass `tbScore`        | like the tower; Pass adds `newGoalIds`                                   |
+| 418 add power, 419 reset map  | `{Val, Reason}` / `{MapID}`                   | none (see below)                                                         |
+| 420 move                      | `{MapID, Path}`                               | `{Err: 0, TeamPos, LastPower}`; `{Err: 1}` no power; `{Err: 2}` bad cell |
+| 429 strengthen                | `{AttrIdx}`                                   | `{nError: 0}`, `{nError: 1}`                                             |
+| 480 exploration reward        | `{MapID, RewardIdx}`                          | `{nError: 0, nMapId, nRewardIdx}`, `{nError: 1}`                         |
+| 424 board open                | `{}`                                          | `[photos before]` when a photo unlocks, else no reply                    |
+| 425 board award               | `{}`                                          | `[6, 28, 55, 4, 1]` (flat), `[]` refused                                 |
+| 437 love                      | `{nType 1 gift or 2 story, girlId, storyIdx}` | `{nType, tbReward}` or `{nError}`                                        |
+| 438 capsule                   | `{nId}`                                       | the bare list of rewards (`[]` refused)                                  |
+| 440 / 441 puzzle              | `{nGroup, nIndex}`                            | the request with `nRet`: 0, -1 refused, -5 no token                      |
+| 430 / 431 / 432 / 433 guess   | see below                                     | `{Error: 0, ...}` or `{Error: 20043 or 20045}`                           |
+| 355 / 356 idol vote           | any                                           | `{Error: 20045}`                                                         |
+| 206 ranking tower award       | `{}`                                          | `{res: false}`                                                           |
+| `GameRankMsg` (not a LuaCall) | `[top, mid, 1, first, [start, limit]]`        | S2C `ServerRankMsg` `{tbData: {tbId, max: 0, me: 0, other: []}}`         |
+
+Task layouts (all in group 81 unless said; `anniversary-side.test.ts` compares them with the Lua): tower clears bit
+(event - 1) of 1010 + LevelId; discovery clears 3002 + event \* 100 + LevelId (a counter), star points 20000 + LevelId,
+goal flags 20000 + LevelId \* 100 + GoalID; the team stands on 81/<map>; visits are in group 80 at (map - 1) \* 200 +
+grid; attributes 4001 to 4003 (50 exp per skill point, 100 exp per level); exploration rewards 19000 + (map - 1) \* 3 +
+idx; capsule pond 1901 and drawn counts 1902+; love 2001 + girl; story bits 2501 + girl (bit storyIdx). Board group 83
+(1 letter opened, 2 photos, 3 award taken, 4 last day); puzzle group 86 (bits 1 to 18 pieces, 21 to 24 boxes); guess
+group 84 (see `GUESS_TASK`).
+
+- Power (money 58) and skill points (money 59) come from the FixAward items 15-86 and 15-87 of the tower levels
+  (AutoUse `ItemAddAnniversaryDiscoveryPowerAuto` and `...ExpAuto`, which have no rule in `autouse`):
+  `grantTowerAwards` adds them to the wallets (`TOWER_ITEM_WALLETS`).
+- 418 and 419 are marked as test commands in `luacall.lua`; the C# build gave out power and let rewards pay again.
+  They are accepted, change nothing and get no reply.
+- 420 charges one power per new cell; a path the power cannot pay is refused whole (`MoveRsp` does not move the team
+  on an error). A hinder (event type 101) stops the walk until strength, spirit and technique reach its needs; a
+  fight cell stops it until its level is passed. First arrival pays the cell event's FirstAward once. The server does
+  not check that cells are adjacent. 429 refuses at the highest level any hinder or story asks for [INFER].
+- 480: `done * 1000 >= ProcessPoint * total` over the exploratory degrees (`ProcessSatisfy`).
+- 424: the first call also sets 83/1 (the client never does), so the letter plays once. 425 pays the item the screen
+  previews (6-28-55-4 is head frame 55: task 11/55 holds the time).
+- 437: a gift is item 15-88 (3 love levels); a story needs the love level, the three attribute levels and the tower
+  level of its row, and the girl (ids below 21); it is paid once (bit). The unlock date stays on the client.
+- 438: one coin (15-89) buys LimitCount draws of the current limited pond and LimitlessCount of the endless one.
+- Guess: a round is six of the fourteen girls (task 84/2 counts rounds, 84/7 holds girl, position, tries and results
+  of the bout), a match is best of three where draws are not recorded and three tries end it (a match without two
+  wins is lost) [INFER]. A throw costs UseNum tries: the 18 free ones of the day (04:00 Shanghai), then wallet 54.
+  The gold finger (wallet 55) wins the bout. RoundList fixes the girl's throw for its bout, RoundRate type 2 throws
+  the client's hint, type 3 anything but the hint, type 4 sometimes does not throw (the player wins by timeout). 431
+  answers `{Error, nType, ServerFist, bGold}` or a timeout shape; 432 pays by bouts, wins against one girl or against
+  all; 433 returns the last twenty rounds. The record and the round's girls are in `player.anniversary`.
+- Fail replies of 423 and 428 are `{}`; `AnniversaryMainLogic` and `GridActLogic` have no `OnFailTower`, so the client
+  runs a nil call after the DoSettle reply (as it does for the concert tower).
+
+Not served: the Event button (NormalActivity 144, the cake page: `NormalActivityGetAward {nActivityId: 144}` and
+`SwitchAnniversaryMission` are unanswered); the first Anniversary has no missions in the tables (all 20 rows of
+`monthmission.txt` are `missionEvent` 2), so its mission button only shows the tip of the client. The shops 30020 and
+30021 are served by the shop module, whose own `shoptabs.txt` closes them by their 2020 dates (as 30040, 30041, 30046,
+30047). 355 and 356 are refused, the idol vote is not built. The client writes no task value of these screens.
+
+**Review fixes of slice 4** (landed with slice 5): the pond stock counts unlimited slots, a boss move onto an
+occupied cell is answered as done and the boss stays, the mission day rolls before a count is added, mission counters
+are kept per mission group (`vigour:<group>`, `kills:<group>:<issue>`, `diff:<group>:<level>:<diff>`; the concert
+challenge missions 52 to 57 count buff tower event 1), a shop spend refreshes the mission tasks, the exchange listing
+counter rolls with the day at login and at 380, and a team that lost its chess fight leaves the grid.

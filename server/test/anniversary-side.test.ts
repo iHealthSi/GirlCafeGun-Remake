@@ -1,3 +1,5 @@
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,8 +9,15 @@ import {
   gameRankReply,
   parseAnniversaryCall,
   parseGameRankCall,
+  BOARD_TASK,
+  GRID_TASK,
+  GUESS_TASK,
+  LOVE_ITEM,
+  MAIN_TASK,
+  PUZZLE_TASK,
   type AnniversaryRequest,
 } from "../src/game-data/anniversary-data.js";
+import { ANNIVERSARY_TASK, NAMED_COMMAND } from "../src/game-data/named-tower-data.js";
 import {
   account,
   current,
@@ -535,3 +544,113 @@ describe("guessing tournament, 430 to 433", () => {
     expect(task(current(repository), 84, 32)).toBe(1 << 1);
   });
 });
+
+/**
+ * The layouts are copied from the 0.1.3 client scripts. Run with
+ * GCG_CLIENT_LUA_DIR=<folder with the decrypted *.lua.txt> to compare them.
+ */
+const luaDirectory = process.env.GCG_CLIENT_LUA_DIR ?? "";
+describe.skipIf(!luaDirectory || !existsSync(luaDirectory))(
+  "first Anniversary layouts against the client Lua",
+  () => {
+    const lua = (name: string): string =>
+      readFileSync(path.join(luaDirectory, `${name}.lua.txt`), "utf8");
+    const value = (source: string, pattern: RegExp): number => {
+      const match = source.match(pattern);
+      if (!match) throw new Error(`Not found: ${pattern}`);
+      return Number(match[1]);
+    };
+
+    it("tower, discovery levels, stories and capsules", () => {
+      const main = lua("anniversarymainlogic");
+      expect(ANNIVERSARY_TASK.group).toBe(value(main, /nGroup\s*=\s*(\d+)/));
+      expect(ANNIVERSARY_TASK.pass).toBe(value(main, /nTask_LevelPass\s*=\s*(\d+)/));
+      expect(MAIN_TASK.pondId).toBe(value(main, /nTaskIdPondId\s*=\s*(\d+)/));
+      expect(MAIN_TASK.pondCount).toBe(value(main, /nTaskIdOffset\s*=\s*(\d+)/));
+      expect(MAIN_TASK.love).toBe(value(main, /nTask_GirlLove\s*=\s*(\d+)/));
+      expect(MAIN_TASK.story).toBe(value(main, /nTask_GirlStory\s*=\s*(\d+)/));
+      expect(MAIN_TASK.maxLove).toBe(value(main, /MaxLoveLevel\s*=\s*(\d+)/));
+      expect(LOVE_ITEM.join(",")).toBe(/LoveItem\s*=\s*\{([\d,]+)\}/.exec(main)![1]);
+    });
+
+    it("discovery map", () => {
+      const grid = lua("gridactlogic");
+      expect(GRID_TASK.visitGroup).toBe(value(grid, /GridPowerGroup\s*=\s*(\d+)/));
+      expect(GRID_TASK.group).toBe(value(grid, /GridLastPointGroup\s*=\s*(\d+)/));
+      expect(ANNIVERSARY_TASK.discoveryPass).toBe(
+        value(grid, /LevelPassOffset\s*=\s*(\d+)/),
+      );
+      expect(GRID_TASK.processReward).toBe(
+        value(grid, /nProcessRewardOffset\s*=\s*(\d+)/),
+      );
+      expect(ANNIVERSARY_TASK.goalBase).toBe(
+        value(grid, /nTaskTowerGoalBase\s*=\s*(\d+)/),
+      );
+      expect(GRID_TASK.expAdd).toBe(value(grid, /ExpAdd\s*=\s*(\d+)/));
+      expect(GRID_TASK.expCost).toBe(value(grid, /ExpCost\s*=\s*(\d+)/));
+      expect(GRID_TASK.attribute).toBe(value(grid, /local task_offset\s*=\s*(\d+)/));
+      expect(value(grid, /nTask_Strength\s*=\s*task_offset \+ (\d+)/)).toBe(1);
+      const money = lua("moneylogic");
+      expect(GRID_TASK.power).toBe(
+        value(money, /eMoneyType_Anniversary_Power\s*=\s*(\d+)/),
+      );
+      expect(GRID_TASK.points).toBe(
+        value(money, /eMoneyType_Anniversary_Point\s*=\s*(\d+)/),
+      );
+    });
+
+    it("board, puzzle and guess", () => {
+      const board = lua("anniversaryboard");
+      expect(BOARD_TASK.group).toBe(value(board, /TaskGroup\s*=\s*(\d+)/));
+      expect(BOARD_TASK.letterOpened).toBe(
+        value(board, /HasOpenLetterTaskId\s*=\s*(\d+)/),
+      );
+      expect(BOARD_TASK.photos).toBe(value(board, /PhotoUnLockNumTaskId\s*=\s*(\d+)/));
+      expect(BOARD_TASK.awardTaken).toBe(value(board, /HasGetAwardTaskId\s*=\s*(\d+)/));
+      expect(BOARD_TASK.lastDay).toBe(value(board, /LastOpenLetterDay\s*=\s*(\d+)/));
+      expect(BOARD_TASK.photoCount).toBe(value(board, /< (\d+) then/));
+      const puzzle = lua("puzzlelogic");
+      expect(PUZZLE_TASK.group).toBe(value(puzzle, /nTaskGroup\s*=\s*(\d+)/));
+      expect(PUZZLE_TASK.pieces).toBe(value(puzzle, /nPuzzleNum\s*=\s*(\d+)/));
+      expect(PUZZLE_TASK.awards).toBe(value(puzzle, /nAwardNum\s*=\s*(\d+)/));
+      expect(PUZZLE_TASK.awardBit).toBe(value(puzzle, /nPuzzleAward\s*=\s*(\d+)/));
+      const guess = lua("anniversaryguess");
+      expect(GUESS_TASK.group).toBe(value(guess, /Task_Group\s*=\s*(\d+)/));
+      expect(GUESS_TASK.turn).toBe(value(guess, /TurnNum_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.daily).toBe(value(guess, /DailyNum_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.join).toBe(value(guess, /JoinNum_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.current).toBe(value(guess, /CurRound_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.rateSum).toBe(value(guess, /AllRoundRate_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.girl).toBe(value(guess, /GirlNum_Task\s*=\s*(\d+)/));
+      expect(GUESS_TASK.awardFlags).toBe(value(guess, /AwardJoin_Task\s*=\s*(\d+)/));
+    });
+
+    it("sends the commands the screens name", () => {
+      const source = lua("luacall");
+      const id = (name: string): number =>
+        value(source, new RegExp(String.raw`LuaCall\.${name}\s*=\s*(\d+)`));
+      expect(NAMED_COMMAND.gridPower).toBe(id("Anniversary_GridAct_GetPower"));
+      expect(NAMED_COMMAND.gridReset).toBe(id("Anniversary_GridAct_ResetMap"));
+      expect(NAMED_COMMAND.gridMove).toBe(id("Anniversary_GridAct_Move"));
+      expect(NAMED_COMMAND.discoveryEnter).toBe(id("Anniversary_Discovery_EnterTower"));
+      expect(NAMED_COMMAND.anniversaryEnter).toBe(id("Anniversary_EnterTower"));
+      expect(NAMED_COMMAND.strengthen).toBe(id("Anniversary_Discovery_StrengthenAttr"));
+      expect(NAMED_COMMAND.processReward).toBe(
+        id("Anniversary_Discovery_Process_Reward"),
+      );
+      expect(NAMED_COMMAND.boardOpen).toBe(id("Anniversary_BoardOpen"));
+      expect(NAMED_COMMAND.boardAward).toBe(id("Anniversary_GetAward"));
+      expect(NAMED_COMMAND.love).toBe(id("Anniversary_Love"));
+      expect(NAMED_COMMAND.gacha).toBe(id("Anniversary_Gacha"));
+      expect(NAMED_COMMAND.puzzleOpen).toBe(id("Puzzle_Open"));
+      expect(NAMED_COMMAND.puzzleBox).toBe(id("Puzzle_Box"));
+      expect(NAMED_COMMAND.guessRefresh).toBe(id("Guess_Refresh"));
+      expect(NAMED_COMMAND.guessFist).toBe(id("Guess_Fist"));
+      expect(NAMED_COMMAND.guessAward).toBe(id("Guess_Award"));
+      expect(NAMED_COMMAND.guessLog).toBe(id("Guess_Log"));
+      expect(NAMED_COMMAND.fanSupport).toBe(id("FanEvent_Support"));
+      expect(NAMED_COMMAND.fanReward).toBe(id("FanEvent_Reward"));
+      expect(NAMED_COMMAND.challengeAwardSome).toBe(id("Challenge_Award_Some"));
+    });
+  },
+);
