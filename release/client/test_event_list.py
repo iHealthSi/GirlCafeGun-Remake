@@ -304,12 +304,72 @@ def g_classes():
     return set(re.findall(r'(\w+) = true', block))
 
 
-def scripts_from_bundle(bundle):
+FAIL_HARNESS = r'''
+MODULE_SERVER = false
+-- Every other global is a mock that can be called, indexed, counted and compared, so the four logic scripts
+-- and LuaCall.lua load as they are. The tables under test and LuaCall stay real (nil until defined).
+local REAL = { MusicActivityLogic = true, BuffTowerLogic = true, GridActLogic = true,
+  AnniversaryMainLogic = true, LuaCall = true, MODULE_SERVER = true }
+local M = {}
+local function any() return setmetatable({}, M) end
+M.__index = function(_, k) if type(k) == 'number' then return nil end return any() end
+M.__call = function() return any() end
+M.__len = function() return 0 end
+M.__pairs = function() return next, {}, nil end
+M.__lt = function() return false end
+M.__le = function() return false end
+M.__concat = function() return '' end
+M.__tostring = function() return 'mock' end
+for _, op in ipairs({'__add', '__sub', '__mul', '__div', '__mod', '__idiv', '__unm', '__pow'}) do
+  M[op] = function() return 0 end
+end
+setmetatable(_G, { __index = function(_, k) if REAL[k] then return nil end return any() end })
+-- MusicActivityLogic:LoadRelayConf runs load(Game.LuaUtils.LoadText(...)): the text is a mock here.
+local real_load = load
+load = function(chunk, ...)
+  if getmetatable(chunk) == M then return function() return any() end end
+  return real_load(chunk, ...)
+end
+'''
+
+FAIL_SCENARIO = r'''
+local out = {}
+for _, cmd in ipairs({'MusicTower_FailTower', 'BuffTower_FailTower', 'Anniversary_Discovery_FailTower',
+                      'Anniversary_FailTower'}) do
+  local id = LuaCall[cmd]
+  local ok, err = pcall(LuaCall.tbCMD[id], id, {})
+  out[#out + 1] = cmd .. '=' .. (ok and 'ok' or tostring(err))
+end
+return table.concat(out, '\n')
+'''
+
+
+def replay_fail(logic, luacall):
+    """logic: {script name: source}; runs the client branch of the four LuaCall Fail handlers."""
+    lua = LuaRuntime()
+    lua.execute(FAIL_HARNESS)
+    for name in sorted(g.FAIL_TOWER):
+        source = logic[name]
+        lua.execute(source.decode('utf8') if isinstance(source, bytes) else source)
+    lua.execute(luacall.decode('utf8') if isinstance(luacall, bytes) else luacall)
+    return dict(line.split('=', 1) for line in lua.execute(FAIL_SCENARIO).split('\n'))
+
+
+def run_fail(stock, patched, stock_luacall, patched_luacall=None):
+    """A lost fight's answer raises on the release scripts and runs on the patched ones."""
+    before = replay_fail(stock, stock_luacall)
+    assert all('OnFailTower' in err for err in before.values()), before
+    after = replay_fail(patched, patched_luacall or stock_luacall)
+    assert all(result == 'ok' for result in after.values()), after
+    return {'stockLostFightErrors': len(before), 'patchedLostFightHandled': sorted(after)}
+
+
+def scripts_from_bundle(bundle, names=None):
     import asset_tools
     _, raw = asset_tools.unityfs(asset_tools.transform(bundle))
     _, objects = asset_tools.serialized_objects(raw)
     out = {}
-    for name in g.LUA_NAMES:
+    for name in names or g.LUA_NAMES:
         obj = next(o for o in objects if o.get('name') == name)
         out[name] = raw[obj['script_start']:obj['script_start'] + obj['script_length']]
     return out
@@ -326,12 +386,15 @@ def tower_text(setting):
 
 def run_bundle(built, stock_bundle, rows):
     """rows: tower_rows(tower_text(setting.u bytes))."""
-    stock = scripts_from_bundle(stock_bundle)
-    patched = scripts_from_bundle(built)
+    names = g.LUA_NAMES | {'LuaCall.lua'}
+    stock = scripts_from_bundle(stock_bundle, names)
+    patched = scripts_from_bundle(built, names)
     for name in g.LUA_NAMES:
         assert b'EventList' in patched[name], name
-    return run_script(stock['UI_FightMode.lua'], stock['UI_CoopChoose.lua'], rows,
-                      (patched['UI_FightMode.lua'], patched['UI_CoopChoose.lua']))
+    result = run_script(stock['UI_FightMode.lua'], stock['UI_CoopChoose.lua'], rows,
+                        (patched['UI_FightMode.lua'], patched['UI_CoopChoose.lua']))
+    result.update(run_fail(stock, patched, stock['LuaCall.lua'], patched['LuaCall.lua']))
+    return result
 
 
 def main(argv):
@@ -343,8 +406,10 @@ def main(argv):
     else:
         bundle = source.read_bytes()
         rows = tower_rows(Path(argv[2]).read_text(encoding='utf8'))
-    scripts = scripts_from_bundle(bundle)
+    scripts = scripts_from_bundle(bundle, g.LUA_NAMES | {'LuaCall.lua'})
     print(run_script(scripts['UI_FightMode.lua'], scripts['UI_CoopChoose.lua'], rows))
+    patched = {name: g.lua_script(name, scripts[name]) for name in g.FAIL_TOWER}
+    print(run_fail(scripts, patched, scripts['LuaCall.lua']))
 
 
 if __name__ == '__main__':

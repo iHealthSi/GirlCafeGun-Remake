@@ -8,11 +8,30 @@ leaves its Mul panel empty (UpdateMul).
 This recipe appends event_list.lua to UI_FightMode.lua: the tile now opens a scroll page (the Mul panel of
 UI_CoopChoose) with every past event of the families the server serves. A tap opens that one event alone,
 by its dates, and enters it through the stock ActivitiesLogic:GetTower. The 3-6 unlock of the tile stays.
+
+A lost fight: the Fail handlers of LuaCall.lua (373 Concert, 379 Concert challenge, 423 and 428 first
+Anniversary) call OnFailTower on a logic table that the release never gives one, so the server's answer
+raised a nil-method error. FailTower already ended the fight before it sent the call, as in the other
+families, whose OnFailTower is empty (SecondAnniversaryTower, LinkageActivityLogic, WarChessTower). The
+recipe adds the same empty method to each of the four logic scripts, just before the script's closing
+Init call (so after its own `X = {}` line).
 """
 from pathlib import Path
+import re
 
-LUA_NAMES = {'UI_FightMode.lua', 'UI_CoopChoose.lua'}
+UI_NAMES = {'UI_FightMode.lua', 'UI_CoopChoose.lua'}
+# Script -> the logic table whose OnFailTower the LuaCall Fail handler calls.
+FAIL_TOWER = {
+    'MusicActivityLogic.lua': 'MusicActivityLogic',
+    'BuffTowerLogic.lua': 'BuffTowerLogic',
+    'GridActLogic.lua': 'GridActLogic',
+    'AnniversaryMainLogic.lua': 'AnniversaryMainLogic',
+}
+LUA_NAMES = UI_NAMES | set(FAIL_TOWER)
 MODULE = Path(__file__).with_name('event_list.lua')
+FAIL_TAIL = (
+    '\n\n-- EventList: the LuaCall Fail handler calls OnFailTower; the fight already ended in FailTower.\n'
+    'if not {0}.OnFailTower then function {0}:OnFailTower() end end\n')
 
 TILE_OLD = 'function tbClass:CheckEventOpen()\n'
 TILE_NEW = TILE_OLD + '\tif EventList and EventList.FightModeTile then return EventList.FightModeTile(self) end\n'
@@ -32,7 +51,16 @@ def replace_one(text, old, new):
 def lua_script(name, source):
     assert name in LUA_NAMES, name
     text = source.decode('utf8').replace('\r\n', '\n')
-    if name == 'UI_FightMode.lua':
+    if name in FAIL_TOWER:
+        table = FAIL_TOWER[name]
+        assert ('\n%s = {}\n' % table) in text or ('\n%s = %s or {};\n' % (table, table)) in text, name
+        assert ('%s:OnFailTower' % table) not in text and 'tbLogic:OnFailTower' not in text, name
+        # Before the script's closing Init call (GridActLogic.lua ends in `return tbLogic;`).
+        init = list(re.finditer(r'\n(?:tbLogic|%s):Init\(\);?\n' % table, text + '\n'))
+        assert len(init) == 1, name
+        at = init[0].start()
+        text = text[:at] + FAIL_TAIL.format(table).rstrip('\n') + text[at:]
+    elif name == 'UI_FightMode.lua':
         text = replace_one(text, TILE_OLD, TILE_NEW)
         text = text.rstrip('\n') + '\n\n' + MODULE.read_text(encoding='utf8')
     else:
