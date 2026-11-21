@@ -190,6 +190,7 @@ import {
   makePvpUpdatePlayerInfoResponse,
   makePvpZanResponse,
 } from "../protocol/pvp-messages.js";
+import { lookupCached, rememberResponse } from "./response-cache.js";
 
 interface GatewayServerOptions {
   config: AppConfig;
@@ -1350,9 +1351,7 @@ export function createGatewayServer({
             ? `${packet.command}:${packet.serial}:${createHash("sha256").update(packet.payload).digest("hex")}`
             : null;
         const now = Date.now();
-        for (const [id, cached] of context.houseResponses)
-          if (cached.expiresAt <= now) context.houseResponses.delete(id);
-        const cached = key ? context.houseResponses.get(key) : undefined;
+        const cached = lookupCached(context.houseResponses, key, now);
         if (cached) {
           send(responseCommand, packet.serial, cached.response);
           return;
@@ -1401,14 +1400,12 @@ export function createGatewayServer({
           }
           send(responseCommand, packet.serial, response);
           if (key) {
-            context.houseResponses.set(key, {
-              response,
-              expiresAt: now + SETTLEMENT_CACHE_TTL_MS,
-            });
-            if (context.houseResponses.size > 64)
-              context.houseResponses.delete(
-                context.houseResponses.keys().next().value!,
-              );
+            rememberResponse(
+              context.houseResponses,
+              key,
+              { response },
+              now + SETTLEMENT_CACHE_TTL_MS,
+            );
           }
         } catch (error) {
           send(responseCommand, packet.serial, Buffer.alloc(0), 1);
@@ -1432,9 +1429,7 @@ export function createGatewayServer({
             ? `${packet.command}:${packet.serial}:${createHash("sha256").update(packet.payload).digest("hex")}`
             : null;
         const now = Date.now();
-        for (const [id, cached] of context.houseResponses)
-          if (cached.expiresAt <= now) context.houseResponses.delete(id);
-        const cached = key ? context.houseResponses.get(key) : undefined;
+        const cached = lookupCached(context.houseResponses, key, now);
         if (cached) {
           send(COMMAND.UPDATE_HOUSE_RSP, packet.serial, cached.response);
           return;
@@ -1450,14 +1445,12 @@ export function createGatewayServer({
           });
           send(COMMAND.UPDATE_HOUSE_RSP, packet.serial, response);
           if (key) {
-            context.houseResponses.set(key, {
-              response,
-              expiresAt: now + SETTLEMENT_CACHE_TTL_MS,
-            });
-            if (context.houseResponses.size > 64)
-              context.houseResponses.delete(
-                context.houseResponses.keys().next().value!,
-              );
+            rememberResponse(
+              context.houseResponses,
+              key,
+              { response },
+              now + SETTLEMENT_CACHE_TTL_MS,
+            );
           }
           logger.info("house.layout.saved", {
             account: context.account,
@@ -3242,10 +3235,7 @@ export function createGatewayServer({
               ? `${packet.serial}:${call?.json}`
               : null;
           const now = Date.now();
-          for (const [key, cached] of context.cafeResponses) {
-            if (cached.expiresAt <= now) context.cafeResponses.delete(key);
-          }
-          const cached = retryKey ? context.cafeResponses.get(retryKey) : undefined;
+          const cached = lookupCached(context.cafeResponses, retryKey, now);
           if (cached) {
             send(
               COMMAND.NTF_S2C_CALL,
@@ -3274,14 +3264,12 @@ export function createGatewayServer({
               }),
             );
             if (retryKey) {
-              context.cafeResponses.set(retryKey, {
-                response: result.response,
-                expiresAt: now + SETTLEMENT_CACHE_TTL_MS,
-              });
-              if (context.cafeResponses.size > 64)
-                context.cafeResponses.delete(
-                  context.cafeResponses.keys().next().value!,
-                );
+              rememberResponse(
+                context.cafeResponses,
+                retryKey,
+                { response: result.response },
+                now + SETTLEMENT_CACHE_TTL_MS,
+              );
             }
             logger.info("cafe.callback", {
               account: context.account,
@@ -3433,10 +3421,12 @@ export function createGatewayServer({
             shopId === 40_001 && packet.serial > 0
               ? `${packet.serial}:${call?.json}`
               : null;
-          const priorCafePurchase = cafeRetryKey
-            ? context.cafeResponses.get(cafeRetryKey)
-            : undefined;
-          if (priorCafePurchase && priorCafePurchase.expiresAt > Date.now()) {
+          const priorCafePurchase = lookupCached(
+            context.cafeResponses,
+            cafeRetryKey,
+            Date.now(),
+          );
+          if (priorCafePurchase) {
             send(
               COMMAND.NTF_S2C_CALL,
               0,
@@ -3502,14 +3492,14 @@ export function createGatewayServer({
               }),
             );
             if (cafeRetryKey) {
-              context.cafeResponses.set(cafeRetryKey, {
-                response: { shopid: shopId, goodsid: goodsId, buynum: buyNum },
-                expiresAt: Date.now() + SETTLEMENT_CACHE_TTL_MS,
-              });
-              if (context.cafeResponses.size > 64)
-                context.cafeResponses.delete(
-                  context.cafeResponses.keys().next().value!,
-                );
+              rememberResponse(
+                context.cafeResponses,
+                cafeRetryKey,
+                {
+                  response: { shopid: shopId, goodsid: goodsId, buynum: buyNum },
+                },
+                Date.now() + SETTLEMENT_CACHE_TTL_MS,
+              );
             }
             logger.info("lua.callback", {
               peer,
@@ -3573,10 +3563,8 @@ export function createGatewayServer({
         }
         if (call?.method === "NCafePetLogic") {
           const now = Date.now();
-          for (const [key, cached] of context.petResponses)
-            if (cached.expiresAt <= now) context.petResponses.delete(key);
           const key = packet.serial > 0 ? `${packet.serial}:${call.json}` : null;
-          const cached = key ? context.petResponses.get(key) : undefined;
+          const cached = lookupCached(context.petResponses, key, now);
           if (cached) {
             sendCafeNotifications(cached.notifications);
             if (cached.response !== undefined)
@@ -3602,13 +3590,15 @@ export function createGatewayServer({
                 makeServerLuaCall("NCafePetLogic", result.response),
               );
             if (key) {
-              context.petResponses.set(key, {
-                response: result.response,
-                notifications: result.notifications,
-                expiresAt: now + SETTLEMENT_CACHE_TTL_MS,
-              });
-              if (context.petResponses.size > 64)
-                context.petResponses.delete(context.petResponses.keys().next().value!);
+              rememberResponse(
+                context.petResponses,
+                key,
+                {
+                  response: result.response,
+                  notifications: result.notifications,
+                },
+                now + SETTLEMENT_CACHE_TTL_MS,
+              );
             }
             logger.info("lua.callback", {
               peer,
@@ -4066,11 +4056,11 @@ export function createGatewayServer({
             // settle normally.
             const settlementKey = JSON.stringify(chapterCall.parameters);
             const settlementNow = Date.now();
-            for (const [key, entry] of context.settlementResponses) {
-              if (entry.expiresAt <= settlementNow)
-                context.settlementResponses.delete(key);
-            }
-            const cached = context.settlementResponses.get(settlementKey);
+            const cached = lookupCached(
+              context.settlementResponses,
+              settlementKey,
+              settlementNow,
+            );
             if (cached && !context.activeChapter) {
               send(
                 COMMAND.NTF_S2C_CALL,
@@ -4216,14 +4206,12 @@ export function createGatewayServer({
               },
             };
             context.activeChapter = null;
-            context.settlementResponses.set(settlementKey, {
-              response,
-              expiresAt: Date.now() + SETTLEMENT_CACHE_TTL_MS,
-            });
-            if (context.settlementResponses.size > 64)
-              context.settlementResponses.delete(
-                context.settlementResponses.keys().next().value!,
-              );
+            rememberResponse(
+              context.settlementResponses,
+              settlementKey,
+              { response },
+              Date.now() + SETTLEMENT_CACHE_TTL_MS,
+            );
             send(COMMAND.NTF_S2C_CALL, 0, makeServerLuaCall("ChapterMsg", response));
             logger.info("lua.callback", {
               peer,
@@ -4674,12 +4662,7 @@ export function createGatewayServer({
             // have distinct serials and must each consume/count normally.
             const retryKey = packet.serial > 0 ? `${packet.serial}:${call.json}` : null;
             const now = Date.now();
-            for (const [key, cached] of context.headpatResponses) {
-              if (cached.expiresAt <= now) context.headpatResponses.delete(key);
-            }
-            const cached = retryKey
-              ? context.headpatResponses.get(retryKey)
-              : undefined;
+            const cached = lookupCached(context.headpatResponses, retryKey, now);
             if (cached) {
               send(
                 COMMAND.NTF_S2C_CALL,
@@ -4711,15 +4694,12 @@ export function createGatewayServer({
                 makeServerLuaCall("GirlLogic", result.response),
               );
               if (retryKey) {
-                context.headpatResponses.set(retryKey, {
-                  response: result.response,
-                  expiresAt: now + SETTLEMENT_CACHE_TTL_MS,
-                });
-                if (context.headpatResponses.size > 64) {
-                  context.headpatResponses.delete(
-                    context.headpatResponses.keys().next().value!,
-                  );
-                }
+                rememberResponse(
+                  context.headpatResponses,
+                  retryKey,
+                  { response: result.response },
+                  now + SETTLEMENT_CACHE_TTL_MS,
+                );
               }
               logger.info("girl.headpat.completed", {
                 account: context.account,
