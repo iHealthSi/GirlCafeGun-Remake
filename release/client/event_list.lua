@@ -20,11 +20,18 @@ local function missionRows(logic, event)
 	return { rows = rows, ends = { 'endTime' },
 		filter = event and function(tb) return tb.missionEvent == event end or nil }
 end
+-- A hub that runs a Challenge (BuffTower) row of its own, marked NoEntry in bufftower.txt: 1 Concert,
+-- 5 second anniversary, 7 Railgun collab. The hub finds it with BuffTowerLogic:GetOpenChallenge.
+local function challengeRow(id)
+	local rows = BuffTowerLogic and BuffTowerLogic.tbChallengeTowerConfig
+	return { rows = { rows and rows[id] }, ends = { 'EndTime', 'ClearTime' } }
+end
 local function concertExtras()
 	if ConcertExchange and not ConcertExchange.timeListConfig and ConcertExchange.LoadTimeListConfig then
 		pcall(ConcertExchange.LoadTimeListConfig, ConcertExchange)
 	end
-	return { missionRows(MusicMission), { rows = ConcertExchange and ConcertExchange.timeListConfig, ends = { 'EndTime' } } }
+	return { missionRows(MusicMission), { rows = ConcertExchange and ConcertExchange.timeListConfig, ends = { 'EndTime' } },
+		challengeRow(1) }
 end
 
 -- The event families of the stock tile (UI_FightMode:CheckEventOpen), with the same entry call each.
@@ -65,10 +72,11 @@ M.FAMILIES = {
 		accept = function(tb) return not tb.noEntry and not tb.NoEntry end,
 		enter = function() BuffTowerLogic:GetTower() end },
 	{ key = 'linkage', label = 'Collab',
+		extras = function() return { challengeRow(7) } end,
 		rows = function() return LinkageActivityLogic and LinkageActivityLogic.tbTowerConfig end,
 		enter = function() UI.CloseAndOpen('UI_RailgunMain') end },
 	{ key = 'anniversary2', label = '2nd Anniversary', together = true,
-		extras = function() return { missionRows(MonthMission, MonthMission and MonthMission.EVENT_TYPE_2YEAR or 2) } end,
+		extras = function() return { missionRows(MonthMission, MonthMission and MonthMission.EVENT_TYPE_2YEAR or 2), challengeRow(5) } end,
 		rows = function() return SecondAnniversaryTower and SecondAnniversaryTower.tbTotalConfig end,
 		enter = function() SecondAnniversaryTower:GetTower() end },
 	{ key = 'warchess', label = 'War Chess',
