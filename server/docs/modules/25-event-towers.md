@@ -233,3 +233,46 @@ only (60310, the time of the TSP level, stays); 513 with `bSave` writes the heal
 teams that fought (holes in `blood` are skipped, values clamped to 0 to 100) and the clear
 time, rounded up to at least 1 because 0 means "not passed". All four answer `{}`.
 The TSP level's time is not written (its source would be the kill parameter of 55).
+
+## Slice 3: named-field event towers
+
+Code: `game-data/named-tower-data.ts` (families, layouts, request parsing), `applyNamedTowerRequest` in
+`persistence/player-repository.ts` (`PlayerRepository.handleNamedTowerRequest`), a branch in the gateway after the
+Tower.txt one. Tables: `resources/tower/{microtower,coopclient,mixonline,bufftower,linkageactivity,2ndanniversary,bosschallenge}`.
+The open run is kept in `Player.namedTower` (a slot of its own: a run of one family never matches a Tower.txt
+settlement or another family). Enter is `CallServer`; Pass and Fail go through DoSettle 252 and are answered the same
+way. Refusals leave the save unchanged. Vigour is charged at the pass (and at a Fail, once), at the cost the client
+computes (support plan halving below commander level 35, as for the other towers).
+
+| Family             | Calls                                                      | Task layout (group: keys)                                                                                    |
+| ------------------ | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Micro tower        | 285 echo `{nTowerId}`, 286-288                             | 59: clears `100 + level*5 + diff`, score `200 +`, goal bits `300 +`; story flag 403 is written by the client |
+| Armed survey       | 335 echo `{nId}`, 336-338, 339 SaveSp, 261 `[]`            | 68: clear `10 + level` (shared by all events), best SP damage 5                                              |
+| Mixed online       | 451-453, 454 `{spCount: 0}`, 455 barrage, 260 cartoon node | 68: event id 1001 (seeded 1, the page writes it), node bits 1002                                             |
+| Buff tower         | 377-379, 376 score award                                   | 64: total 5008, got 5009, pass bit `5100 + level` (diff - 1), score `5200 + (level-1)*6 + diff`              |
+| Linkage            | 401-403, 404 mission claim, 405 gacha                      | 63: event id 3001 (seeded 1), pass bit `3002 + level`, gacha `3200 + (pond-1)*20 + slot`                     |
+| Second anniversary | 529-531, 528 `[]`                                          | 81: pass bit (event - 1) of `30010 + level`                                                                  |
+| Boss challenge     | 532-534, 535 score award                                   | 81: got 30104, pass bit `30110 + level`, score `30150 + (level-1)*6 + diff`                                  |
+
+Reply shapes: Pass `{tbData, tbAwards, nMasterExp, nCardExp, newGoalIds, isPass}` (always arrays; micro reads
+`tbAwards`); armed survey adds `spKillNum`, `curScore`; boss adds `tbRet [useTime, leftHpRate, score, isNew]`.
+Enter `{tbData: {fields of the request}, tbDrop: [], tbDropItems: []}`. Errors: `{nError}`, Fail `{}`.
+
+- Armed survey SP level (type 3): the pass counts `tbKillMonster.tbKillMonster[attribute]` kills (KillAward attribute),
+  339 with `bSave` pays `KillAward item * min(kills, max)` once and keeps the best damage; OtherCost (money 51 x 60) is
+  charged at the pass, error 17 at Enter when short. [INFER] the kill index and `curScore = kills`.
+- Mixed online: the server reads the event from 68/1001. The page must write it when it opens row 2. Type 3 nodes
+  (online levels) are refused (error 2).
+- Buff tower: score = sum of the chosen buffs' `Score` (positions in `tbBuffs`), best per level, total adjusted.
+- Boss challenge score is [INFER] (half of `MaxScore` for a clear, the rest by `leftHpRate`).
+- Linkage: missions 5700-5740 and the map nodes' 5741-5743 are `AchievementOther` (group 18). Fights add the counters
+  the tables name (type 110 clears of activity type 25, type 24 vigour spent) [INFER]; types 135 (girl affection) and
+  45 (owning a card) are read from the save. 404 claims in the lists (a state opens when the one before is claimed);
+  the map nodes claim through `GetConverAchieveAward` (new gateway branch, `claimOtherAchievementAward`). Types 29, 220,
+  221 (training, richman) have no source: those missions never complete. The last gacha pond opens when the others are
+  empty.
+- Not served: Music, WarChess, the first Anniversary, Month_Mission 436 (second anniversary mission screen), the
+  ranking tower, 535 only for `BossChallenge` (206 is not).
+- Shared records (the client's keys carry no event id): armed survey events share 68/10+, buff events 64/5008...,
+  mixed events 68/1002, second anniversary events one task with one bit each. `named-tower-data.test.ts` lists them.
+- Seeds: `reconcileNamedTowerSeeds` sets 63/3001 and 68/1001 to the first event at login (`getOrCreate`, `markLogin`).
