@@ -535,14 +535,14 @@ def run_shops(module_source, scripts, texts, rows):
     for row in expected['anniversary2'].values():
         row.append(30042)
     assert shops == expected, (shops, expected)
-    # Every goods of those shops costs tokens: no diamonds (3, 12), gold (2, 17) or price 0; the Concert shops
+    # Every goods of those shops costs tokens: no diamonds (3, 12, 18), gold (2, 17) or price 0; the Concert shops
     # each hold a goods for diamonds.
     costs = goods_costs(texts['Shop/GoodsList.txt'])
     opened = sorted({shop for rows_ in shops.values() for ids in rows_.values() for shop in ids})
     for shop in opened:
         assert costs.get(shop), shop
         for goods_id, money_id, prices in costs[shop]:
-            assert money_id not in (2, 3, 12, 17) and prices and min(prices) > 0, (shop, goods_id, money_id, prices)
+            assert money_id not in (2, 3, 12, 17, 18) and prices and min(prices) > 0, (shop, goods_id, money_id, prices)
     for shop in (30013, 30014):
         assert any(money_id == 3 for _, money_id, _ in costs[shop]), shop
     return {'eventShopsOpenWithTheirEvent': len(opened), 'concertShopsClosed': True, 'shopDatesRestored': True}
