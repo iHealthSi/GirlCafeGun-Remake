@@ -1294,6 +1294,10 @@ export function createGatewayServer({
       }
 
       if (packet.command === COMMAND.TASK_CHANGE_REQ) {
+        if (!loggedIn) {
+          send(COMMAND.TASK_CHANGE_RSP, packet.serial, Buffer.alloc(0), 1);
+          return;
+        }
         const changes = parseTaskChanges(packet.payload);
         context.player = await players.setTaskValues(context.account, changes);
         send(COMMAND.TASK_CHANGE_RSP, packet.serial, packet.payload);

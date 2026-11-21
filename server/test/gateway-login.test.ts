@@ -14,7 +14,11 @@ import {
   PlayerRepository,
 } from "../src/persistence/player-repository.js";
 import { COMMAND } from "../src/protocol/commands.js";
-import { makeServerLuaCall, parseTaskChanges } from "../src/protocol/messages.js";
+import {
+  makeServerLuaCall,
+  makeTaskValueSync,
+  parseTaskChanges,
+} from "../src/protocol/messages.js";
 import {
   HEADER_SIZE,
   makePacket,
@@ -278,6 +282,91 @@ it("keeps VERIFY's saved profile when LOGIN sends the bare username on fresh con
         [identity]: { roleId: 1, level: 2, exp: 8, taskValues: { 65551: 6 } },
       },
     });
+  } finally {
+    if (server?.listening) {
+      await new Promise<void>((resolve, reject) => {
+        server!.close((error) => (error ? reject(error) : resolve()));
+      });
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("rejects TASK_CHANGE_REQ before LOGIN and leaves the task value alone", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "gcg2-gateway-task-"));
+  const account = "commander";
+  const identity = `${account}:local-password`;
+  let server: Server | undefined;
+  try {
+    const config = await loadConfig(path.resolve(import.meta.dirname, ".."));
+    const store = new JsonStore({
+      filePath: path.join(directory, "state.json"),
+      initialState: makeInitialState(),
+      logger,
+    });
+    await store.initialize();
+    const players = new PlayerRepository({
+      store,
+      defaults: {
+        ...config.playerDefaults,
+        level: 1,
+        exp: 0,
+        firstLevelComplete: false,
+      },
+      logger,
+    });
+    server = createGatewayServer({ config, logger, players });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    const address = server.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Gateway did not bind a TCP port");
+    }
+
+    const socket = createConnection({ host: "127.0.0.1", port: address.port });
+    try {
+      await once(socket, "connect");
+      await request(
+        socket,
+        COMMAND.VERIFY_REQ,
+        1,
+        Buffer.concat([fieldBytes(1, "android"), fieldBytes(2, identity)]),
+        COMMAND.VERIFY_RSP,
+      );
+      const change = makeTaskValueSync({ 123: 9 });
+      const early = await request(
+        socket,
+        COMMAND.TASK_CHANGE_REQ,
+        2,
+        change,
+        COMMAND.TASK_CHANGE_RSP,
+      );
+      expect(early.at(-1)!.returnCode).toBe(1);
+      expect(players.get(identity)?.taskValues["123"]).toBeUndefined();
+
+      await request(
+        socket,
+        COMMAND.LOGIN_REQ,
+        3,
+        fieldBytes(1, account),
+        COMMAND.LOGIN_RSP,
+      );
+      expect(players.get(identity)?.taskValues["123"]).toBeUndefined();
+
+      const accepted = await request(
+        socket,
+        COMMAND.TASK_CHANGE_REQ,
+        4,
+        change,
+        COMMAND.TASK_CHANGE_RSP,
+      );
+      expect(accepted.at(-1)!.returnCode).toBe(0);
+      expect(players.get(identity)?.taskValues["123"]).toBe(9);
+    } finally {
+      const closed = once(socket, "close");
+      socket.destroy();
+      await closed;
+    }
   } finally {
     if (server?.listening) {
       await new Promise<void>((resolve, reject) => {
