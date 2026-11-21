@@ -120,6 +120,7 @@ import {
   CharacterCardDecompositionError,
   DailyMissionError,
   isCharacterCard,
+  girlMainStoryTaskKey,
   makeGachaTaskId,
   CustomGirlOutfitUnavailableError,
   makeLevelId,
@@ -2966,9 +2967,7 @@ export function createGatewayServer({
                 sCmd: 256,
                 tbParam: {
                   nId: girlId,
-                  nValue:
-                    player.taskValues[String((3 << 16) | ((girlId - 1) * 2000 + 14))] ??
-                    0,
+                  nValue: player.taskValues[girlMainStoryTaskKey(girlId)] ?? 0,
                 },
               }),
             );

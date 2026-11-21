@@ -7,10 +7,10 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { loadConfig } from "../src/config.js";
-import { GIRL_MAIN_STORY_OFFSET } from "../src/game-data/girl-fetter-data.js";
 import type { Logger } from "../src/logger.js";
 import { JsonStore } from "../src/persistence/json-store.js";
 import {
+  girlMainStoryTaskKey,
   makeInitialState,
   PlayerRepository,
 } from "../src/persistence/player-repository.js";
@@ -28,10 +28,11 @@ import { createGatewayServer } from "../src/servers/gateway-server.js";
 const account = "main-story-wire:local-test";
 const username = "main-story-wire";
 const girlId = 2;
+const linkGirlId = 201;
 const scratchRoot = path.resolve(import.meta.dirname, "../../tools/main-story-test");
-const mainStoryKey = String(
-  (3 << 16) | ((girlId - 1) * 2_000 + GIRL_MAIN_STORY_OFFSET),
-);
+const mainStoryKey = girlMainStoryTaskKey(girlId);
+const linkMainStoryKey = girlMainStoryTaskKey(linkGirlId);
+const linkMainStoryBitfield = 0b1011;
 
 function luaReply(packet: GamePacket): { method: string; parameters: unknown } | null {
   if (packet.command !== COMMAND.NTF_S2C_CALL) return null;
@@ -135,6 +136,20 @@ async function fixture() {
     const player = state.players[account];
     const owned = player?.girls.find((entry) => entry.girlId === girlId);
     if (owned) owned.level = 20;
+    if (player) {
+      const link = player.girls.find((entry) => entry.girlId === linkGirlId);
+      if (!link)
+        player.girls.push({
+          girlId: linkGirlId,
+          level: 1,
+          exp: 0,
+          modelId: 1,
+          moodValue: 100,
+          vigor: 100,
+          flag: 0,
+        });
+      player.taskValues[linkMainStoryKey] = linkMainStoryBitfield;
+    }
   });
   let server: Server | undefined;
   let socket: Socket | undefined;
@@ -263,6 +278,26 @@ describe("girl main story LuaCall", () => {
       const packets = await test.setMainStory(27, 1);
       expect(isErrorReply(packets[packets.length - 1]!)).toBe(true);
       expect(test.players.get(account)!.taskValues[mainStoryKey] ?? 0).toBe(0);
+    } finally {
+      await test.cleanup();
+    }
+  });
+
+  it("echoes the link girl bit field without validating a story row", async () => {
+    const test = await fixture();
+    try {
+      const packets = await test.setMainStory(linkGirlId, 0);
+      expect(isErrorReply(packets[packets.length - 1]!)).toBe(false);
+      expect(mainStoryReply(packets[packets.length - 1]!)).toMatchObject({
+        nId: linkGirlId,
+        nValue: linkMainStoryBitfield,
+      });
+      expect(packets.some((packet) => packet.command === COMMAND.TASK_VALUE_RSP)).toBe(
+        true,
+      );
+      expect(test.players.get(account)!.taskValues[linkMainStoryKey]).toBe(
+        linkMainStoryBitfield,
+      );
     } finally {
       await test.cleanup();
     }

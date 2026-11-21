@@ -230,6 +230,7 @@ import {
   girlLevelAwardIndex,
   handworkGiftState,
   isFavoriteGift,
+  isLinkGirl,
   type GirlAffectionGain,
 } from "../game-data/girl-gift-data.js";
 import {
@@ -1151,6 +1152,10 @@ function makeGirlTaskId(group: number, girlId: number, offset: number): number {
     taskGirlId -= LINK_GIRL_ID;
   }
   return (taskGroup << 16) | ((taskGirlId - 1) * GIRL_TASK_STRIDE + offset);
+}
+
+export function girlMainStoryTaskKey(girlId: number): string {
+  return String(makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET));
 }
 
 /**
@@ -4192,21 +4197,22 @@ export class PlayerRepository {
     girlId: number,
     ordinal: number,
   ): Promise<Player> {
-    if (!Number.isSafeInteger(girlId) || !Number.isSafeInteger(ordinal) || ordinal <= 0)
+    if (!Number.isSafeInteger(girlId) || !Number.isSafeInteger(ordinal))
       throw new GirlViewStoryError("invalid_request");
+    const linkGirl = isLinkGirl(girlId);
+    if (!linkGirl && ordinal <= 0) throw new GirlViewStoryError("invalid_request");
     return this.#store.update((state) => {
       const player = state.players[account];
       const girl = player?.girls.find((entry) => entry.girlId === girlId);
       if (!player || !girl) throw new GirlViewStoryError("girl_not_owned");
+      if (linkGirl) return structuredClone(player);
       const stories = defaultGirlFetterCatalog().mainStories(girlId);
       const story = stories[ordinal - 1];
       if (!story) throw new GirlViewStoryError("story_not_found");
       const progress = reconcileGirlMainStoryProgress(player, girlId);
       if (girl.level < story.requiredLevel || ordinal > progress + 1)
         throw new GirlViewStoryError("story_locked");
-      const key = String(
-        makeGirlTaskId(GIRL_STATE_TASK_GROUP, girlId, GIRL_MAIN_STORY_OFFSET),
-      );
+      const key = girlMainStoryTaskKey(girlId);
       player.taskValues[key] = Math.max(progress, ordinal);
       return structuredClone(player);
     });
