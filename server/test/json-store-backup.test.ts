@@ -296,5 +296,11 @@ describe("no-op updates", () => {
     expect(store.snapshot().nextRoleId).toBe(8);
     expect(JSON.parse(await readFile(filePath, "utf8")).nextRoleId).toBe(8);
     expect((await stat(filePath)).mtimeMs).toBeGreaterThan(old.getTime());
+
+    // The kept fingerprint follows each write: going back to 7 is a change again.
+    await store.update((state) => {
+      state.nextRoleId = 7;
+    });
+    expect(JSON.parse(await readFile(filePath, "utf8")).nextRoleId).toBe(7);
   });
 });

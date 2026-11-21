@@ -101,6 +101,8 @@ export class JsonStore<T extends PersistedDocument> {
   readonly #backups: JsonStoreBackupOptions | undefined;
   readonly #validate: ((document: unknown) => void) | undefined;
   #state: T | undefined;
+  // stateFingerprint of #state, kept so that update() serialises the state once, not twice.
+  #fingerprint: string | undefined;
   #writeQueue: Promise<unknown> = Promise.resolve();
 
   constructor({
@@ -118,6 +120,7 @@ export class JsonStore<T extends PersistedDocument> {
   }
 
   async initialize(now = Date.now()) {
+    this.#fingerprint = undefined;
     await mkdir(path.dirname(this.#filePath), { recursive: true });
     let body: string;
     try {
@@ -154,13 +157,20 @@ export class JsonStore<T extends PersistedDocument> {
     const operation = this.#writeQueue.then(async () => {
       const current = this.#state as T;
       const draft = structuredClone(current);
-      const before = stateFingerprint(current);
+      const before = this.#fingerprint ?? stateFingerprint(current);
       const result = await mutator(draft);
-      // A mutation that changed nothing must not rewrite the save or move updatedAt.
-      if (stateFingerprint(draft) === before) return result;
+      const after = stateFingerprint(draft);
+      // A mutation that changed nothing must not rewrite the save or move
+      // updatedAt. The draft still becomes the state, as after a write.
+      if (after === before) {
+        this.#state = draft;
+        this.#fingerprint = after;
+        return result;
+      }
       draft.updatedAt = new Date().toISOString();
       await this.#persist(draft);
       this.#state = draft;
+      this.#fingerprint = after;
       return result;
     });
     this.#writeQueue = operation.catch(() => undefined);
