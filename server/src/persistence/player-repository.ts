@@ -3622,9 +3622,7 @@ export class PlayerRepository {
           grantAwards(player, awards, items, money);
           for (const award of awards)
             if (award[0] === 11 && award[4] > 0) {
-              const config = catalog
-                .furnitureItems()
-                .find((row) => row.ItemInfo.join("-") === award.slice(0, 4).join("-"));
+              const config = catalog.furnitureForItem(award.slice(0, 4));
               if (!config)
                 throw new CafeOperationError("unknown_furniture_award", command);
               for (let count = 0; count < award[4]; count++)
@@ -5716,24 +5714,18 @@ export class PlayerRepository {
       );
       if (config.genre === 11) {
         const cafeCatalog = CafeCatalog.loadDefault();
-        const matches = cafeCatalog
-          .furnitureItems()
-          .filter(
-            (item) =>
-              item.ItemInfo.join("-") ===
-              [
-                config.genre,
-                config.detail,
-                config.particular,
-                config.templateLevel,
-              ].join("-"),
-          );
-        if (matches.length !== 1) throw new ShopError("unknown_goods");
+        const furniture = cafeCatalog.furnitureForItem([
+          config.genre,
+          config.detail,
+          config.particular,
+          config.templateLevel,
+        ]);
+        if (!furniture) throw new ShopError("unknown_goods");
         try {
           updatedFurniture.push(
             ...materializeOwnedCafeFurniture(
               player,
-              Array.from({ length: config.goodsNum * buyNum }, () => matches[0]!.Id),
+              Array.from({ length: config.goodsNum * buyNum }, () => furniture.Id),
               cafeCatalog,
               {
                 consumeItem: (gdpl, count) =>
