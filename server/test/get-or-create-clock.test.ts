@@ -81,4 +81,23 @@ describe("getOrCreate clock", () => {
       dailyMissionOperationalDate(Date.now()),
     );
   });
+
+  it("rolls the daily missions and bounty at 04:00 Asia/Shanghai, not before", async () => {
+    const repository = await createRepository();
+    const day1 = Date.UTC(2026, 2, 10, 12); // 20:00 Shanghai, operational day 2026-03-10
+    const beforeBoundary = Date.UTC(2026, 2, 10, 19, 59, 59); // 03:59:59 Shanghai
+    const atBoundary = Date.UTC(2026, 2, 10, 20, 0, 0); // 04:00:00 Shanghai
+
+    const first = await repository.getOrCreate("tester", day1);
+    expect(first.dailyMissions?.operationalDate).toBe("2026-03-10");
+    expect(first.bounty?.operationalDate).toBe("2026-03-10");
+
+    const before = await repository.getOrCreate("tester", beforeBoundary);
+    expect(before.dailyMissions?.operationalDate).toBe("2026-03-10");
+    expect(before.bounty?.operationalDate).toBe("2026-03-10");
+
+    const after = await repository.getOrCreate("tester", atBoundary);
+    expect(after.dailyMissions?.operationalDate).toBe("2026-03-11");
+    expect(after.bounty?.operationalDate).toBe("2026-03-11");
+  });
 });
