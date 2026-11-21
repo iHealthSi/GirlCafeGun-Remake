@@ -26,6 +26,21 @@ local function challengeRow(id)
 	local rows = BuffTowerLogic and BuffTowerLogic.tbChallengeTowerConfig
 	return { rows = { rows and rows[id] }, ends = { 'EndTime', 'ClearTime' } }
 end
+-- The first Anniversary hub: discovery maps (AnniversaryDiscovery.txt EndTime), puzzle boards
+-- (PuzzleCfg.txt CLOSE -> nCloseTime) and the guess game (AnniversaryGuess/TimeList.txt EndTime).
+-- Its month missions have no rows for event 1, so they need nothing.
+local function anniversaryExtras()
+	if GridActLogic and not GridActLogic.Maps and GridActLogic.LoadCfg then pcall(GridActLogic.LoadCfg, GridActLogic) end
+	if PuzzleLogic and not PuzzleLogic.tbPuzzleCfg and PuzzleLogic.LoadCfg then pcall(PuzzleLogic.LoadCfg, PuzzleLogic) end
+	if AnniversaryGuess and not AnniversaryGuess.tbTimeConfig and AnniversaryGuess.LoadTimeConfig then
+		pcall(AnniversaryGuess.LoadTimeConfig, AnniversaryGuess)
+	end
+	return {
+		{ rows = GridActLogic and GridActLogic.Maps, ends = { 'EndTime' } },
+		{ rows = PuzzleLogic and PuzzleLogic.tbPuzzleCfg, ends = { 'nCloseTime' } },
+		{ rows = AnniversaryGuess and AnniversaryGuess.tbTimeConfig, ends = { 'EndTime' } },
+	}
+end
 local function concertExtras()
 	if ConcertExchange and not ConcertExchange.timeListConfig and ConcertExchange.LoadTimeListConfig then
 		pcall(ConcertExchange.LoadTimeListConfig, ConcertExchange)
@@ -55,7 +70,7 @@ M.FAMILIES = {
 		rows = function() return MusicActivityLogic and MusicActivityLogic.tbMusicTowerTotalConfig end,
 		enter = function() MusicActivityLogic:GetTower() end },
 	{ key = 'anniversary', label = 'Anniversary', together = true,
-		extras = function() return { missionRows(MonthMission, MonthMission and MonthMission.EVENT_TYPE_YEAR or 1) } end,
+		extras = anniversaryExtras,
 		rows = function() return AnniversaryMainLogic and AnniversaryMainLogic.tbTowerTotalConfig end,
 		enter = function() UI.CloseAndOpen('UI_AnniversaryMain') end },
 	{ key = 'mix', label = 'Joint Event',
@@ -86,8 +101,8 @@ M.FAMILIES = {
 
 -- Families whose server part exists. A family off this list stays off the page: its calls would get no
 -- reply and its screens would wait for ever.
-M.SERVED = { tower = true, micro = true, coop = true, music = true, mix = true, buff = true, linkage = true,
-	anniversary2 = true, warchess = true }
+M.SERVED = { tower = true, micro = true, coop = true, music = true, anniversary = true, mix = true, buff = true,
+	linkage = true, anniversary2 = true, warchess = true }
 
 local DAY = 86400
 local ALL = 'all'
