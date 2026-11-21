@@ -3585,18 +3585,24 @@ export class PlayerRepository {
   }
 
   getByRoleId(roleId: number): Player | null {
-    return (
-      Object.values(this.#store.snapshot().players).find(
-        (player) => player.roleId === roleId,
-      ) ?? null
-    );
+    return this.#store.read((state) => {
+      const player = Object.values(state.players).find(
+        (candidate) => candidate.roleId === roleId,
+      );
+      return player ? structuredClone(player) : null;
+    });
   }
   listLocalPlayers(): Player[] {
-    return Object.values(this.#store.snapshot().players);
+    return this.#store.read((state) =>
+      Object.values(state.players).map((player) => structuredClone(player)),
+    );
   }
 
   get(account: string): Player | null {
-    return this.#store.snapshot().players?.[account] ?? null;
+    return this.#store.read((state) => {
+      const player = state.players?.[account];
+      return player ? structuredClone(player) : null;
+    });
   }
 
   async syncPhoneEvents(account: string, storyPath?: string, now = Date.now()) {

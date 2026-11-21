@@ -152,6 +152,12 @@ export class JsonStore<T extends PersistedDocument> {
     return structuredClone(this.#state);
   }
 
+  /** Reads from the live state without cloning it. The reader must not mutate or leak the state. */
+  read<R>(reader: (state: Readonly<T>) => R): R {
+    if (!this.#state) throw new Error("JsonStore is not initialized");
+    return reader(this.#state);
+  }
+
   async update<R>(mutator: (draft: T) => R | Promise<R>): Promise<R> {
     if (!this.#state) throw new Error("JsonStore is not initialized");
     const operation = this.#writeQueue.then(async () => {
