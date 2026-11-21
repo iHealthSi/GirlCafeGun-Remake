@@ -58,7 +58,7 @@ def main():
         proofs['titleBehavior']=test_title.run_bundle(changed['lua.u'])
         proofs['gamepadBehavior']=test_gamepad.run_bundle(changed['lua.u'])
         proofs['offlineWebBehavior']=test_offline_web.run_bundle(changed['lua.u'])
-        proofs['eventListBehavior']=test_event_list.run_bundle(changed['lua.u'],apk.read('assets/lua.u'),test_event_list.tower_rows(test_event_list.tower_text(apk.read('assets/setting.u'))))
+        proofs['eventListBehavior']=test_event_list.run_bundle(changed['lua.u'],apk.read('assets/lua.u'),test_event_list.tower_rows(test_event_list.tower_text(apk.read('assets/setting.u'))),apk.read('assets/setting.u'))
         print('Verified release login, title screens, controller layer, offline web, event list and removed developer Lua',flush=True)
         changed['setting.u'],plain,proofs['settings']=patch_settings.build(apk.read('assets/setting.u'))
         changed['lang.u'],proofs['selectorLanguage']=patch_selectors.build_language(apk.read('assets/lang.u'))

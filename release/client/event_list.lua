@@ -104,6 +104,27 @@ M.FAMILIES = {
 M.SERVED = { tower = true, micro = true, coop = true, music = true, anniversary = true, mix = true, buff = true,
 	linkage = true, anniversary2 = true, warchess = true }
 
+-- Event shops: the shop of an event opens with it. Shop ids by family and row Id, from the ShopId column of
+-- the event's top table (armed survey: the third value of Param; Tower.txt row 201, the rerun of row 1 that the
+-- page leaves out, adds 30006 to row 1). Only shops whose goods all cost the event's own tokens: the Concert
+-- shops 30013 and 30014 sell one goods each for 10 diamonds and stay closed. The server keeps the same shops
+-- open at any date (server/src/game-data/shop-data.ts OPEN_EVENT_SHOPS).
+M.SHOPS = {
+	tower = { [1] = { 30001, 30006 }, [5] = { 30002 }, [9] = { 30003 }, [10] = { 30004 }, [12] = { 30017 },
+		[13] = { 30022 }, [14] = { 30027 }, [15] = { 30031 }, [16] = { 30033 }, [17] = { 30034 }, [18] = { 30036 },
+		[19] = { 30037 }, [21] = { 30045 }, [101] = { 30005 }, [102] = { 30010 }, [103] = { 30016 },
+		[104] = { 30023 }, [105] = { 30030 }, [106] = { 30032 }, [107] = { 30035 }, [303] = { 30038 } },
+	coop = { [1] = { 30011 }, [2] = { 30012 }, [3] = { 30015 }, [4] = { 30019 }, [5] = { 30025 }, [7] = { 30039 },
+		[8] = { 30043 } },
+	anniversary = { [1] = { 30020 }, [2] = { 30021 } },
+	-- 30042: the second Anniversary hall (ShowType 1, UI_2ndAnniversaryShop), paid by the hub's Challenge row 5,
+	-- its bind activity and its missions.
+	anniversary2 = { [1] = { 30040, 30042 }, [2] = { 30041, 30042 } },
+	linkage = { [1] = { 30028 } },
+	warchess = { [1] = { 30046 }, [2] = { 30047 } },
+	mix = { [1] = { 30092 }, [2] = { 30024 } },
+}
+
 local DAY = 86400
 local ALL = 'all'
 M.OPEN_DAYS = 30
@@ -224,18 +245,62 @@ local function extend(tb, key, untilSec)
 	end
 end
 
+-- A shop tab (ShopTabLogicC.tbShopTabConfig) keeps each date twice: a string 'yyyy-mm-dd-HH-MM-SS' (beginTime,
+-- endTime: CheckShopOpen, GetShopId, CheckShopOpenFlag) and a table for os.time (Begin, End: UI_ShopNew and
+-- UI_2ndAnniversaryShop CheckOpen). Goods keep yyyymmddHHMM numbers (GoodsLogicC:CheckGoodInTime).
+local function stamp(seconds)
+	return os.date('%Y-%m-%d-%H-%M-%S', seconds), os.date('*t', seconds)
+end
+
+function M.OpenShop(shopId, now, untilSec)
+	local tabs = ShopTabLogicC and ShopTabLogicC.tbShopTabConfig
+	local tab = type(tabs) == 'table' and tabs[shopId]
+	if type(tab) ~= 'table' then return false end
+	local ok, endSec = pcall(os.time, tab.End)
+	if not ok or type(endSec) ~= 'number' or endSec < untilSec then
+		local text, fields = stamp(untilSec)
+		set(tab, 'endTime', text)
+		set(tab, 'End', fields)
+	end
+	local okBegin, beginSec = pcall(os.time, tab.Begin)
+	if okBegin and type(beginSec) == 'number' and beginSec > now then
+		local text, fields = stamp(now - DAY)
+		set(tab, 'beginTime', text)
+		set(tab, 'Begin', fields)
+	end
+	local byType = GoodsLogicC and GoodsLogicC.shopsGoodsCFG
+	local goods = type(byType) == 'table' and type(byType[3]) == 'table' and byType[3][shopId]
+	for _, g in pairs(type(goods) == 'table' and goods or {}) do
+		if type(g) == 'table' then
+			extend(g, 'End', untilSec)
+			if type(g.Begin) == 'number' and g.Begin > 0 then
+				local okStart, startSec = pcall(GetDate2Time, g.Begin)
+				if okStart and type(startSec) == 'number' and startSec > now then set(g, 'Begin', 0) end
+			end
+		end
+	end
+	return true
+end
+
 function M.Activate(entry)
 	local rows = familyRows(entry.Family)
 	if not rows then return false end
 	M.Restore()
-	local untilSec = GetTime() + M.OPEN_DAYS * DAY
+	local now = GetTime()
+	local untilSec = now + M.OPEN_DAYS * DAY
 	local opened = 0
+	local shopsOf = M.SHOPS[entry.Family.key] or {}
+	local shops = {}
 	for key, tb in pairs(rows) do
 		if (entry.Key == ALL and accepted(entry.Family, tb)) or (key == entry.Key and type(tb) == 'table') then
 			extend(tb, 'EndTime', untilSec)
 			extend(tb, 'ClearTime', untilSec + 3 * DAY)
 			opened = opened + 1
+			for _, shopId in ipairs(shopsOf[tb.Id or key] or {}) do shops[shopId] = true end
 		end
+	end
+	for shopId in pairs(shops) do
+		if not M.OpenShop(shopId, now, untilSec) then log('no shop tab ' .. tostring(shopId)) end
 	end
 	if entry.Family.extras then
 		local ok, specs = pcall(entry.Family.extras)

@@ -8,6 +8,8 @@ leaves its Mul panel empty (UpdateMul).
 This recipe appends event_list.lua to UI_FightMode.lua: the tile now opens a scroll page (the Mul panel of
 UI_CoopChoose) with every past event of the families the server serves. A tap opens that one event alone,
 by its dates, and enters it through the stock ActivitiesLogic:GetTower. The 3-6 unlock of the tile stays.
+The event's shop opens with it (EventList.SHOPS: its ShopTabList tab and the dates of its goods), for the
+shops whose goods all cost the event's own tokens; the server keeps the same shops open.
 
 A lost fight: the Fail handlers of LuaCall.lua (373 Concert, 379 Concert challenge, 423 and 428 first
 Anniversary) call OnFailTower on a logic table that the release never gives one, so the server's answer

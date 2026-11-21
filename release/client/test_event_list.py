@@ -11,7 +11,13 @@ run_script(fight, choose, towers) replays the Attack menu in Lua with the Tower.
 - a second family (War Chess, mocked) joins the list by date, a tap opens only its row, a later tap closes it;
 - a hub family (Concert, mocked) is one entry that opens both rows and its sub-tables (missions, exchange
   time list), every start date stays, and a later tap puts it all back.
-run_bundle(built) reads both scripts from a built lua.u and replays the same scenario.
+run_fail(stock, patched, luacall) loads the four real logic scripts and LuaCall.lua: the Fail handlers of a lost
+Concert, Challenge and first Anniversary fight raise on the release scripts and run on the patched ones.
+run_shops(module, scripts, tables, rows) loads the real Lib, ShopTabLogicC and GoodsLogicC with the release's
+ShopTabList and GoodsList: a tapped event opens its shop tab and dated goods (strings and os.time tables), a hub
+opens all its shops, the Concert shops stay closed, the next tap and Restore close them again; EventList.SHOPS
+equals the ShopId columns of the top tables, and every goods of those shops costs tokens (no diamonds, gold, 0).
+run_bundle(built, stock, rows, setting) reads the scripts from a built lua.u and replays all of it.
 Command: python test_event_list.py <release APK or lua.u>
 """
 from pathlib import Path
@@ -364,6 +370,184 @@ def run_fail(stock, patched, stock_luacall, patched_luacall=None):
     return {'stockLostFightErrors': len(before), 'patchedLostFightHandled': sorted(after)}
 
 
+SHOP_SCRIPTS = ('Lib.lua', 'ShopTabLogicC.lua', 'GoodsLogicC.lua')
+SHOP_TABLES = {
+    'Shop/ShopTabList.txt': 'shop/shoptablist.txt',
+    'Shop/GoodsList.txt': 'shop/goodslist.txt',
+    'tower': 'activities/smalltower/tower.txt',
+    'coop': 'activities/coopclient/coopclientactivities.txt',
+    'anniversary': 'activities/anniversaryactivity/anniversarytowertotal.txt',
+    'anniversary2': 'activities/2ndanniversary/2ndanniversarytowertotal.txt',
+    'linkage': 'activities/linkageactivity/linkagetower.txt',
+    'warchess': 'activities/warchesstower/warchesstower.txt',
+    'mix': 'activities/mixonline/mixonlineactivities.txt',
+    'music': 'activities/musicactivity/musictowertotal.txt',
+}
+
+SHOP_HARNESS = r'''
+-- Unknown globals are mocks (as in FAIL_HARNESS); the shop scripts, lib functions and families stay real.
+local REAL = { EventList = true, ShopTabLogicC = true, GoodsLogicC = true, ActivitiesConfig = true,
+  ActivitiesLogic = true, MicroClimbTower = true, CoopClientLogic = true, MusicActivityLogic = true,
+  AnniversaryMainLogic = true, MixOnlineLogic = true, BuffTowerLogic = true, LinkageActivityLogic = true,
+  SecondAnniversaryTower = true, WarChessTower = true, GridActLogic = true, PuzzleLogic = true,
+  AnniversaryGuess = true, ConcertExchange = true, MusicMission = true, MonthMission = true, me = true,
+  GetIsLogin = true, TABLES = true }
+local M = {}
+local function any() return setmetatable({}, M) end
+M.__index = function(_, k) if type(k) == 'number' then return nil end return any() end
+M.__call = function() return any() end
+M.__len = function() return 0 end
+M.__pairs = function() return next, {}, nil end
+M.__concat = function() return '' end
+setmetatable(_G, { __index = function(_, k) if REAL[k] then return nil end return any() end })
+NOW = 1795000000   -- 2026-11-18, after every event and shop date of the release
+function GetTime() return NOW end
+Game = { LuaUtils = { LoadText = function(path) return TABLES[path] end }, Logger = { Error = function() end } }
+setmetatable(Game, { __index = function() return any() end })
+ActivitiesConfig = { tbSmallTowerConfig = {} }
+'''
+
+SHOP_SCENARIO = r'''
+local function family(key) for _, f in ipairs(EventList.FAMILIES) do if f.key == key then return f end end end
+local function row(id) return { Id = id, BeginTime = NOW - 900 * 86400, EndTime = NOW - 800 * 86400,
+  ClearTime = NOW - 797 * 86400 } end
+CoopClientLogic = { tbConfig = { [2] = row(2), [3] = row(3) } }
+AnniversaryMainLogic = { tbTowerTotalConfig = { [1] = row(1), [2] = row(2) } }
+MusicActivityLogic = { tbMusicTowerTotalConfig = { [1] = row(1), [2] = row(2) } }
+SecondAnniversaryTower = { tbTotalConfig = { [1] = row(1), [2] = row(2) } }
+-- Open as every reader sees it: the strings (CheckShopOpen, CheckShopOpenFlag) and the os.time tables
+-- (UI_ShopNew:CheckOpen, UI_2ndAnniversaryShop:CheckOpen).
+local function open(id)
+  local tab = ShopTabLogicC.tbShopTabConfig[id]
+  return ShopTabLogicC:CheckShopOpen(id) and ShopTabLogicC:CheckShopOpenFlag(id) == 0
+    and os.time(tab.Begin) <= NOW and os.time(tab.End) >= NOW
+end
+local function line(list) local out = {} for i, v in ipairs(list) do out[i] = tostring(v) end return table.concat(out, ',') end
+local goods = function(id) return GoodsLogicC:CheckGoodInTime(GoodsLogicC:GetGoodsCfg(id)) == true end
+local out = {}
+out[#out + 1] = 'before=' .. line({ open(30001), open(30006), open(30012), open(30013), open(30020), open(30042),
+  goods(32017) })
+EventList.Activate({ Family = family('tower'), Key = 1 })
+out[#out + 1] = 'tower1=' .. line({ open(30001), open(30006), open(30002), ShopTabLogicC:GetShopId(30001),
+  ShopTabLogicC:GetShopId(30002) })
+EventList.Activate({ Family = family('coop'), Key = 2 })
+out[#out + 1] = 'coop2=' .. line({ open(30012), open(30015), open(30001) })
+EventList.Activate({ Family = family('anniversary'), Key = 'all' })
+out[#out + 1] = 'anniversary=' .. line({ open(30020), open(30021), goods(32017), goods(32118), open(30012) })
+EventList.Activate({ Family = family('music'), Key = 'all' })
+out[#out + 1] = 'music=' .. line({ open(30013), open(30014), open(30020), goods(32017) })
+EventList.Activate({ Family = family('anniversary2'), Key = 'all' })
+out[#out + 1] = 'anniversary2=' .. line({ open(30040), open(30041), open(30042) })
+EventList.Restore()
+out[#out + 1] = 'restored=' .. line({ open(30040), open(30042), open(30001), open(30012), goods(32017) })
+local shops = {}
+for key, rows in pairs(EventList.SHOPS) do
+  for id, list in pairs(rows) do shops[#shops + 1] = key .. ':' .. id .. ':' .. table.concat(list, '/') end
+end
+table.sort(shops)
+out[#out + 1] = 'shops=' .. table.concat(shops, ' ')
+return table.concat(out, '\n')
+'''
+
+
+def table_text(setting, path):
+    """A settinggen table (path under assets/_game/settinggen/) from the bytes of a release setting.u."""
+    import asset_tools as w
+    _, _, _, plain = w.unity.decode(setting)
+    env = w.unity.UnityPy.load(plain)
+    obj = env.container['assets/_game/settinggen/' + path].deref()
+    return obj.read_typetree()['m_Script']
+
+
+def shop_ids_from_tables(texts):
+    """{family: {row id: [shop ids]}} as the top tables give them (armed survey: third value of Param)."""
+    import re
+    out = {}
+    for key in ('tower', 'coop', 'anniversary', 'anniversary2', 'linkage', 'warchess', 'mix', 'music'):
+        lines = texts[key].replace('\r\n', '\n').split('\n')
+        header = lines[2].split('\t')
+        rows = {}
+        for line in lines[3:]:
+            cells = dict(zip(header, line.split('\t')))
+            if not cells.get('Id', '').strip().isdigit():
+                continue
+            value = cells.get('ShopId', '') if key != 'coop' else (re.findall(r'\d+', cells.get('Param', '')) + [''] * 3)[2]
+            if value.strip():
+                rows[int(cells['Id'])] = [int(value)]
+        out[key] = rows
+    return out
+
+
+def goods_costs(text):
+    """{shop id: [(goods id, money, [prices])]} from GoodsList.txt (Price1 and Price2 'money|price' or tiers)."""
+    import re
+    lines = text.replace('\r\n', '\n').split('\n')
+    header = lines[2].split('\t')
+    out = {}
+    for line in lines[3:]:
+        cells = dict(zip(header, line.split('\t')))
+        if not cells.get('GoodsId', '').strip().isdigit():
+            continue
+        for column in ('Price1', 'Price2'):
+            match = re.match(r'\s*(\d+)\|(.*)', cells.get(column, ''))
+            if match:
+                out.setdefault(int(cells['ShopId']), []).append(
+                    (int(cells['GoodsId']), int(match.group(1)), [int(x) for x in re.findall(r'\d+', match.group(2))]))
+    return out
+
+
+def run_shops(module_source, scripts, texts, rows):
+    """The shop of a tapped event opens with it, as the real ShopTabLogicC and GoodsLogicC read the release tables.
+
+    module_source: event_list.lua (or the patched UI_FightMode.lua that carries it); scripts: SHOP_SCRIPTS sources;
+    texts: SHOP_TABLES texts; rows: tower_rows(Tower.txt).
+    """
+    lua = LuaRuntime()
+    lua.execute(SHOP_HARNESS)
+    tables = lua.eval('{}')
+    for client_path in ('Shop/ShopTabList.txt', 'Shop/GoodsList.txt'):
+        tables[client_path] = texts[client_path]
+    lua.globals().TABLES = tables
+    for name in SHOP_SCRIPTS:
+        source = scripts[name]
+        lua.execute(source.decode('utf8') if isinstance(source, bytes) else source)
+    lua.execute(towers_lua(rows))
+    text = module_source.decode('utf8') if isinstance(module_source, bytes) else module_source
+    lua.execute(text[text.index('-- Event list page (release recipe'):])
+    result = dict(line.split('=', 1) for line in lua.execute(SHOP_SCENARIO).split('\n'))
+    assert result['before'] == 'false,false,false,false,false,false,false', result
+    # GetShopId keeps an open shop and sends a closed event shop to the last open one (stock redirect).
+    assert result['tower1'] == 'true,true,false,30001,30006', result
+    assert result['coop2'] == 'true,false,false', result
+    assert result['anniversary'] == 'true,true,true,true,false', result
+    assert result['music'] == 'false,false,false,false', result
+    assert result['anniversary2'] == 'true,true,true', result
+    assert result['restored'] == 'false,false,false,false,false', result
+    # M.SHOPS is the tables' ShopId of every served row, without the Concert, plus 30006 (row 201) and 30042.
+    shops = {}
+    for item in result['shops'].split(' '):
+        key, row, ids = item.split(':')
+        shops.setdefault(key, {})[int(row)] = [int(x) for x in ids.split('/')]
+    expected = shop_ids_from_tables(texts)
+    expected.pop('music')
+    expected['tower'].pop(201)
+    expected['tower'][1].append(30006)
+    for row in expected['anniversary2'].values():
+        row.append(30042)
+    assert shops == expected, (shops, expected)
+    # Every goods of those shops costs tokens: no diamonds (3, 12), gold (2, 17) or price 0; the Concert shops
+    # each hold a goods for diamonds.
+    costs = goods_costs(texts['Shop/GoodsList.txt'])
+    opened = sorted({shop for rows_ in shops.values() for ids in rows_.values() for shop in ids})
+    for shop in opened:
+        assert costs.get(shop), shop
+        for goods_id, money_id, prices in costs[shop]:
+            assert money_id not in (2, 3, 12, 17) and prices and min(prices) > 0, (shop, goods_id, money_id, prices)
+    for shop in (30013, 30014):
+        assert any(money_id == 3 for _, money_id, _ in costs[shop]), shop
+    return {'eventShopsOpenWithTheirEvent': len(opened), 'concertShopsClosed': True, 'shopDatesRestored': True}
+
+
 def scripts_from_bundle(bundle, names=None):
     import asset_tools
     _, raw = asset_tools.unityfs(asset_tools.transform(bundle))
@@ -384,9 +568,9 @@ def tower_text(setting):
     return obj.read_typetree()['m_Script']
 
 
-def run_bundle(built, stock_bundle, rows):
-    """rows: tower_rows(tower_text(setting.u bytes))."""
-    names = g.LUA_NAMES | {'LuaCall.lua'}
+def run_bundle(built, stock_bundle, rows, setting=None):
+    """rows: tower_rows(tower_text(setting.u bytes)); setting: the setting.u bytes for the shop test."""
+    names = g.LUA_NAMES | {'LuaCall.lua'} | set(SHOP_SCRIPTS)
     stock = scripts_from_bundle(stock_bundle, names)
     patched = scripts_from_bundle(built, names)
     for name in g.LUA_NAMES:
@@ -394,22 +578,30 @@ def run_bundle(built, stock_bundle, rows):
     result = run_script(stock['UI_FightMode.lua'], stock['UI_CoopChoose.lua'], rows,
                         (patched['UI_FightMode.lua'], patched['UI_CoopChoose.lua']))
     result.update(run_fail(stock, patched, stock['LuaCall.lua'], patched['LuaCall.lua']))
+    if setting is not None:
+        texts = {key: table_text(setting, path) for key, path in SHOP_TABLES.items()}
+        result.update(run_shops(patched['UI_FightMode.lua'], patched, texts, rows))
     return result
 
 
 def main(argv):
     source = Path(argv[1])
+    setting = None
     if source.suffix == '.apk':
         with zipfile.ZipFile(source) as z:
             bundle = z.read('assets/lua.u')
-            rows = tower_rows(tower_text(z.read('assets/setting.u')))
+            setting = z.read('assets/setting.u')
+            rows = tower_rows(tower_text(setting))
     else:
         bundle = source.read_bytes()
         rows = tower_rows(Path(argv[2]).read_text(encoding='utf8'))
-    scripts = scripts_from_bundle(bundle, g.LUA_NAMES | {'LuaCall.lua'})
+    scripts = scripts_from_bundle(bundle, g.LUA_NAMES | {'LuaCall.lua'} | set(SHOP_SCRIPTS))
     print(run_script(scripts['UI_FightMode.lua'], scripts['UI_CoopChoose.lua'], rows))
     patched = {name: g.lua_script(name, scripts[name]) for name in g.FAIL_TOWER}
     print(run_fail(scripts, patched, scripts['LuaCall.lua']))
+    if setting is not None:
+        texts = {key: table_text(setting, path) for key, path in SHOP_TABLES.items()}
+        print(run_shops(g.MODULE.read_text(encoding='utf8'), scripts, texts, rows))
 
 
 if __name__ == '__main__':
