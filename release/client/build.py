@@ -28,6 +28,8 @@ CACHE_SHA='a2012a54d479ef5eed6232374a543b9f31b038146202e27705a19199cacf3f5e'
 sha=lambda b:hashlib.sha256(b).hexdigest()
 
 def main():
+    # Every check of this build is an assert; python -O would skip them and still write the overlay.
+    if not __debug__:sys.exit('Refuse building with python -O: the build checks are asserts')
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--source-apk',type=Path,default=ROOT/'client/GCG-Neptune-Nep-Note-Sequence-Fix-Test.apk')
     ap.add_argument('--source-cache',type=Path,default=ROOT/'client/GCG-Neptune-Nep-Note-Sequence-Fix-Test.cache.zip')
