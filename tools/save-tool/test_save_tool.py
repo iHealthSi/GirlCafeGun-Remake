@@ -147,7 +147,16 @@ def test_manifest():
     print('ok manifest: refused without the attribute, on another tag, with another type, on a cut file')
 
 
+def test_package_name():
+    with tempfile.TemporaryDirectory() as tmp:
+        for bad in ('x"; touch /sdcard/pwn; echo "', 'com.example.app extra', 'nodots', 'com..app', '1com.app', ''):
+            message = stops(lambda: save_tool.main(['--store', tmp, '--package', bad, 'list'], FakePhone()))
+            assert message and 'not an Android package name' in message, bad
+    print('ok package name: shell characters and malformed names are refused before any adb call')
+
+
 if __name__ == '__main__':
     test_save_tool()
+    test_package_name()
     test_manifest()
     print('all checks passed')

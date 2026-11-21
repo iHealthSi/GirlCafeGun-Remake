@@ -236,6 +236,9 @@ def parser():
 
 def main(argv=None, phone=None):
     a = parser().parse_args(argv)
+    # The package goes into a `run-as ... sh -c "..."` command line: allow only a plain Android package name.
+    if not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+', a.package):
+        sys.exit('--package %r is not an Android package name (letters, digits, underscores, dots)' % a.package)
     a.run(a, phone or Phone(a.adb, a.package))
 
 
