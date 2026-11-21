@@ -111,6 +111,29 @@ import {
   type EventMissionState,
 } from "../game-data/event-mission-data.js";
 import {
+  ANNIVERSARY_ERROR,
+  AnniversaryCatalog,
+  BOARD_AWARD,
+  BOARD_TASK,
+  GRID_TASK,
+  GUESS_LOG_ROUNDS,
+  GUESS_MATCH_TRIES,
+  GUESS_ROUND_SIZE,
+  GUESS_TASK,
+  LOVE_ITEM,
+  MAIN_TASK,
+  PUZZLE_TASK,
+  anniversaryErrorReply,
+  anniversaryReadOnly,
+  type AnniversaryRequest,
+  type AnniversaryState,
+  type DiscoveryMap,
+  type GridCell,
+  type GuessAward,
+  type GuessConfig,
+  type PondItem,
+} from "../game-data/anniversary-data.js";
+import {
   ACTIVITY_TYPE,
   ANNIVERSARY_TASK,
   BOSS_TASK,
@@ -600,6 +623,8 @@ export interface Player {
   namedTower?: NamedTowerState;
   /** Counters behind the concert and anniversary missions (event-mission-data.ts). */
   eventMissions?: EventMissionState;
+  /** What the first Anniversary's side games keep outside task values (guess round and record). */
+  anniversary?: AnniversaryState;
 }
 
 export interface PersistedState {
@@ -4481,6 +4506,706 @@ function applyNamedTowerRequest(
           chessBossFailed(player, catalog, request.body, outcome);
       }
       outcome.response = {};
+      return outcome;
+    }
+  }
+}
+
+// ================================================================ first Anniversary side games
+
+/** The longest path one 420 call may walk (the biggest map has 103 cells). */
+const ANNIVERSARY_PATH_LIMIT = 400;
+
+/** Wallet helpers of the side games: spending is all or nothing. */
+function walletCount(player: Player, id: number): number {
+  return player.money.find((entry) => entry.id === id)?.count ?? 0;
+}
+
+function spendWallet(
+  player: Player,
+  id: number,
+  count: number,
+  outcome: TowerOutcome,
+): boolean {
+  if (count <= 0) return true;
+  const wallet = player.money.find((entry) => entry.id === id);
+  if (!wallet || wallet.count < count) return false;
+  wallet.count -= count;
+  outcome.moneyIds.add(id);
+  return true;
+}
+
+function bitSet(value: number, bit: number): boolean {
+  return bit >= 0 && bit < 31 && ((value >>> bit) & 1) === 1;
+}
+
+function withBit(value: number, bit: number): number {
+  return (value | (1 << bit)) >>> 0;
+}
+
+function gridVisitKey(map: DiscoveryMap, grid: number): number {
+  return (map.id - 1) * GRID_TASK.visitStride + grid;
+}
+
+function gridVisited(player: Player, map: DiscoveryMap, grid: number): boolean {
+  return towerTask(player, GRID_TASK.visitGroup, gridVisitKey(map, grid)) > 0;
+}
+
+/** GridActLogic:GetAttrLevel: exp / ExpCost + 1, attribute 1 strength, 2 spirit, 3 technique. */
+function attributeLevel(player: Player, attribute: number): number {
+  return (
+    Math.floor(
+      towerTask(player, GRID_TASK.group, GRID_TASK.attribute + attribute) /
+        GRID_TASK.expCost,
+    ) + 1
+  );
+}
+
+/** GridActLogic:CheckLevelPass: a discovery level is passed once its clear counter is above 0. */
+function discoveryLevelPassed(
+  player: Player,
+  eventId: number,
+  levelId: number,
+): boolean {
+  return (
+    towerTask(
+      player,
+      ANNIVERSARY_TASK.group,
+      ANNIVERSARY_TASK.discoveryPass + eventId * 100 + levelId,
+    ) > 0
+  );
+}
+
+/** AnniversaryMainLogic:CheckLevelPass: bit (event - 1) of 1010 + LevelId. */
+function towerLevelPassed(player: Player, eventId: number, levelId: number): boolean {
+  return bitSet(
+    towerTask(player, ANNIVERSARY_TASK.group, ANNIVERSARY_TASK.pass + levelId),
+    eventId - 1,
+  );
+}
+
+function anniversaryState(player: Player): AnniversaryState {
+  return (player.anniversary ??= {});
+}
+
+/** The cell the team stands on: task 81/<map>, or the start cell on a map not walked yet. */
+function gridPosition(player: Player, map: DiscoveryMap): number {
+  const stored = towerTask(player, GRID_TASK.group, map.id);
+  return map.cells.has(stored) ? stored : map.start;
+}
+
+function awardRows(awards: readonly (readonly number[])[]): number[][] {
+  return awards.map((award) => award.slice(0, 5));
+}
+
+// Guess: the bout of the girl in play is one task (AnniversaryGuess:GetCurRoundInfo).
+function guessEncode(
+  girl: number,
+  pos: number,
+  count: number,
+  results: number[],
+): number {
+  return (
+    ((girl << 20) |
+      (pos << 16) |
+      (count << 6) |
+      ((results[2] ?? 0) << 4) |
+      ((results[1] ?? 0) << 2) |
+      (results[0] ?? 0)) >>>
+    0
+  );
+}
+
+function guessDecode(value: number): {
+  girl: number;
+  pos: number;
+  count: number;
+  results: number[];
+} {
+  return {
+    girl: (value >>> 20) & 0xfff,
+    pos: (value >>> 16) & 0xf,
+    count: (value >>> 6) & 0x3ff,
+    results: [value & 3, (value >>> 2) & 3, (value >>> 4) & 3],
+  };
+}
+
+function guessGirlKey(guess: GuessConfig, girl: number): number {
+  const position = guess.girls.indexOf(girl) + 1;
+  return position > 0 ? GUESS_TASK.girl + position : 0;
+}
+
+/** The free tries start again at 04:00 Shanghai (task 84/3 is the tries used today). */
+function guessNewDay(player: Player, state: AnniversaryState, now: number): void {
+  const day = missionDay(now);
+  if (state.guessDay === day) return;
+  state.guessDay = day;
+  setTowerTask(player, GUESS_TASK.group, GUESS_TASK.daily, 0);
+}
+
+function guessStartRound(
+  player: Player,
+  state: AnniversaryState,
+  guess: GuessConfig,
+  random: (maxExclusive: number) => number,
+): void {
+  const pool = [...guess.girls];
+  for (let index = pool.length - 1; index > 0; index--) {
+    const swap = random(index + 1);
+    [pool[index], pool[swap]] = [pool[swap]!, pool[index]!];
+  }
+  const picks = pool.slice(0, GUESS_ROUND_SIZE);
+  state.guessGirls = picks;
+  const turn = towerTask(player, GUESS_TASK.group, GUESS_TASK.turn) + 1;
+  setTowerTask(player, GUESS_TASK.group, GUESS_TASK.phase, 1);
+  setTowerTask(player, GUESS_TASK.group, GUESS_TASK.turn, turn);
+  setTowerTask(
+    player,
+    GUESS_TASK.group,
+    GUESS_TASK.current,
+    guessEncode(picks[0] ?? 0, 1, 0, [0, 0, 0]),
+  );
+  // The high half of a girl's task counts how often she was drawn, the low half the matches won against her.
+  for (const girl of picks) {
+    const key = guessGirlKey(guess, girl);
+    if (key > 0)
+      setTowerTask(
+        player,
+        GUESS_TASK.group,
+        key,
+        towerTask(player, GUESS_TASK.group, key) + 0x10000,
+      );
+  }
+  const log = (state.guessLog ??= []);
+  log.push({ nRound: turn, tbGirls: [] });
+  while (log.length > GUESS_LOG_ROUNDS) log.shift();
+}
+
+/** CheckCanAward: bouts played, matches won against one girl, or against every girl. */
+function guessCanClaim(player: Player, guess: GuessConfig, award: GuessAward): boolean {
+  const wins = (girl: number): number => {
+    const key = guessGirlKey(guess, girl);
+    return key > 0 ? towerTask(player, GUESS_TASK.group, key) & 0xffff : 0;
+  };
+  switch (award.type) {
+    case 1:
+      return (
+        towerTask(player, GUESS_TASK.group, GUESS_TASK.join) >= (award.limit[0] ?? 1)
+      );
+    case 2:
+      return award.limit.length >= 2 && wins(award.limit[0]!) >= award.limit[1]!;
+    case 3:
+      return (
+        award.limit.length >= 1 &&
+        guess.girls.every((girl) => wins(girl) >= award.limit[0]!)
+      );
+    default:
+      return false;
+  }
+}
+
+/** Closes the match with the girl in play: counters, record, then the next girl or the next round. */
+function guessFinishMatch(
+  player: Player,
+  state: AnniversaryState,
+  guess: GuessConfig,
+  bout: { girl: number; pos: number; results: number[] },
+  won: boolean,
+  random: (maxExclusive: number) => number,
+): void {
+  setTowerTask(
+    player,
+    GUESS_TASK.group,
+    GUESS_TASK.join,
+    towerTask(player, GUESS_TASK.group, GUESS_TASK.join) + 1,
+  );
+  const key = guessGirlKey(guess, bout.girl);
+  if (won && key > 0)
+    setTowerTask(
+      player,
+      GUESS_TASK.group,
+      key,
+      towerTask(player, GUESS_TASK.group, key) + 1,
+    );
+  const entry = state.guessLog?.at(-1);
+  entry?.tbGirls.push({ Girlid: bout.girl, tbResult: [...bout.results] });
+  const girls = state.guessGirls ?? [];
+  if (bout.pos < girls.length) {
+    setTowerTask(
+      player,
+      GUESS_TASK.group,
+      GUESS_TASK.current,
+      guessEncode(girls[bout.pos]!, bout.pos + 1, 0, [0, 0, 0]),
+    );
+    return;
+  }
+  // The round is over: its win rate (percent of the decided bouts) is added to the sum behind the average.
+  const results = (entry?.tbGirls ?? []).flatMap((girl) => girl.tbResult);
+  const decided = results.filter((result) => result !== 0).length;
+  if (decided > 0)
+    setTowerTask(
+      player,
+      GUESS_TASK.group,
+      GUESS_TASK.rateSum,
+      towerTask(player, GUESS_TASK.group, GUESS_TASK.rateSum) +
+        Math.floor((results.filter((result) => result === 2).length * 100) / decided),
+    );
+  guessStartRound(player, state, guess, random);
+}
+
+/** Applies one request of the Anniversary hub's side games. Throws EventTowerError for a refusal. */
+function applyAnniversaryRequest(
+  player: Player,
+  request: AnniversaryRequest,
+  catalog: AnniversaryCatalog,
+  random: (maxExclusive: number) => number,
+  now: number,
+): TowerOutcome {
+  const outcome: TowerOutcome = {
+    response: {},
+    itemGuids: new Set(),
+    moneyIds: new Set(),
+    girlIds: new Set(),
+    experience: null,
+  };
+  const finishAwards = (): void => {
+    const reconciliation = reconcileGirlAppearanceState(player, outcome.itemGuids);
+    for (const girlId of reconciliation.updatedGirlIds) outcome.girlIds.add(girlId);
+    reconcileGirlFetterUnlocks(player);
+  };
+
+  switch (request.kind) {
+    case "ignored":
+      // 418 and 419 are test commands (luacall.lua marks them): the C# build gave out power and let the
+      // grid rewards pay again. Nothing changes here and the client has no handler.
+      outcome.response = undefined;
+      return outcome;
+
+    case "fan":
+    case "challengeAward":
+      outcome.response = anniversaryErrorReply(request, 0);
+      return outcome;
+
+    case "move": {
+      const map = catalog.maps.get(request.mapId);
+      if (!map) throw refuse(2, "unknown_map");
+      const levels = [1, 2, 3].map((attribute) => attributeLevel(player, attribute));
+      let position = gridPosition(player, map);
+      const entered: GridCell[] = [];
+      const fresh = new Set<number>();
+      const path = request.path.slice(0, ANNIVERSARY_PATH_LIMIT);
+      for (const [index, grid] of path.entries()) {
+        const cell = map.cells.get(grid);
+        if (!cell) throw refuse(2, "unknown_cell");
+        if (cell.id === position) continue;
+        const event = catalog.events.get(cell.event);
+        const visited = gridVisited(player, map, cell.id) || fresh.has(cell.id);
+        if (!visited) {
+          // A hinder (type 101) stops the team until the attributes reach what it needs.
+          if (
+            event &&
+            event.type > 100 &&
+            !event.conditions.every(
+              (need, attribute) => (levels[attribute] ?? 0) >= need,
+            )
+          )
+            break;
+          fresh.add(cell.id);
+          entered.push(cell);
+        }
+        position = cell.id;
+        // A fight cell stops the team until its level is passed.
+        const [eventId, levelId] = event?.levelInfo ?? [];
+        if (
+          eventId !== undefined &&
+          levelId !== undefined &&
+          index < path.length - 1 &&
+          !discoveryLevelPassed(player, eventId, levelId)
+        )
+          break;
+      }
+      // One power per new cell. MoveRsp does not move the team on an error, so a path the power cannot pay
+      // is refused whole.
+      if (!spendWallet(player, GRID_TASK.power, entered.length, outcome))
+        throw refuse(1, "no_power");
+      for (const cell of entered) {
+        setTowerTask(player, GRID_TASK.visitGroup, gridVisitKey(map, cell.id), 1);
+        const event = catalog.events.get(cell.event);
+        if (event) grantTowerAwards(player, event.awards, outcome);
+      }
+      setTowerTask(player, GRID_TASK.group, map.id, position);
+      finishAwards();
+      outcome.response = {
+        Err: 0,
+        LastPower: walletCount(player, GRID_TASK.power),
+        TeamPos: position,
+      };
+      return outcome;
+    }
+
+    case "strengthen": {
+      if (request.attribute < 1 || request.attribute > 3)
+        throw refuse(1, "unknown_attribute");
+      const cap = catalog.attributeCap[request.attribute - 1] ?? 0;
+      // [INFER] the client shows LevelMax on any error: the cap is the most a hinder or a story asks for.
+      if (cap > 0 && attributeLevel(player, request.attribute) >= cap)
+        throw refuse(1, "attribute_maxed");
+      if (!spendWallet(player, GRID_TASK.points, 1, outcome))
+        throw refuse(1, "no_skill_point");
+      const key = GRID_TASK.attribute + request.attribute;
+      setTowerTask(
+        player,
+        GRID_TASK.group,
+        key,
+        towerTask(player, GRID_TASK.group, key) + GRID_TASK.expAdd,
+      );
+      outcome.response = { nError: 0 };
+      return outcome;
+    }
+
+    case "processReward": {
+      const map = catalog.maps.get(request.mapId);
+      const point = map?.processPoints[request.index - 1];
+      const rewards = map?.rewards[request.index - 1];
+      if (!map || point === undefined || !rewards || request.index < 1)
+        throw refuse(1, "unknown_reward");
+      const flag =
+        GRID_TASK.processReward +
+        (map.id - 1) * GRID_TASK.processStride +
+        request.index;
+      if (towerTask(player, GRID_TASK.group, flag) > 0)
+        throw refuse(1, "already_taken");
+      // GridActLogic:ProcessSatisfy: complete / total * 1000 >= ProcessPoint.
+      const [total, done] = catalog.degree(map, (cell) =>
+        gridVisited(player, map, cell.id),
+      );
+      if (total <= 0 || done * 1000 < point * total)
+        throw refuse(1, "not_explored_enough");
+      grantTowerAwards(player, rewards, outcome);
+      setTowerTask(player, GRID_TASK.group, flag, 1);
+      finishAwards();
+      outcome.response = { nError: 0, nMapId: map.id, nRewardIdx: request.index };
+      return outcome;
+    }
+
+    case "boardOpen": {
+      const day = missionDay(now);
+      const unlocked = towerTask(player, BOARD_TASK.group, BOARD_TASK.photos);
+      // The client never writes the letter flag: the first call marks it, so the letter plays once.
+      if (towerTask(player, BOARD_TASK.group, BOARD_TASK.letterOpened) === 0)
+        setTowerTask(player, BOARD_TASK.group, BOARD_TASK.letterOpened, 1);
+      const lastDay = towerTask(player, BOARD_TASK.group, BOARD_TASK.lastDay);
+      if (unlocked >= BOARD_TASK.photoCount || day <= lastDay) {
+        // Nothing new today: no answer (an empty list would animate photo 1).
+        outcome.response = undefined;
+        return outcome;
+      }
+      setTowerTask(player, BOARD_TASK.group, BOARD_TASK.lastDay, day);
+      setTowerTask(player, BOARD_TASK.group, BOARD_TASK.photos, unlocked + 1);
+      // UnClockOne unlocks photo tb[1] + 1: the count before this one.
+      outcome.response = [unlocked];
+      return outcome;
+    }
+
+    case "boardAward": {
+      if (
+        towerTask(player, BOARD_TASK.group, BOARD_TASK.photos) <
+          BOARD_TASK.photoCount ||
+        towerTask(player, BOARD_TASK.group, BOARD_TASK.awardTaken) > 0
+      )
+        throw refuse(2, "board_award_unavailable");
+      grantTowerAwards(player, [BOARD_AWARD], outcome);
+      setTowerTask(player, BOARD_TASK.group, BOARD_TASK.awardTaken, 1);
+      finishAwards();
+      // GetAwardRsp shows the reward only for exactly five numbers: one flat tuple.
+      outcome.response = [...BOARD_AWARD];
+      return outcome;
+    }
+
+    case "love": {
+      const stories = catalog.stories.get(request.girlId);
+      if (!stories || stories.length === 0)
+        throw refuse(ANNIVERSARY_ERROR.closed, "unknown_girl");
+      const ownedOrNpc =
+        request.girlId > 20 ||
+        player.girls.some(({ girlId }) => girlId === request.girlId);
+      if (!ownedOrNpc) throw refuse(ANNIVERSARY_ERROR.closed, "girl_not_owned");
+      const loveKey = MAIN_TASK.love + request.girlId;
+      const love = towerTask(player, MAIN_TASK.group, loveKey);
+      if (request.type === 1) {
+        if (stories[0]!.noGift || love >= MAIN_TASK.maxLove)
+          throw refuse(ANNIVERSARY_ERROR.closed, "no_gift_possible");
+        if (!takeTowerItem(player, LOVE_ITEM, 1, outcome))
+          throw refuse(ANNIVERSARY_ERROR.short, "no_gift");
+        setTowerTask(player, MAIN_TASK.group, loveKey, love + 1);
+        outcome.response = { nType: 1, tbReward: [] };
+        return outcome;
+      }
+      if (request.type !== 2)
+        throw refuse(ANNIVERSARY_ERROR.closed, "unknown_love_type");
+      const story = stories[request.storyIdx - 1];
+      if (!story) throw refuse(ANNIVERSARY_ERROR.closed, "unknown_story");
+      const storyKey = MAIN_TASK.story + request.girlId;
+      if (bitSet(towerTask(player, MAIN_TASK.group, storyKey), request.storyIdx))
+        throw refuse(ANNIVERSARY_ERROR.short, "story_taken");
+      // AnniversaryMainLogic:IsStoryUnlock without the date: love, the three skills and a tower level.
+      const unlocked =
+        love >= story.loveLevel &&
+        (story.skillLevels.length < 3 ||
+          story.skillLevels.every(
+            (need, index) => attributeLevel(player, index + 1) >= need,
+          )) &&
+        (story.towerLevel.length < 2 ||
+          towerLevelPassed(player, story.towerLevel[0]!, story.towerLevel[1]!));
+      if (!unlocked) throw refuse(ANNIVERSARY_ERROR.short, "story_locked");
+      grantTowerAwards(player, story.rewards, outcome);
+      setTowerTask(
+        player,
+        MAIN_TASK.group,
+        storyKey,
+        withBit(towerTask(player, MAIN_TASK.group, storyKey), request.storyIdx),
+      );
+      finishAwards();
+      outcome.response = { nType: 2, tbReward: awardRows(story.rewards) };
+      return outcome;
+    }
+
+    case "gacha": {
+      // One coin buys LimitCount draws from the current limited pond (counts by position in tasks 1902+)
+      // and LimitlessCount draws from the endless one.
+      const pool = catalog.pools.get(request.poolId);
+      if (!pool || !pool.cost) throw refuse(ANNIVERSARY_ERROR.closed, "unknown_pool");
+      if (!takeTowerItem(player, pool.cost, pool.cost[4], outcome))
+        throw refuse(ANNIVERSARY_ERROR.short, "no_coin");
+      const drawn: BaseAward[] = [];
+      const asSlots = (items: readonly PondItem[], unlimited: boolean) =>
+        items.map((item) => ({
+          award: item.award,
+          key: false,
+          loop: 0,
+          weight: item.weight,
+          count: unlimited ? -1 : item.count,
+        }));
+      for (let draw = 0; draw < pool.limited; draw++) {
+        const pond = Math.max(1, towerTask(player, MAIN_TASK.group, MAIN_TASK.pondId));
+        const items = pool.ponds.get(pond) ?? [];
+        if (items.length === 0) break;
+        const records = items.map((_, index) =>
+          towerTask(player, MAIN_TASK.group, MAIN_TASK.pondCount + index),
+        );
+        const pick = pickPondSlot(asSlots(items, false), records, random);
+        if (pick >= 0) {
+          drawn.push(items[pick]!.award);
+          records[pick] = records[pick]! + 1;
+          setTowerTask(
+            player,
+            MAIN_TASK.group,
+            MAIN_TASK.pondCount + pick,
+            records[pick]!,
+          );
+        }
+        // An emptied pond starts the next one with clean counts.
+        if (items.every((item, index) => records[index]! >= item.count)) {
+          items.forEach((_, index) =>
+            setTowerTask(player, MAIN_TASK.group, MAIN_TASK.pondCount + index, 0),
+          );
+          setTowerTask(player, MAIN_TASK.group, MAIN_TASK.pondId, pond + 1);
+        }
+      }
+      for (let draw = 0; draw < pool.limitless; draw++) {
+        const slots = asSlots(pool.endless, true);
+        const pick = pickPondSlot(
+          slots,
+          slots.map(() => 0),
+          random,
+        );
+        if (pick >= 0) drawn.push(pool.endless[pick]!.award);
+      }
+      grantTowerAwards(player, drawn, outcome);
+      finishAwards();
+      // The reply is the bare list of rewards (UI_AnniversaryGame passes it to UI_RewardNormal).
+      outcome.response = awardRows(drawn);
+      return outcome;
+    }
+
+    case "puzzle": {
+      const board = catalog.puzzles.get(request.group);
+      if (!board) throw refuse(-1, "unknown_board");
+      const value = towerTask(player, PUZZLE_TASK.group, board.id);
+      if (request.op === "open") {
+        if (
+          request.index < 1 ||
+          request.index > PUZZLE_TASK.pieces ||
+          bitSet(value, request.index)
+        )
+          throw refuse(-1, "piece_unavailable");
+        if (!spendWallet(player, board.moneyId, 1, outcome))
+          throw refuse(-5, "no_puzzle_token");
+        setTowerTask(
+          player,
+          PUZZLE_TASK.group,
+          board.id,
+          withBit(value, request.index),
+        );
+      } else {
+        const award = board.awards[request.index - 1];
+        const bit = PUZZLE_TASK.awardBit + request.index - 1;
+        if (!award || request.index < 1 || bitSet(value, bit))
+          throw refuse(-1, "award_unavailable");
+        let flipped = 0;
+        for (let piece = 1; piece <= PUZZLE_TASK.pieces; piece++)
+          if (bitSet(value, piece)) flipped++;
+        if (flipped < award.count) throw refuse(-1, "board_not_far_enough");
+        grantTowerAwards(player, award.rewards, outcome);
+        setTowerTask(player, PUZZLE_TASK.group, board.id, withBit(value, bit));
+        finishAwards();
+      }
+      // The server of these commands answers with the request and nRet set.
+      outcome.response = { ...request.body, nRet: 0 };
+      return outcome;
+    }
+
+    case "guessRefresh": {
+      const guess = catalog.guess;
+      if (!guess) throw refuse(ANNIVERSARY_ERROR.closed, "no_guess_tables");
+      const state = anniversaryState(player);
+      guessNewDay(player, state, now);
+      const current = guessDecode(
+        towerTask(player, GUESS_TASK.group, GUESS_TASK.current),
+      );
+      if (
+        towerTask(player, GUESS_TASK.group, GUESS_TASK.turn) === 0 ||
+        !state.guessGirls ||
+        state.guessGirls.length === 0 ||
+        current.girl <= 0
+      )
+        guessStartRound(player, state, guess, random);
+      outcome.response = {
+        Error: 0,
+        tbGirl: (state.guessGirls ?? []).map((girl) => [girl]),
+      };
+      return outcome;
+    }
+
+    case "guessLog": {
+      outcome.response = {
+        Error: 0,
+        tbLog: structuredClone(anniversaryState(player).guessLog ?? []),
+      };
+      return outcome;
+    }
+
+    case "guessFist": {
+      const guess = catalog.guess;
+      if (!guess) throw refuse(ANNIVERSARY_ERROR.closed, "no_guess_tables");
+      const state = anniversaryState(player);
+      guessNewDay(player, state, now);
+      const bout = guessDecode(towerTask(player, GUESS_TASK.group, GUESS_TASK.current));
+      if (bout.girl <= 0 || bout.pos < 1)
+        throw refuse(ANNIVERSARY_ERROR.closed, "no_round");
+      if (request.fist === null && !request.timeout)
+        throw refuse(ANNIVERSARY_ERROR.closed, "no_fist");
+      // A throw costs UseNum tries: the free ones of the day first, then the extra tries.
+      const used = towerTask(player, GUESS_TASK.group, GUESS_TASK.daily);
+      if (used + guess.useNum <= guess.dailyNum)
+        setTowerTask(player, GUESS_TASK.group, GUESS_TASK.daily, used + guess.useNum);
+      else if (!spendWallet(player, guess.moneyId, guess.useNum, outcome))
+        throw refuse(ANNIVERSARY_ERROR.short, "no_tries");
+      if (
+        request.gold &&
+        (request.fist === null || !spendWallet(player, guess.goldId, 1, outcome))
+      )
+        throw refuse(ANNIVERSARY_ERROR.short, "no_gold_finger");
+
+      const reply: Record<string, unknown> = { Error: 0 };
+      let result: number;
+      if (request.fist === null) {
+        // The player did not throw: the bout is lost.
+        result = 1;
+        reply.bTimeOut = true;
+      } else {
+        const decided = bout.results.filter((entry) => entry !== 0).length;
+        const rule = guess.rules.get(bout.girl);
+        let server: number;
+        let refuses = false;
+        if (request.gold) {
+          // The gold finger: the girl throws what loses to the player's throw.
+          server = (request.fist % 3) + 1;
+        } else {
+          const forced = guess.forced.get(`${decided + 1}:${bout.girl}`);
+          if (forced !== undefined) server = forced;
+          else if (rule?.type === 2 && request.hint !== null) server = request.hint;
+          else if (rule?.type === 3 && request.hint !== null)
+            server = [1, 2, 3].filter((fist) => fist !== request.hint)[random(2)]!;
+          else {
+            server = random(3) + 1;
+            // RoundRate type 4: the girl sometimes does not throw at all.
+            if (rule?.type === 4 && random(100) < rule.rate) refuses = true;
+          }
+        }
+        reply.nType = request.fist;
+        if (refuses) {
+          // UI_AnniversaryGuessFight: a timeout that carries nType means the girl did not throw, the player wins.
+          result = 2;
+          reply.bTimeOut = true;
+        } else {
+          // The comparison of UI_AnniversaryGuessFight:OnReceiveUpdate: 1 the player lost, 2 won, 0 draw.
+          result =
+            request.fist === (server % 3) + 1
+              ? 1
+              : request.fist === ((server + 1) % 3) + 1
+                ? 2
+                : 0;
+          reply.ServerFist = server;
+          if (request.gold) reply.bGold = true;
+        }
+      }
+
+      const results = [...bout.results];
+      const count = bout.count + 1;
+      if (result !== 0) {
+        const slot = results.indexOf(0);
+        if (slot >= 0) results[slot] = result;
+      }
+      const wins = results.filter((entry) => entry === 2).length;
+      const losses = results.filter((entry) => entry === 1).length;
+      // Best of three, draws do not count; a match that used its three tries without two wins is lost.
+      if (wins >= 2 || losses >= 2 || count >= GUESS_MATCH_TRIES)
+        guessFinishMatch(
+          player,
+          state,
+          guess,
+          { girl: bout.girl, pos: bout.pos, results },
+          wins >= 2,
+          random,
+        );
+      else
+        setTowerTask(
+          player,
+          GUESS_TASK.group,
+          GUESS_TASK.current,
+          guessEncode(bout.girl, bout.pos, count, results),
+        );
+      outcome.response = reply;
+      return outcome;
+    }
+
+    case "guessAward": {
+      const guess = catalog.guess;
+      const award = guess?.awards.find(
+        (entry) => entry.type === request.type && entry.index === request.index,
+      );
+      if (!guess || !award) throw refuse(ANNIVERSARY_ERROR.closed, "unknown_award");
+      const key = GUESS_TASK.awardFlags + request.type - 1;
+      const flags = towerTask(player, GUESS_TASK.group, key);
+      if (request.index < 0 || request.index > 30 || bitSet(flags, request.index))
+        throw refuse(ANNIVERSARY_ERROR.short, "award_taken");
+      if (!guessCanClaim(player, guess, award))
+        throw refuse(ANNIVERSARY_ERROR.short, "award_not_reached");
+      grantTowerAwards(player, award.items, outcome);
+      setTowerTask(player, GUESS_TASK.group, key, withBit(flags, request.index));
+      finishAwards();
+      outcome.response = { Error: 0, Items: awardRows(award.items) };
       return outcome;
     }
   }
@@ -9458,6 +10183,77 @@ export class PlayerRepository {
       experienceUpdate: outcome.experience,
       rejected: null,
       ...(outcome.pushes ? { pushes: outcome.pushes } : {}),
+    };
+  }
+
+  /**
+   * The side games of the first Anniversary hub (anniversary-data.ts): discovery map, thank-you board, girl
+   * stories, capsules, puzzle, guess and the leftover calls of the other event screens. A refusal leaves the
+   * save unchanged and returns the client's error reply (undefined where the client has no handler).
+   */
+  async handleAnniversaryRequest(
+    account: string,
+    request: AnniversaryRequest,
+    options: { random?: (maxExclusive: number) => number; now?: number } = {},
+  ): Promise<EventTowerResult> {
+    const catalog = AnniversaryCatalog.loadDefault();
+    const random = options.random ?? ((max: number) => randomInt(max));
+    const now = options.now ?? Date.now();
+    const readOnly = anniversaryReadOnly(request);
+    let player: Player | undefined;
+    let outcome: TowerOutcome | undefined;
+    try {
+      if (readOnly) {
+        player = this.#store.snapshot().players[account];
+        if (!player) throw new Error(`Unknown player account: ${account}`);
+        outcome = applyAnniversaryRequest(player, request, catalog, random, now);
+      } else {
+        await this.#store.update((state) => {
+          const draft = state.players[account];
+          if (!draft) throw new Error(`Unknown player account: ${account}`);
+          outcome = applyAnniversaryRequest(draft, request, catalog, random, now);
+          player = draft;
+        });
+      }
+    } catch (error) {
+      if (!(error instanceof EventTowerError)) throw error;
+      const current = this.#store.snapshot().players[account];
+      if (!current) throw new Error(`Unknown player account: ${account}`);
+      this.#logger.warn("player.anniversary.rejected", {
+        account,
+        command: request.command,
+        kind: request.kind,
+        reason: error.reason,
+        code: error.code,
+      });
+      return {
+        player: current,
+        response: anniversaryErrorReply(request, error.code),
+        updatedItems: [],
+        updatedMoney: [],
+        updatedGirls: [],
+        experienceUpdate: null,
+        rejected: { code: error.code, reason: error.reason },
+      };
+    }
+    if (!player || !outcome)
+      throw new Error(`Failed to handle anniversary request: ${account}`);
+    const snapshot = structuredClone(player);
+    if (!readOnly)
+      this.#logger.info("player.anniversary", {
+        account,
+        command: request.command,
+        kind: request.kind,
+      });
+    const { itemGuids, moneyIds, girlIds } = outcome;
+    return {
+      player: snapshot,
+      response: outcome.response,
+      updatedItems: snapshot.inventory.filter(({ guid }) => itemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id }) => moneyIds.has(id)),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
+      experienceUpdate: outcome.experience,
+      rejected: null,
     };
   }
 

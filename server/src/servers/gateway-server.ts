@@ -31,6 +31,14 @@ import {
   parseEventTowerCall,
 } from "../game-data/event-tower-data.js";
 import {
+  AnniversaryCatalog,
+  anniversaryErrorReply,
+  anniversaryReadOnly,
+  gameRankReply,
+  parseAnniversaryCall,
+  parseGameRankCall,
+} from "../game-data/anniversary-data.js";
+import {
   NAMED_LOG_COMMANDS,
   NamedTowerCatalog,
   namedTowerErrorReply,
@@ -769,6 +777,10 @@ export function createGatewayServer({
   if (!NamedTowerCatalog.tryLoadDefault())
     logger.warn("named_tower.tables_unavailable", {
       message: String(NamedTowerCatalog.loadError),
+    });
+  if (!AnniversaryCatalog.tryLoadDefault())
+    logger.warn("anniversary.tables_unavailable", {
+      message: String(AnniversaryCatalog.loadError),
     });
   const chapterCatalog = ChapterCatalog.loadDefault();
   const gachaCatalog = GachaCatalog.loadDefault();
@@ -3862,6 +3874,90 @@ export function createGatewayServer({
             rejected: result.rejected?.reason,
           });
           return;
+        }
+        const anniversary =
+          call?.method === "LuaCall" ? parseAnniversaryCall(call.parameters) : null;
+        if (anniversary) {
+          // The side games of the first Anniversary hub and a few leftover event calls. A reply of undefined
+          // means the client has no handler (or the answer would change its screen): nothing is sent.
+          const answer = (body: unknown): void => {
+            if (body === undefined) return;
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: anniversary.command,
+                tbParam: body,
+              }),
+            );
+          };
+          let result: Awaited<ReturnType<typeof players.handleAnniversaryRequest>>;
+          try {
+            result = await players.handleAnniversaryRequest(
+              context.account,
+              anniversary,
+            );
+          } catch (error) {
+            logger.error("lua.anniversary_failed", {
+              peer,
+              account: context.account,
+              command: anniversary.command,
+              kind: anniversary.kind,
+              message:
+                error instanceof Error ? (error.stack ?? error.message) : String(error),
+            });
+            answer(anniversaryErrorReply(anniversary, TOWER_ERROR.invalid));
+            return;
+          }
+          context.player = result.player;
+          // The client's reply handlers re-read money, items and task values, so they go out first.
+          for (const money of result.updatedMoney) {
+            send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+          }
+          if (result.updatedItems.length > 0) {
+            send(
+              COMMAND.ITEM_UPDATE_NTF,
+              0,
+              makeItemUpdateNotification(result.updatedItems),
+            );
+          }
+          sendGirlUpdates(result.updatedGirls);
+          if (!result.rejected && !anniversaryReadOnly(anniversary)) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          answer(result.response);
+          logger.info("lua.callback", {
+            peer,
+            account: context.account,
+            method: "LuaCall",
+            command: anniversary.command,
+            feature: "event.anniversary",
+            kind: anniversary.kind,
+            rejected: result.rejected?.reason,
+          });
+          return;
+        }
+        if (call?.method === "GameRankMsg") {
+          const rank = parseGameRankCall(call.parameters);
+          if (rank) {
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("ServerRankMsg", gameRankReply(rank)),
+            );
+            logger.info("lua.callback", {
+              peer,
+              account: context.account,
+              method: "GameRankMsg",
+              feature: "event.game_rank",
+              rank: rank.id,
+            });
+            return;
+          }
         }
         const bountyCall = parseBountyCall(call);
         if (bountyCall) {

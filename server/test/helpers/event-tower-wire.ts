@@ -192,6 +192,19 @@ export async function startTowerWire(
         makeServerLuaCall("LuaCall", payload),
         until,
       ),
+    /** Sends a call of another method (GameRankMsg ...) and collects packets up to the one `until` accepts. */
+    callMethod: (
+      method: string,
+      payload: unknown,
+      until: (packet: GamePacket) => boolean,
+    ) =>
+      exchange(
+        socket,
+        COMMAND.C2S_CALL_REQ,
+        ++serial,
+        makeServerLuaCall(method, payload),
+        until,
+      ),
     /** The packet that carries the reply of `command` (bare or inside DoSettle). */
     replyTo: (command: number) => (packet: GamePacket) =>
       packet.command === COMMAND.NTF_S2C_CALL &&
