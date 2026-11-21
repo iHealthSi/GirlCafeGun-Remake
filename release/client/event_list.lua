@@ -14,9 +14,24 @@ M.TOWER_CLASSES = {
 	Animalize = true, EighthTower = true, TwentyFirstTower = true,
 }
 
+-- Sub-tables that a hub reads with dates of their own. Each spec: rows, filter (optional), ends (end fields).
+local function missionRows(logic, event)
+	local rows = logic and logic.tbMissionList
+	return { rows = rows, ends = { 'endTime' },
+		filter = event and function(tb) return tb.missionEvent == event end or nil }
+end
+local function concertExtras()
+	if ConcertExchange and not ConcertExchange.timeListConfig and ConcertExchange.LoadTimeListConfig then
+		pcall(ConcertExchange.LoadTimeListConfig, ConcertExchange)
+	end
+	return { missionRows(MusicMission), { rows = ConcertExchange and ConcertExchange.timeListConfig, ends = { 'EndTime' } } }
+end
+
 -- The event families of the stock tile (UI_FightMode:CheckEventOpen), with the same entry call each.
 -- rows: the family's config rows (each has BeginTime, EndTime, ClearTime as seconds); accept: rows that
--- belong on the page; enter: the stock entry call; label: name when the row has none.
+-- belong on the page; enter: the stock entry call; label: name when the row has none; together: the hub
+-- shows every open row of the family at once, so the page lists the family once and opens all its rows;
+-- extras: sub-tables to open with it.
 M.FAMILIES = {
 	{ key = 'tower', label = 'Event',
 		rows = function() return ActivitiesConfig and ActivitiesConfig.tbSmallTowerConfig end,
@@ -29,10 +44,11 @@ M.FAMILIES = {
 	{ key = 'coop', label = 'Armed Survey',
 		rows = function() return CoopClientLogic and CoopClientLogic.tbConfig end,
 		enter = function(tb) CoopClientLogic:GetTower(tb.Id) end },
-	{ key = 'music', label = 'Concert',
+	{ key = 'music', label = 'Concert', together = true, extras = concertExtras,
 		rows = function() return MusicActivityLogic and MusicActivityLogic.tbMusicTowerTotalConfig end,
 		enter = function() MusicActivityLogic:GetTower() end },
-	{ key = 'anniversary', label = 'Anniversary',
+	{ key = 'anniversary', label = 'Anniversary', together = true,
+		extras = function() return { missionRows(MonthMission, MonthMission and MonthMission.EVENT_TYPE_YEAR or 1) } end,
 		rows = function() return AnniversaryMainLogic and AnniversaryMainLogic.tbTowerTotalConfig end,
 		enter = function() UI.CloseAndOpen('UI_AnniversaryMain') end },
 	{ key = 'mix', label = 'Joint Event',
@@ -51,7 +67,8 @@ M.FAMILIES = {
 	{ key = 'linkage', label = 'Collab',
 		rows = function() return LinkageActivityLogic and LinkageActivityLogic.tbTowerConfig end,
 		enter = function() UI.CloseAndOpen('UI_RailgunMain') end },
-	{ key = 'anniversary2', label = '2nd Anniversary',
+	{ key = 'anniversary2', label = '2nd Anniversary', together = true,
+		extras = function() return { missionRows(MonthMission, MonthMission and MonthMission.EVENT_TYPE_2YEAR or 2) } end,
 		rows = function() return SecondAnniversaryTower and SecondAnniversaryTower.tbTotalConfig end,
 		enter = function() SecondAnniversaryTower:GetTower() end },
 	{ key = 'warchess', label = 'War Chess',
@@ -61,15 +78,17 @@ M.FAMILIES = {
 
 -- Families whose server part exists. A family off this list stays off the page: its calls would get no
 -- reply and its screens would wait for ever.
-M.SERVED = { tower = true, micro = true, coop = true, mix = true, buff = true, linkage = true, anniversary2 = true }
+M.SERVED = { tower = true, micro = true, coop = true, music = true, mix = true, buff = true, linkage = true,
+	anniversary2 = true, warchess = true }
 
 local DAY = 86400
+local ALL = 'all'
 M.OPEN_DAYS = 30
 M.COLUMNS, M.TILE_W, M.TILE_H, M.LABEL_H, M.GAP = 4, 250, 168, 46, 20
 
 local function log(msg) print('[events] ' .. tostring(msg)) end
 
--- First dates of a config row, kept before any change so the order and a later restore use them.
+-- First dates of a config row, kept before any change, for the order of the page.
 local function original(tb)
 	if not tb.__gcgDates then
 		tb.__gcgDates = { BeginTime = tb.BeginTime, EndTime = tb.EndTime, ClearTime = tb.ClearTime }
@@ -96,6 +115,10 @@ local function familyRows(family)
 	if ok and type(rows) == 'table' then return rows end
 end
 
+local function accepted(family, tb)
+	return type(tb) == 'table' and type(tb.BeginTime) == 'number' and (not family.accept or family.accept(tb))
+end
+
 -- Every entry of the served families, oldest first. Dates do not matter here: all are past.
 -- A row that repeats an earlier one of its family (Tower.txt 201 = 1) is left out.
 function M.Entries()
@@ -111,7 +134,7 @@ function M.Entries()
 			end)
 			for _, id in ipairs(ids) do
 				local tb = rows[id]
-				if type(tb) == 'table' and type(tb.BeginTime) == 'number' and (not family.accept or family.accept(tb)) then
+				if accepted(family, tb) then
 					local dates = original(tb)
 					local key = table.concat({ tostring(tb.ClassName), tostring(tb.Name), tostring(dates.BeginTime) }, '|')
 					if not seen[key] then
@@ -120,11 +143,22 @@ function M.Entries()
 					end
 				end
 			end
-			for _, p in ipairs(picked) do
-				local dates = original(p.tb)
-				out[#out + 1] = { Id = p.tb.Id or p.id, Key = p.id, Kind = family.key, Family = family,
-					Name = rowName(family, p.tb, #picked), Icon = p.tb.Icon,
-					Start = dates.BeginTime or 0, Month = month(dates.BeginTime) }
+			if family.together and #picked > 0 then
+				local start, icon = nil, nil
+				for _, p in ipairs(picked) do
+					local begin = original(p.tb).BeginTime or 0
+					if not start or begin < start then start = begin end
+					if p.tb.Icon and p.tb.Icon ~= '' then icon = p.tb.Icon end
+				end
+				out[#out + 1] = { Id = 0, Key = ALL, Kind = family.key, Family = family, Name = family.label,
+					Icon = icon, Start = start, Month = month(start) }
+			else
+				for _, p in ipairs(picked) do
+					local dates = original(p.tb)
+					out[#out + 1] = { Id = p.tb.Id or p.id, Key = p.id, Kind = family.key, Family = family,
+						Name = rowName(family, p.tb, #picked), Icon = p.tb.Icon,
+						Start = dates.BeginTime or 0, Month = month(dates.BeginTime) }
+				end
 			end
 		end
 	end
@@ -136,28 +170,61 @@ function M.Entries()
 	return out
 end
 
--- Make one row the only open event of every family (now - 1 day .. now + OPEN_DAYS) and put every row
--- that an earlier tap opened back to its own dates. Lookups that take "the first open row" then find it.
-M.opened = M.opened or {}
+-- Opening keeps each row's own start (all are in the past, so content that unlocks day by day after the
+-- start is all unlocked) and moves only its end fields to now + OPEN_DAYS. Every change is recorded, and
+-- the next tap puts it back first, so only one event is open at a time: lookups that take "the first open
+-- row" then find the chosen one.
+M.changed = M.changed or {}
+
+local function set(tb, key, value)
+	M.changed[#M.changed + 1] = { tb = tb, key = key, value = tb[key] }
+	tb[key] = value
+end
+
+function M.Restore()
+	for i = #M.changed, 1, -1 do
+		local c = M.changed[i]
+		c.tb[c.key] = c.value
+		M.changed[i] = nil
+	end
+end
+
+-- An end is seconds, or a yyyymmddHHMM number (ConcertExchange time list). 0 means "no end".
+local function extend(tb, key, untilSec)
+	local value = tb[key]
+	if type(value) ~= 'number' or value == 0 then return end
+	if value >= 190000000000 and value < 300000000000 then
+		local target = tonumber(os.date('%Y%m%d%H%M', untilSec))
+		if target and value < target then set(tb, key, target) end
+	elseif value < untilSec then
+		set(tb, key, untilSec)
+	end
+end
+
 function M.Activate(entry)
 	local rows = familyRows(entry.Family)
-	local chosen = rows and rows[entry.Key]
-	if type(chosen) ~= 'table' then return false end
-	for i = #M.opened, 1, -1 do
-		local tb = M.opened[i]
-		if tb ~= chosen then
-			local dates = original(tb)
-			tb.BeginTime, tb.EndTime, tb.ClearTime = dates.BeginTime, dates.EndTime, dates.ClearTime
+	if not rows then return false end
+	M.Restore()
+	local untilSec = GetTime() + M.OPEN_DAYS * DAY
+	local opened = 0
+	for key, tb in pairs(rows) do
+		if (entry.Key == ALL and accepted(entry.Family, tb)) or (key == entry.Key and type(tb) == 'table') then
+			extend(tb, 'EndTime', untilSec)
+			extend(tb, 'ClearTime', untilSec + 3 * DAY)
+			opened = opened + 1
 		end
-		M.opened[i] = nil
 	end
-	original(chosen)
-	local now = GetTime()
-	chosen.BeginTime = now - DAY
-	chosen.EndTime = now + M.OPEN_DAYS * DAY
-	chosen.ClearTime = chosen.EndTime + 3 * DAY
-	M.opened[1] = chosen
-	return true
+	if entry.Family.extras then
+		local ok, specs = pcall(entry.Family.extras)
+		for _, spec in ipairs(ok and type(specs) == 'table' and specs or {}) do
+			for _, tb in pairs(type(spec.rows) == 'table' and spec.rows or {}) do
+				if type(tb) == 'table' and (not spec.filter or spec.filter(tb)) then
+					for _, key in ipairs(spec.ends) do extend(tb, key, untilSec) end
+				end
+			end
+		end
+	end
+	return opened > 0
 end
 
 function M.Enter(entry)

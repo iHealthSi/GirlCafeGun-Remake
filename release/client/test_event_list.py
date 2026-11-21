@@ -8,7 +8,9 @@ run_script(fight, choose, towers) replays the Attack menu in Lua with the Tower.
 - UI_CoopChoose builds the page (Unity calls are mocked) and a tap on a tile enters that tower with the
   stock date check passing; a second tap closes the first tower again;
 - UI_CoopChoose opened with stock data still takes its stock path;
-- a second family (War Chess, mocked) joins the list by date, a tap opens only its row, a later tap closes it.
+- a second family (War Chess, mocked) joins the list by date, a tap opens only its row, a later tap closes it;
+- a hub family (Concert, mocked) is one entry that opens both rows and its sub-tables (missions, exchange
+  time list), every start date stays, and a later tap puts it all back.
 run_bundle(built) reads both scripts from a built lua.u and replays the same scenario.
 Command: python test_event_list.py <release APK or lua.u>
 """
@@ -189,6 +191,61 @@ return #list, table.concat(names, ','), table.concat(WARCHESS, ','), closedAgain
 '''
 
 
+# A hub family (Concert): both rows open together as one page entry, its sub-tables (missions in seconds,
+# the exchange time list as a yyyymmddHHMM number) get future ends, every start stays as it was, and a later
+# tap on a tower puts all of it back.
+HUB_SCENARIO = r'''
+MUSIC_OPENED = 0
+MusicActivityLogic = {
+  tbMusicTowerTotalConfig = {
+    [1] = { Id = 1, Icon = 'Poster/fightmode_concert01_normal_Mul.png', BeginTime = 1595548800, EndTime = 1598299200, ClearTime = 1598644800 },
+    [2] = { Id = 2, Icon = 'Poster/fightmode_concert02_normal_Mul.png', BeginTime = 1596916800, EndTime = 1598299200, ClearTime = 1598644800 },
+  },
+  GetTower = function(self)
+    local n = 0
+    for _, tb in pairs(self.tbMusicTowerTotalConfig) do
+      if GetTime() >= tb.BeginTime and GetTime() <= tb.ClearTime then n = n + 1 end
+    end
+    MUSIC_OPENED = n
+  end,
+}
+MusicMission = { tbMissionList = { [101] = { startTime = 1595548800, endTime = 1598299200 }, [102] = { startTime = 1595548800, endTime = 0 } } }
+ConcertExchange = { LoadTimeListConfig = function(self) self.timeListConfig = { [1] = { ID = 1, StartTime = 202007240800, EndTime = 202008250400 } } end }
+local list = EventList.Entries()
+local hub, hubs, tower = nil, 0, nil
+for _, e in ipairs(list) do
+  if e.Kind == 'music' then hub = e; hubs = hubs + 1 end
+  if e.Kind == 'tower' and not tower then tower = e end
+end
+local towerRow = ActivitiesConfig.tbSmallTowerConfig[tower.Key]
+local towerBegin = towerRow.BeginTime
+EventList.Enter(tower)
+local beginKept = towerRow.BeginTime == towerBegin and towerRow.EndTime > GetTime()
+EventList.Enter(hub)
+local mission = MusicMission.tbMissionList[101]
+local exchange = ConcertExchange.timeListConfig[1]
+local nowNumber = tonumber(os.date('%Y%m%d%H%M', GetTime()))
+local opened = MUSIC_OPENED
+local missionOpen = mission.endTime > GetTime() and mission.startTime == 1595548800
+local noEndKept = MusicMission.tbMissionList[102].endTime == 0
+local exchangeOpen = exchange.EndTime > nowNumber and exchange.StartTime == 202007240800
+local towerClosed = towerRow.ClearTime < GetTime()
+EventList.Enter(tower)
+local row = MusicActivityLogic.tbMusicTowerTotalConfig[2]
+local hubClosed = row.ClearTime < GetTime() and mission.endTime < GetTime() and exchange.EndTime == 202008250400
+return hubs, opened, missionOpen, noEndKept, exchangeOpen, beginKept, towerClosed, hubClosed
+'''
+
+
+def replay_hub(fight, choose, rows):
+    lua = LuaRuntime()
+    lua.execute(HARNESS)
+    lua.execute(towers_lua(rows))
+    lua.execute(fight.decode('utf8') if isinstance(fight, bytes) else fight)
+    lua.execute(choose.decode('utf8') if isinstance(choose, bytes) else choose)
+    return tuple(lua.execute(HUB_SCENARIO))
+
+
 def replay_family(fight, choose, rows):
     lua = LuaRuntime()
     lua.execute(HARNESS)
@@ -232,9 +289,12 @@ def run_script(fight, choose, rows, patched=None):
     total, names, chess, closed_again, tower_entered = replay_family(patched[0], patched[1], rows)
     assert total == count + 2 and names.count('warchess:') == 2, (total, count, names)
     assert chess == '2' and closed_again is True and tower_entered is True, (chess, closed_again, tower_entered)
+    hub = replay_hub(patched[0], patched[1], rows)
+    assert hub == (1, 2, True, True, True, True, True, True), hub
     return {'stockTileOpen': stock[0], 'patchedTileOpen': open_, 'events': count, 'dropped': sorted(dropped),
             'firstEvents': ids.split(',')[:5], 'entered': entered_ids, 'stockChooserStillWorks': True,
-            'secondFamilyEntered': chess, 'secondFamilyClosedAfterOtherTap': closed_again}
+            'secondFamilyEntered': chess, 'secondFamilyClosedAfterOtherTap': closed_again,
+            'hubOpensAllRowsAndSubTables': True, 'startDatesKept': True}
 
 
 def g_classes():
