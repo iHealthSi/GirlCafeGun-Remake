@@ -18,7 +18,7 @@ def patch_script(name, data):
     if name == 'UI_Login.lua':
         s=replace_one(s, '-- Local server settings. Appended to the exact supplied UI_Login TextAsset.', '\0SPLIT')
         s=s.split('\0SPLIT')[0]
-        s=re.sub(r'\tself\.btnSwitch\.onClick:AddListener\(function\(\).*?\n\tend\);', '\tself.btnSwitch.gameObject:SetActive(false);',s,count=1,flags=re.S)
+        s,n=re.subn(r'\tself\.btnSwitch\.onClick:AddListener\(function\(\).*?\n\tend\);', '\tself.btnSwitch.gameObject:SetActive(false);',s,count=1,flags=re.S);assert n==1
         s=replace_one(s, '\tif Game.Utils.TryOpenGM() and not Game.GM.Get() then \n\t\tGM:LoadUI(); \n\t\tGM.view:Register() \n\tend', '')
         # Unity reports no Internet interface when both radios are disabled,
         # although Android loopback TCP remains usable. Bypass that advisory
@@ -39,9 +39,9 @@ def patch_script(name, data):
         s=replace_one(s,"\tlocal address = U3D.PlayerPrefs.GetString('gcg.localServerUrl', '')\n\treturn address:match('^%s*(.-)%s*$'):gsub('/+$', '') == 'http://127.0.0.1:28080'",'\treturn true')
         s=replace_one(s,"\tlocal acc = GameManager.IsEmbeddedProfileServer() and self.gcgEmbeddedPlayerAccount\n\t\tor U3D.PlayerPrefs.GetString('account', '');", "\tlocal acc = self.gcgEmbeddedPlayerAccount;\n\tassert(acc and acc ~= '', 'Local account unavailable');")
     elif name == 'Preload.lua':
-        s=s.replace('--local breakSocketHandle,debugXpCall = StartDebug("localhost",7003);','')
+        s=replace_one(s,'--local breakSocketHandle,debugXpCall = StartDebug("localhost",7003);','')
         s=replace_one(s,"\tloadlua 'GM/GM.lua';", "\tGM = { IsOpen=function() return false end, LoadUI=function() end, DoCommand=function() end };\n\tOpenGM = false;")
-        s=s.replace("\tloadlua\t'Acivities/GMActivity.lua'",'')
+        s=replace_one(s,"\tloadlua\t'Acivities/GMActivity.lua'",'')
     elif name in {'GM.lua','UI_GM.lua','LuaHotFixCSharp.lua','develop.lua','GMActivity.lua'}:
         s='-- Developer implementation omitted from the release.\n'
         if name=='GM.lua':s+="GM = { IsOpen=function() return false end, LoadUI=function() end, DoCommand=function() end }; OpenGM=false;\n"
