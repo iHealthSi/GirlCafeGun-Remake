@@ -75,7 +75,7 @@ function collect(
   return new Promise((resolve) => {
     let pending = Buffer.alloc(0);
     const packets: GamePacket[] = [];
-    const timer = setTimeout(finish, windowMs);
+    let timer = setTimeout(finish, windowMs);
     function finish() {
       clearTimeout(timer);
       socket.off("data", onData);
@@ -90,6 +90,16 @@ function collect(
         if (size < HEADER_SIZE || pending.length < size) return;
         packets.push(readPacket(pending.subarray(0, size)));
         pending = pending.subarray(size);
+      }
+      if (
+        packets.some(
+          (packet) =>
+            packet.command === COMMAND.NTF_S2C_CALL ||
+            packet.command === COMMAND.LOGIN_RSP,
+        )
+      ) {
+        clearTimeout(timer);
+        timer = setTimeout(finish, 80);
       }
     }
     socket.on("data", onData);
@@ -161,7 +171,7 @@ async function withGateway(
   }
 }
 
-it("answers a card enhance at the level cap with the Error.1 LuaCall and changes nothing", async () => {
+it("answers a card enhance at the level cap with the UI_Card.MaxLevel LuaCall and changes nothing", async () => {
   const account = "reply-fix-cap";
   let guid = 0;
   await withGateway(
@@ -203,7 +213,7 @@ it("answers a card enhance at the level cap with the Error.1 LuaCall and changes
           method: "LuaCall",
           parameters: {
             sCmd: LUA_COMMAND_CARD_LEVEL_UP_COMMON,
-            tbParam: { errorKey: "Error.1" },
+            tbParam: { errorKey: "UI_Card.MaxLevel" },
           },
         },
       ]);
