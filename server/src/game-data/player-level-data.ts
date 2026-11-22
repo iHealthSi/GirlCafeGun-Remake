@@ -1,6 +1,7 @@
 export interface PlayerLevelConfig {
   level: number;
   experience: number;
+  maxVigour: number;
   vigourRecovery: number;
 }
 
@@ -135,9 +136,109 @@ const PLAYER_VIGOUR_RECOVERY: readonly number[] = [
   ...Array<number>(212).fill(150),
 ];
 
+/**
+ * Exact Spirit column from Player/PlayerExp.txt. From level 90 onward the value is 150.
+ */
+const PLAYER_MAX_VIGOUR: readonly number[] = [
+  28,
+  31,
+  34,
+  36,
+  38,
+  40,
+  42,
+  43,
+  45,
+  46,
+  47,
+  49,
+  51,
+  53,
+  55,
+  56,
+  58,
+  60,
+  62,
+  64,
+  66,
+  67,
+  69,
+  71,
+  73,
+  75,
+  76,
+  78,
+  80,
+  82,
+  84,
+  86,
+  87,
+  89,
+  91,
+  93,
+  95,
+  96,
+  98,
+  100,
+  102,
+  104,
+  106,
+  107,
+  109,
+  111,
+  113,
+  115,
+  117,
+  120,
+  121,
+  122,
+  123,
+  124,
+  125,
+  126,
+  127,
+  128,
+  129,
+  130,
+  131,
+  132,
+  133,
+  134,
+  135,
+  136,
+  137,
+  138,
+  139,
+  140,
+  140,
+  141,
+  141,
+  142,
+  142,
+  143,
+  143,
+  144,
+  144,
+  145,
+  145,
+  146,
+  146,
+  147,
+  147,
+  148,
+  148,
+  149,
+  149,
+  ...Array<number>(211).fill(150),
+];
+
 export const MAX_PLAYER_LEVEL = PLAYER_EXP_TO_NEXT_LEVEL.length;
 
-if (MAX_PLAYER_LEVEL !== 300 || PLAYER_VIGOUR_RECOVERY.length !== MAX_PLAYER_LEVEL) {
+if (
+  MAX_PLAYER_LEVEL !== 300 ||
+  PLAYER_VIGOUR_RECOVERY.length !== MAX_PLAYER_LEVEL ||
+  PLAYER_MAX_VIGOUR.length !== MAX_PLAYER_LEVEL
+) {
   throw new Error("Invalid embedded PlayerExp configuration");
 }
 
@@ -148,8 +249,17 @@ export function getPlayerLevelConfig(level: number): PlayerLevelConfig | null {
   return {
     level,
     experience: PLAYER_EXP_TO_NEXT_LEVEL[level - 1]!,
+    maxVigour: PLAYER_MAX_VIGOUR[level - 1]!,
     vigourRecovery: PLAYER_VIGOUR_RECOVERY[level - 1]!,
   };
+}
+
+export function getPlayerMaxVigour(level: number): number {
+  const clamped = Math.min(
+    MAX_PLAYER_LEVEL,
+    Math.max(1, Number.isSafeInteger(level) ? level : 1),
+  );
+  return PLAYER_MAX_VIGOUR[clamped - 1]!;
 }
 
 /**

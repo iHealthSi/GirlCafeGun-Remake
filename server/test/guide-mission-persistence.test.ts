@@ -97,9 +97,17 @@ describe("guide mission persistence", () => {
     await store.update((state) => {
       const player = state.players.tester;
       if (!player) throw new Error("missing test player");
-      for (const card of player.inventory.filter(({ genre }) => genre === 1)) {
+      const cards = player.inventory.filter(({ genre }) => genre === 1);
+      for (const card of cards) {
         card.enhanceLevel = 50;
       }
+      player.formations[0]!.fightCards = cards.map((card) => ({
+        mainCardGuid: card.guid,
+        secondaryCardGuids: [],
+        usedCardGuid: card.guid,
+        weaponGuid: 0,
+        runeItemGuids: [],
+      }));
     });
 
     const player = await repository.markLogin("tester");

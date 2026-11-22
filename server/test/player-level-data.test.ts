@@ -12,6 +12,7 @@ describe("player level data", () => {
     expect(getPlayerLevelConfig(1)).toEqual({
       level: 1,
       experience: 10,
+      maxVigour: 28,
       vigourRecovery: 15,
     });
     expect(getPlayerLevelConfig(2)?.experience).toBe(10);
