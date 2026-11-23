@@ -69,8 +69,8 @@ Keep `LoginNotice` empty unless a window at every login is wanted.
 
 - The client's own notice reader maps its address to this server. `NoticeCommon.lua`
   builds the address from `Game.Dir.GetBaseUpdateUrl()`, which is a publisher host on
-  the 0.1.3 phone build (logcat line `NoticeCommon's Url is
-  http://l3-prod-patch-sssj.bilibiligame.net/bili/10136/debug/notice.txt`, 2026-11-14);
+  the 0.1.3 phone build (logcat, 2026-11-14:
+  `http://l3-prod-patch-sssj.bilibiligame.net/bili/10136/debug/notice.txt`);
   the Lua recipe wraps both assignments with `OfflineWeb.NoticeUrl`, which uses the
   local address of `Game.ServerList.GetNoticeUrl()` and asks for `/notice.txt`.
   It rarely sends the request in this client: the two callers of `DownloadNoticeData`
