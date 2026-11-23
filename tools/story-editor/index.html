@@ -111,10 +111,10 @@ main{display:grid;grid-template-columns:1fr 384px;min-height:0;min-width:0}
 #dlg.cg{text-align:center;min-height:0;padding:16px 24px;bottom:9%}
 #spname{position:absolute;left:16px;top:-16px;background:var(--accent);color:var(--on-accent);font-weight:600;padding:4px 16px;border-radius:var(--r-ctl);font-size:15px}
 #sptext{font-size:clamp(14px,1.55vw,19px);line-height:1.55;white-space:pre-wrap}
-.zh{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC","Segoe UI",sans-serif}
-#spzh{margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,.12);color:var(--text2);font-size:clamp(13px,1.35vw,17px);line-height:1.55;white-space:pre-wrap}
-#choices button .zh{display:block;color:var(--text2);font-size:13px;margin-top:4px}
-#choices button:hover .zh{color:inherit}
+.zh,#stage.cn #sptext,#stage.cn #spname,#stage.cn #sttitle,#stage.cn #choices button{font-family:"Microsoft YaHei UI","Microsoft YaHei","PingFang SC","Noto Sans SC","Segoe UI",sans-serif}
+.flag{height:14px;width:auto;flex:none;border-radius:2px;box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+#lang button{gap:6px;padding:2px 10px}
+#lang button:not(.on) .flag{opacity:.55;filter:saturate(.6)}
 #sptag{position:absolute;right:12px;top:8px}
 #choices{position:absolute;inset:0;z-index:4;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:rgba(0,0,0,.4)}
 #choices button{min-width:46%;max-width:80%;padding:12px 24px;font-size:16px;background:rgba(20,22,30,.94);border-color:var(--line2)}
@@ -219,7 +219,7 @@ kbd{background:var(--raise);box-shadow:inset 0 -1px 0 var(--line2),0 0 0 1px var
         <div id="layers"></div>
         <div id="sttitle" hidden></div>
         <div id="stnote" hidden></div>
-        <div id="dlg" hidden><div id="spname"></div><div id="sptext"></div><div id="spzh" class="zh" lang="zh-Hans" hidden></div><span id="sptag"></span></div>
+        <div id="dlg" hidden><div id="spname"></div><div id="sptext"></div><span id="sptag"></span></div>
         <div id="choices" hidden></div>
         <div id="endcard" hidden></div>
       </div>
@@ -230,6 +230,10 @@ kbd{background:var(--raise);box-shadow:inset 0 -1px 0 var(--line2),0 0 0 1px var
           <button id="restart" title="Play the scene again"><svg class="ic" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Restart</button>
         </div>
         <span id="pos"></span><span class="spacer"></span>
+        <div class="seg" id="lang" title="Language of the scene (L)" hidden>
+          <button data-lang="en" class="on" title="English (L)"><svg class="flag" viewBox="0 0 19 10" aria-hidden="true"><rect width="19" height="10" fill="#b22234"/><path fill="#fff" d="M0 .77h19v.77H0zM0 2.31h19v.77H0zM0 3.85h19v.77H0zM0 5.38h19v.77H0zM0 6.92h19v.77H0zM0 8.46h19v.77H0z"/><rect width="7.6" height="5.38" fill="#3c3b6e"/><g fill="#fff"><circle cx="1.3" cy="1.1" r=".35"/><circle cx="3.8" cy="1.1" r=".35"/><circle cx="6.3" cy="1.1" r=".35"/><circle cx="2.55" cy="2.7" r=".35"/><circle cx="5.05" cy="2.7" r=".35"/><circle cx="1.3" cy="4.3" r=".35"/><circle cx="3.8" cy="4.3" r=".35"/><circle cx="6.3" cy="4.3" r=".35"/></g></svg>EN</button>
+          <button data-lang="zh" title="Chinese original (L)"><svg class="flag" viewBox="0 0 30 20" aria-hidden="true"><rect width="30" height="20" fill="#de2910"/><g fill="#ffde00"><polygon points="0,-1 .22,-.31 .95,-.31 .36,.12 .59,.81 0,.38 -.59,.81 -.36,.12 -.95,-.31 -.22,-.31" transform="translate(5 5) scale(3)"/><polygon points="0,-1 .22,-.31 .95,-.31 .36,.12 .59,.81 0,.38 -.59,.81 -.36,.12 -.95,-.31 -.22,-.31" transform="translate(10 2) rotate(23)"/><polygon points="0,-1 .22,-.31 .95,-.31 .36,.12 .59,.81 0,.38 -.59,.81 -.36,.12 -.95,-.31 -.22,-.31" transform="translate(12 4) rotate(45)"/><polygon points="0,-1 .22,-.31 .95,-.31 .36,.12 .59,.81 0,.38 -.59,.81 -.36,.12 -.95,-.31 -.22,-.31" transform="translate(12 7) rotate(70)"/><polygon points="0,-1 .22,-.31 .95,-.31 .36,.12 .59,.81 0,.38 -.59,.81 -.36,.12 -.95,-.31 -.22,-.31" transform="translate(10 9) rotate(21)"/></g></svg>CN</button>
+        </div>
         <div class="opts">
           <label title="Full-screen scene backgrounds"><input type="checkbox" id="optBg" checked> Backgrounds</label>
           <label title="CG illustrations and other pictures the scene shows, with their zoom and position"><input type="checkbox" id="optCg" checked> CG and pictures</label>
@@ -237,7 +241,6 @@ kbd{background:var(--raise);box-shadow:inset 0 -1px 0 var(--line2),0 0 0 1px var
           <label title="Character size">Size <input type="range" id="chSize" min="40" max="200" value="100"></label>
           <label title="Character height on the screen">Height <input type="range" id="chShift" min="-60" max="60" value="0"></label>
           <label><input type="checkbox" id="optType" checked> Typewriter</label>
-          <label id="optZhBox" title="The Chinese line of the source table under the English line, here and in the script" hidden><input type="checkbox" id="optZh" checked> Chinese</label>
         </div>
       </div>
     </div>
@@ -260,7 +263,7 @@ kbd{background:var(--raise);box-shadow:inset 0 -1px 0 var(--line2),0 0 0 1px var
       <div id="refs"></div>
     </div>
     <div class="help">
-      <kbd>Space</kbd> <kbd>→</kbd> next line &nbsp; <kbd>←</kbd> back &nbsp; <kbd>E</kbd> edit<br>
+      <kbd>Space</kbd> <kbd>→</kbd> next line &nbsp; <kbd>←</kbd> back &nbsp; <kbd>E</kbd> edit &nbsp; <kbd>L</kbd> EN / CN<br>
       <kbd>Ctrl</kbd> <kbd>Enter</kbd> save &nbsp; <kbd>Esc</kbd> leave the text box
       <p>The tag is set by the tool: original English = the text equals an official English text; machine translated = other text of the table; human translated = a text you saved.</p>
     </div>
@@ -275,7 +278,7 @@ const TAG_LABEL = {original: "Original English", machine: "Machine translated", 
                    untagged: "No tag", untranslated: "Not translated", missing: "No text (raw key)"};
 const TAG_ORDER = ["original", "machine", "human", "untagged", "untranslated", "missing"];
 const S = {nav: null, tab: "main", flat: [], scene: null, sceneId: null, mode: "play", key: null,
-           p: null, typing: null};
+           p: null, typing: null, lang: "en"};
 
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c])); }
 // Unity rich text -> HTML. Unknown tags stay visible as text.
@@ -359,7 +362,8 @@ function renderTotals() {
   $("#totals").innerHTML = TAG_ORDER.filter(k => t[k]).map(k => '<span class="chip"><i class="dot t-' + k + '"></i>' + t[k].toLocaleString() + " " + esc(TAG_LABEL[k].toLowerCase()) + "</span>").join("");
   $("#setinfo").textContent = "data: " + S.nav.set + " · " + S.nav.edits + " edited" + (S.nav.official ? "" : " · no official table (--official): lines have no tag") +
     (S.nav.source ? "" : " · no Chinese table (--source)");
-  $("#optZhBox").hidden = !S.nav.source;
+  $("#lang").hidden = !S.nav.source;
+  if (!S.nav.source) S.lang = "en";
 }
 async function loadNav() {
   const old = S.nav && S.nav.rev;
@@ -434,9 +438,18 @@ function rowHtml(k, n, who, at, cls) {
   return '<div class="row' + cls + (k === S.key ? " on" : "") + '" data-k="' + esc(k) + '"' + at + '><span class="i">' + n + '</span><span class="who" title="' + esc(who) + '">' + esc(who) +
     '</span><span class="tx">' + tx + "</span>" + zh + '<span title="' + esc(TAG_LABEL[i.tag] || "") + '"><i class="dot t-' + i.tag + '"></i></span></div>';
 }
-// the Chinese line of the source table (--source), shown when the page has one and the Chinese box is ticked
-function zhOn() { return !!(S.nav && S.nav.source) && $("#optZh").checked; }
-function zhText(k) { const i = info(k); return zhOn() && i && i.source ? i.source : null; }
+// Chinese lines (--source): a second column in Script; in Play the EN/CN switch picks the language
+function zhOn() { return !!(S.nav && S.nav.source); }
+function playCn() { return zhOn() && S.lang === "zh"; }
+// the text Play shows for a key: the Chinese line in CN (the English text when the line has no Chinese)
+function lineText(k) { const i = info(k); return playCn() && i && i.source ? i.source : shown(k); }
+function setLang(l) {
+  S.lang = l === "zh" && zhOn() ? "zh" : "en";
+  document.querySelectorAll("#lang button").forEach(b => b.classList.toggle("on", b.dataset.lang === S.lang));
+  try { localStorage.setItem("gcg-story-lang", S.lang); } catch (e) {}
+  const p = S.p, st = S.scene && p && S.scene.sections[p.sec] && S.scene.sections[p.sec].steps[p.idx];
+  if (st && !p.done) { const was = $("#optType").checked; $("#optType").checked = false; showStep(st, st.t === "title"); $("#optType").checked = was; }
+}
 
 // ---------------------------------------------------------------- play view
 function startPlay(key) {
@@ -737,15 +750,15 @@ function showStep(st, titleOnly) {
   const p = S.p;
   $("#endcard").hidden = true;
   renderLayers();
-  const tk = p.title;
-  $("#sttitle").hidden = !tk; if (tk) $("#sttitle").innerHTML = rich(shown(tk) != null ? shown(tk) : tk);
+  const tk = p.title, cn = playCn();
+  $("#stage").classList.toggle("cn", cn); $("#stage").lang = cn ? "zh-Hans" : "en";
+  $("#sttitle").hidden = !tk; if (tk) $("#sttitle").innerHTML = rich(lineText(tk) != null ? lineText(tk) : tk);
   $("#stnote").hidden = !p.note; if (p.note) $("#stnote").textContent = p.note;
   $("#pos").textContent = "line " + p.shown + " of " + p.total + " · section " + S.scene.sections[p.sec].name;
   const ch = $("#choices"), dlg = $("#dlg");
   if (st.t === "choice") {
     dlg.hidden = true; ch.hidden = false;
-    ch.innerHTML = st.opts.map((o, i) => '<button data-o="' + i + '"><span>' + (shown(o.k) != null ? rich(shown(o.k)) : '<span class="rawkey">' + esc(o.k) + "</span>") +
-      (zhText(o.k) ? '<span class="zh" lang="zh-Hans">' + rich(zhText(o.k)) + "</span>" : "") + "</span></button>").join("");
+    ch.innerHTML = st.opts.map((o, i) => '<button data-o="' + i + '">' + (lineText(o.k) != null ? rich(lineText(o.k)) : '<span class="rawkey">' + esc(o.k) + "</span>") + "</button>").join("");
     select(st.opts[0].k, true);
     return;
   }
@@ -753,12 +766,10 @@ function showStep(st, titleOnly) {
   if (titleOnly) { dlg.hidden = true; select(st.k, true); return; }
   dlg.hidden = false;
   dlg.className = st.t === "cg" ? "cg" : (st.name ? "" : "narr");
-  $("#spname").hidden = !st.name || st.t === "cg"; $("#spname").textContent = st.name || "";
+  $("#spname").hidden = !st.name || st.t === "cg"; $("#spname").textContent = (cn && st.nameZh) || st.name || "";
   const i = info(st.k) || {tag: "missing"};
   $("#sptag").innerHTML = tagChip(i.tag, true);
-  const zh = zhText(st.k);
-  $("#spzh").hidden = !zh; $("#spzh").innerHTML = zh ? rich(zh) : "";
-  typeText(shown(st.k), st.k);
+  typeText(lineText(st.k), st.k);
   select(st.k, true);
 }
 function typeText(text, key) {
@@ -885,13 +896,7 @@ $("#optCh").onchange = () => { renderLayers(); try { localStorage.setItem("gcg-s
 $("#script").onclick = e => { const r = e.target.closest(".row[data-k]"); if (r) select(r.dataset.k); };
 $("#script").ondblclick = e => { const r = e.target.closest(".row[data-k]"); if (r) { setMode("play"); jumpTo(r.dataset.k); } };
 $("#save").onclick = save; $("#revert").onclick = revert;
-$("#optZh").onchange = () => {
-  try { localStorage.setItem("gcg-story-zh", $("#optZh").checked ? "1" : "0"); } catch (e) {}
-  if (!S.scene) return;
-  renderScript(); select(S.key);
-  const p = S.p, st = S.scene.sections[p.sec] && S.scene.sections[p.sec].steps[p.idx];
-  if (st && !p.done) { const was = $("#optType").checked; $("#optType").checked = false; showStep(st, st.t === "title"); $("#optType").checked = was; }
-};
+$("#lang").onclick = e => { const b = e.target.closest("button[data-lang]"); if (b) setLang(b.dataset.lang); };
 $("#refs").onclick = e => { const b = e.target.closest("button[data-use]"); if (b) { $("#edtext").value = JSON.parse($("#refs").dataset.refs)[+b.dataset.use]; $("#edtext").focus(); } };
 $("#edkey").onclick = () => { navigator.clipboard && navigator.clipboard.writeText(S.key); toast("Key copied"); };
 $("#export").onclick = async () => {
@@ -915,6 +920,7 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape" && inText) { document.activeElement.blur(); return; }
   if (inText) return;
   if (e.key === "e" || e.key === "E") { e.preventDefault(); $("#edtext").focus(); return; }
+  if ((e.key === "l" || e.key === "L") && zhOn()) { e.preventDefault(); setLang(S.lang === "zh" ? "en" : "zh"); return; }
   if (S.mode !== "play") return;
   if (e.key === " " || e.key === "ArrowRight" || e.key === "Enter") { e.preventDefault(); next(); }
   else if (e.key === "ArrowLeft") { e.preventDefault(); back(); }
@@ -930,11 +936,12 @@ window.addEventListener("beforeunload", e => {
     if (off || localStorage.getItem("gcg-story-bg") === "0") $("#optBg").checked = false;
     if (off || localStorage.getItem("gcg-story-cg") === "0") $("#optCg").checked = false;
     if (off || localStorage.getItem("gcg-story-ch") === "0") $("#optCh").checked = false;
-    if (localStorage.getItem("gcg-story-zh") === "0") $("#optZh").checked = false;
     ["chSize", "chShift"].forEach(id => { const v = localStorage.getItem("gcg-story-" + id); if (v != null) $("#" + id).value = v; });
   } catch (e) {}
   try {
     await loadNav();
+    let lang = null; try { lang = localStorage.getItem("gcg-story-lang"); } catch (e) {}
+    if (lang === "zh") setLang("zh");
     let last = null; try { last = localStorage.getItem("gcg-story-last"); } catch (e) {}
     let i = -1;
     if (last) { const [tab, id] = last.split("|"); i = S.flat.findIndex(f => f.tab === tab && f.id === id); }

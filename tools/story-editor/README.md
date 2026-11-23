@@ -43,8 +43,9 @@ The first start reads the bundles (a few seconds) and keeps the result in `work/
 - **Play** runs the scene script (`com.u`, `cartoon/<scene>.txt`): scene title, speaker, text, choices and branches,
   with the pictures the script shows. **Script** lists all lines of the scene. Double-click a script line to play
   from it.
-- **Chinese** (with `--source`): the Chinese line under the English line in Play, as a second column in Script,
-  and above the text box of the Line panel. The checkbox under the stage switches it off in Play and Script.
+- **Chinese** (with `--source`): the EN / CN switch under the stage (key `L`) plays the scene in English or in the
+  Chinese original, with Chinese speaker names; a line with no Chinese stays English. Script shows the Chinese as a
+  second column, and the Line panel shows it above the text box.
 - Pictures are layers with the script's stacking order, zoom, position and pan time. Three checkboxes switch them:
   **backgrounds**, **CG and pictures** (CG illustrations, card art, boss and NPC art, overlays) and **characters**
   (Live2D models).

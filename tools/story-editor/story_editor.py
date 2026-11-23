@@ -42,7 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.path.join(HERE, "work")
 CFG = {"data": None, "archive": None, "lang": None, "official": [], "source": None, "label": "data"}   # set by configure()
 SEED = 0x166920ED
-CACHE_VERSION = 8
+CACHE_VERSION = 9
 SOURCE_MEMBERS = ("assets/_lang_bundle.bin", "assets/lang.u")   # Chinese table of the Remake APK first
 
 CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]")
@@ -598,15 +598,23 @@ def build(setname, log=print):
     official_specs = [v for k, v in src.items() if k.startswith("official")]
     tables = [(cur, file_label(src["lang"]))] + [(t, file_label(s)) for t, s in zip(official, official_specs)]
     source_label = file_label(src["source"]) if "source" in src else None
-    zh, zh_from = {}, {}
-    for k in keys:
+    def chinese_of(k):
+        """-> (Chinese value, file it comes from when that is not --source) or (None, None)"""
         v = chinese.get(k)
         if not is_cjk_text(v):
             hit = next(((t[k], name) for t, name in tables if is_cjk_text(t.get(k))), None)
             if hit:
-                v, zh_from[k] = hit
+                return hit
+        return (v or None), None
+
+    zh, zh_from = {}, {}
+    for k in keys:
+        v, origin = chinese_of(k)
         if v:
             zh[k] = v
+        if origin:
+            zh_from[k] = origin
+    names_zh = {k: v for k, v in ((k, chinese_of(k)[0]) for k in names) if v}
     data = {
         "version": CACHE_VERSION, "set": setname,
         "stamps": [source_stamp(s) for s in src.values()],
@@ -616,6 +624,7 @@ def build(setname, log=print):
         "scenes": scenes,
         "texts": {k: [cur.get(k)] + [t.get(k) for t in official] for k in sorted(keys)},
         "names": names,
+        "namesZh": names_zh,
         "source": zh,
         "sourceFrom": zh_from,          # keys whose Chinese line comes from another table than --source
         "sourceName": source_label or ("Chinese values of the text tables" if zh else None),
@@ -729,19 +738,21 @@ class Store:
         return {t: c[t] for t in ("original", "machine", "human", "untagged", "untranslated", "missing") if c[t]}
 
 
-def speaker_name(store, sp):
+def speaker_name(store, sp, chinese=False):
+    """The speaker's name; chinese=True: the name of the Chinese table (the English name when it has none)."""
     if sp in (None, "", "-1"):
         return ""
     if sp == "playername":
-        return "[Player]"
-    names = store.data["names"]
+        return "[玩家]" if chinese else "[Player]"
     if sp.isdigit():
-        for k in ("ui.npcid.%s.name" % sp, "_GirlInfo.%s.NickName" % sp, "_GirlInfo.%s.GirlName" % sp):
-            if names.get(k):
-                return names[k]
+        for names in ([store.data.get("namesZh", {})] if chinese else []) + [store.data["names"]]:
+            for k in ("ui.npcid.%s.name" % sp, "_GirlInfo.%s.NickName" % sp, "_GirlInfo.%s.GirlName" % sp):
+                if names.get(k):
+                    return names[k]
         return "#" + sp
     if "." in sp:
-        return store.info(sp)["text"] or sp
+        i = store.info(sp)
+        return (chinese and i["source"]) or i["text"] or sp
     return sp
 
 
@@ -787,6 +798,7 @@ def scene_payload(store, sid):
             st = dict(st)
             if "sp" in st:
                 st["name"] = speaker_name(store, st["sp"])
+                st["nameZh"] = speaker_name(store, st["sp"], chinese=True)
             steps.append(st)
         sections.append({"name": sec["name"], "steps": steps})
     return {"id": sid, "sections": sections, "texts": {k: store.info(k) for k in s["keys"]}}
