@@ -10,9 +10,9 @@
  * - Every Currency -1 row sells a gift box (IBGiftAuto, ExtParam1 = box id of
  *   Item/ItemBoxInfo.txt). The box is opened here, nested ItemBoxAuto boxes too,
  *   when every entry is Fix. A pack is sold only when every item it opens to has
- *   a rule on this server: a bag box of genre 8 (mostly "Select" boxes),
- *   BuyRecruitAuto (the 15-day recruit plan) and IBCycleGiftAuto have none, so
- *   those packs stay unsold.
+ *   a rule on this server: genre-8 bag boxes stay in the inventory and are
+ *   opened by LuaCall 75/76; BuyRecruitAuto (the 15-day recruit plan) and
+ *   IBCycleGiftAuto have no rule, so those packs stay unsold.
  * - Only rows without an EndTime are sold: the other rows were limited-time
  *   offers that the client no longer shows (IBLogic:CheckTime).
  *
@@ -58,7 +58,6 @@ export interface YenPack {
   readonly blocked?: string;
 }
 
-const BAG_BOX_GENRE = 8;
 const BOX_CLASSES = new Set(["IBGiftAuto", "ItemBoxAuto"]);
 /** Genre 15 wallets that awardMoneyId pays before any AutoUse rule (player-repository.ts). */
 const WALLET_DETAILS = new Set([1, 2, 4, 10, 11, 20, YEN_ITEM_DETAIL]);
@@ -119,10 +118,6 @@ export class YenPackCatalog {
       const [g, d, p, l, n] = award;
       const rule = auto.get(key(g, d, p, l));
       if (!rule) {
-        // Genre 8 is boxes (ItemBoxAuto with AutoUse 0, opened from the bag,
-        // often "Select" boxes). This server does not open bag boxes.
-        if (g === BAG_BOX_GENRE)
-          return `bag box ${key(g, d, p, l)} cannot be opened here`;
         out.push([g, d, p, l, n]);
         return null;
       }
