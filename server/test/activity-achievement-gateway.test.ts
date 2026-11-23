@@ -99,6 +99,7 @@ it("answers event page and achievement panel claims on the wire", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "gcg2-activity-wire-"));
   let server: Server | undefined;
   let socket: Socket | undefined;
+  const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 10, 17, 3));
   try {
     const config = await loadConfig(path.resolve(import.meta.dirname, ".."));
     const store = new JsonStore({
@@ -198,48 +199,44 @@ it("answers event page and achievement panel claims on the wire", async () => {
     expect(callback(panel.at(-1)!)?.parameters).toEqual({ nError: 1, nMission: 0 });
 
     // Exact UI_EnergyGet request: no nType or nId is sent by the button.
-    const clock = vi.spyOn(Date, "now").mockReturnValue(Date.UTC(2026, 10, 17, 3));
-    try {
-      const energyBefore = players
-        .get(account)!
-        .money.find((money) => money.id === 1)!.count;
-      const power = () =>
-        request(
-          socket!,
-          COMMAND.C2S_CALL_REQ,
-          ++serial,
-          makeServerLuaCall("NormalActivityGetAward", { nActivityId: 8 }),
-          (packet) => callback(packet)?.method === "NormalActivityMsg",
-        );
-      const claimed = await power();
-      expect(callback(claimed.at(-1)!)?.parameters).toEqual({
-        nType: 4,
-        nEnergy: 30,
-        bFullAdd: true,
-      });
-      expect(tasksOf(claimed).get(energyActivityTaskId(1))).toBe(1);
-      const commands = claimed.map((packet) => packet.command);
-      expect(commands.indexOf(COMMAND.MONEY_UPDATE_NTF)).toBeLessThan(
-        commands.indexOf(COMMAND.NTF_S2C_CALL),
+    const energyBefore = players
+      .get(account)!
+      .money.find((money) => money.id === 1)!.count;
+    const power = () =>
+      request(
+        socket!,
+        COMMAND.C2S_CALL_REQ,
+        ++serial,
+        makeServerLuaCall("NormalActivityGetAward", { nActivityId: 8 }),
+        (packet) => callback(packet)?.method === "NormalActivityMsg",
       );
-      expect(commands.indexOf(COMMAND.TASK_VALUE_RSP)).toBeLessThan(
-        commands.indexOf(COMMAND.NTF_S2C_CALL),
-      );
-      expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
-        energyBefore + 30,
-      );
-      expect(callback((await power()).at(-1)!)?.parameters).toEqual({
-        nType: 4,
-        nEnergy: 0,
-        bFullAdd: false,
-      });
-      expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
-        energyBefore + 30,
-      );
-    } finally {
-      clock.mockRestore();
-    }
+    const claimed = await power();
+    expect(callback(claimed.at(-1)!)?.parameters).toEqual({
+      nType: 4,
+      nEnergy: 30,
+      bFullAdd: true,
+    });
+    expect(tasksOf(claimed).get(energyActivityTaskId(1))).toBe(1);
+    const powerCommands = claimed.map((packet) => packet.command);
+    expect(powerCommands.indexOf(COMMAND.MONEY_UPDATE_NTF)).toBeLessThan(
+      powerCommands.indexOf(COMMAND.NTF_S2C_CALL),
+    );
+    expect(powerCommands.indexOf(COMMAND.TASK_VALUE_RSP)).toBeLessThan(
+      powerCommands.indexOf(COMMAND.NTF_S2C_CALL),
+    );
+    expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
+      energyBefore + 30,
+    );
+    expect(callback((await power()).at(-1)!)?.parameters).toEqual({
+      nType: 4,
+      nEnergy: 0,
+      bFullAdd: false,
+    });
+    expect(players.get(account)!.money.find((money) => money.id === 1)!.count).toBe(
+      energyBefore + 30,
+    );
   } finally {
+    clock.mockRestore();
     if (socket) {
       const closed = once(socket, "close");
       socket.destroy();

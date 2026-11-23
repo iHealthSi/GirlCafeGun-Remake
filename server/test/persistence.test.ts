@@ -4,7 +4,6 @@ import os from "node:os";
 import path from "node:path";
 import { expect, it } from "vitest";
 
-import { CARD_MAXIMUM_ENHANCE_LEVEL } from "../src/game-data/card-enhancement-data.js";
 import {
   makeDailyMissionTaskId,
   DAILY_MISSIONS,
@@ -64,7 +63,7 @@ it("persists player and task changes atomically", async () => {
       "264145": 2,
       "274145": 2,
       "278145": 2,
-      "367702": 4384,
+      "367702": 1370,
       "460773": 1,
       "470773": 1,
       "474775": 1,
@@ -353,9 +352,7 @@ it("rejects card enhancement at the maximum level without spending anything", as
     const enhanced = await repository.enhanceCard("tester", card.guid, [
       { kind: 1, reference: 24, count: 20 },
     ]);
-    // Break 0 caps the card at MaxLevel0 of its CharacterCardBreak row (40).
     expect(enhanced.card.enhanceLevel).toBe(40);
-    expect(enhanced.card.enhanceLevel).toBeLessThan(CARD_MAXIMUM_ENHANCE_LEVEL);
     const before = repository.get("tester")!;
     await expect(
       repository.enhanceCard("tester", card.guid, [

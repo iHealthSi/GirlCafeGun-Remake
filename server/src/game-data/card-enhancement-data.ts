@@ -84,9 +84,6 @@ export const CARD_EXP_TO_NEXT_LEVEL = [
   33_695, 34_990, 36_312, 37_661, 39_040, 40_445, 41_879, 43_341, 44_832, 46_351,
 ] as const;
 
-/** The last row of the experience table; break rows lower the cap per card. */
-export const CARD_MAXIMUM_ENHANCE_LEVEL = CARD_EXP_TO_NEXT_LEVEL.length + 1;
-
 export function parseCardEnhancementRequest(
   parameters: unknown,
 ): CardEnhancementRequest | null {
@@ -133,6 +130,9 @@ export function parseCardEnhancementRequest(
 
   return { guid, clientLevel, clientSkillLevel, materials };
 }
+
+/** The last row of the experience table; break rows lower the cap per card. */
+export const CARD_MAXIMUM_ENHANCE_LEVEL = CARD_EXP_TO_NEXT_LEVEL.length + 1;
 
 /**
  * Adds experience up to maximumLevel. A card already at or above the cap keeps

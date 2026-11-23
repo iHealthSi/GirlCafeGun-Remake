@@ -6,6 +6,7 @@ import patch_gamepad
 import patch_offline_links
 import patch_offline_web
 import patch_gacha_skip
+import patch_gameplay_fixes
 import patch_selectors
 import patch_title
 ROOT = Path(__file__).resolve().parents[2]
@@ -63,6 +64,7 @@ def patch_script(name, data):
     if name in patch_offline_web.LUA_NAMES:result=patch_offline_web.lua_script(name,result)
     if name in patch_offline_links.LUA_NAMES:result=patch_offline_links.lua_script(name,result)
     if name in patch_gacha_skip.LUA_NAMES:result=patch_gacha_skip.lua_script(name,result)
+    if name in patch_gameplay_fixes.LUA_NAMES:result=patch_gameplay_fixes.lua_script(name,result)
     return result
 
 NAMES={'UI_Login.lua','GameManager.lua','Preload.lua','GM.lua','UI_GM.lua','LuaHotFixCSharp.lua','develop.lua','S2CCall.lua','LuaCall.lua','UI_User.lua','GMActivity.lua','GachaCommon.lua','UI_GachaHistory.lua'}
@@ -72,6 +74,7 @@ NAMES |= patch_gamepad.LUA_NAMES
 NAMES |= patch_offline_web.LUA_NAMES
 NAMES |= patch_offline_links.LUA_NAMES
 NAMES |= patch_gacha_skip.LUA_NAMES
+NAMES |= patch_gameplay_fixes.LUA_NAMES
 
 def build(source):
     cipher,unity,builder=load_reviewed_parsers()

@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { dailySignUpOperationalDate } from "./daily-sign-up-data.js";
+import {
+  ENERGY_EXCHANGE_COUNT_TASK_ID,
+  GOLD_EXCHANGE_COUNT_TASK_ID,
+} from "./vigour-recovery-data.js";
 import type { Player } from "../persistence/player-repository.js";
 
 export const ENERGY_ACTIVITY_ID = 8;
@@ -88,6 +92,16 @@ export function reconcileEnergyActivity(player: Player, now: number): boolean {
     const key = String(energyActivityTaskId(window.id));
     changed ||= (player.taskValues[key] ?? 0) !== 0;
     player.taskValues[key] = 0;
+  }
+  for (const exchangeTaskId of [
+    ENERGY_EXCHANGE_COUNT_TASK_ID,
+    GOLD_EXCHANGE_COUNT_TASK_ID,
+  ]) {
+    const key = String(exchangeTaskId);
+    if ((player.taskValues[key] ?? 0) !== 0) {
+      player.taskValues[key] = 0;
+      changed = true;
+    }
   }
   return changed;
 }

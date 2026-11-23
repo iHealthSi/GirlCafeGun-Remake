@@ -1134,6 +1134,18 @@ export function createGatewayServer({
       }, 3000);
     }
 
+    async function syncVigourRecovery(now = Date.now()): Promise<void> {
+      if (!loggedIn || !context.account) return;
+      const result = await players.syncVigourRecovery(context.account, now);
+      context.player = result.player;
+      for (const money of result.updatedMoney) {
+        send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+      }
+      if (result.taskChanged) {
+        send(COMMAND.TASK_VALUE_RSP, 0, makeTaskValueSync(result.player.taskValues));
+      }
+    }
+
     async function handlePacket(packetBuffer: Buffer): Promise<void> {
       const packet = readPacket(packetBuffer);
       const preview = hexPreview(packet.payload, config.logging.maxPayloadHexBytes);
@@ -1237,12 +1249,14 @@ export function createGatewayServer({
             context.player?.serverZone ?? config.playerDefaults.serverZone,
           ),
         );
+        await syncVigourRecovery();
         await refreshDailyMail();
         return;
       }
 
       if (packet.command === COMMAND.KEEP_ALIVE_REQ) {
         send(COMMAND.KEEP_ALIVE_RSP, packet.serial);
+        await syncVigourRecovery();
         await refreshDailyMail();
         return;
       }
@@ -1630,6 +1644,125 @@ export function createGatewayServer({
               reason: error.reason,
             });
           }
+          return;
+        }
+        if (call?.method === "ItemFlushFlag") {
+          const parameters =
+            call.parameters && typeof call.parameters === "object"
+              ? (call.parameters as Record<string, unknown>)
+              : {};
+          const cmd =
+            typeof parameters.nCmd === "number"
+              ? parameters.nCmd
+              : Number(parameters.nCmd);
+          if (cmd === 1 || cmd === 3 || cmd === 4) {
+            return;
+          }
+          if (cmd === 2) {
+            const guid =
+              typeof parameters.nGuid === "number"
+                ? parameters.nGuid
+                : Number(parameters.nGuid);
+            const result = await players.useEnergyItem(context.account, guid);
+            if (!result) {
+              logger.warn("item.energy.rejected", {
+                peer,
+                account: context.account,
+                guid,
+              });
+              return;
+            }
+            context.player = result.player;
+            if (result.updatedItems.length > 0) {
+              send(
+                COMMAND.ITEM_UPDATE_NTF,
+                0,
+                makeItemUpdateNotification(result.updatedItems),
+              );
+            }
+            for (const money of result.updatedMoney) {
+              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            }
+            if (result.taskChanged) {
+              send(
+                COMMAND.TASK_VALUE_RSP,
+                0,
+                makeTaskValueSync(result.player.taskValues),
+              );
+            }
+            if (result.error === 0) {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("UseItemMsg", {
+                  Class:
+                    typeof parameters.Class === "string"
+                      ? parameters.Class
+                      : "UI_Accumulator",
+                  MoneyIdx: MONEY_VIGOUR,
+                  MoneyNum: result.addedVigour,
+                }),
+              );
+            } else {
+              send(
+                COMMAND.NTF_S2C_CALL,
+                0,
+                makeServerLuaCall("CallClientTip", [`Error.${result.error}`]),
+              );
+            }
+            logger.info("item.energy.used", {
+              peer,
+              account: context.account,
+              guid,
+              addedVigour: result.addedVigour,
+              error: result.error,
+            });
+            return;
+          }
+          logger.warn("item.flush_flag.unsupported", {
+            peer,
+            account: context.account,
+            parameters,
+          });
+          return;
+        }
+        if (call?.method === "ExChangeMoney") {
+          const parameters =
+            call.parameters && typeof call.parameters === "object"
+              ? (call.parameters as Record<string, unknown>)
+              : {};
+          const type =
+            typeof parameters.nType === "number"
+              ? parameters.nType
+              : Number(parameters.nType);
+          const count =
+            typeof parameters.nCount === "number"
+              ? parameters.nCount
+              : Number(parameters.nCount);
+          const result = await players.exchangeMoney(context.account, type, count);
+          context.player = result.player;
+          for (const money of result.updatedMoney) {
+            send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+          }
+          if (result.taskChanged) {
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
+          }
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("MoneyBuyMsg", { nError: result.error }),
+          );
+          logger.info("money.exchanged", {
+            peer,
+            account: context.account,
+            type,
+            count,
+            error: result.error,
+          });
           return;
         }
         if (call?.method === "LockItem") {

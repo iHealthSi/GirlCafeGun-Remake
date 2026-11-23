@@ -284,6 +284,31 @@ import {
 } from "../game-data/girl-training-data.js";
 import { addPlayerExperience } from "../game-data/player-level-data.js";
 import {
+  ENERGY_EXCHANGE_COUNT_TASK_ID,
+  ENERGY_EXCHANGE_TIERS,
+  ENERGY_ITEM_VIGOUR_BY_LEVEL,
+  GOLD_EXCHANGE_COUNT_TASK_ID,
+  GOLD_EXCHANGE_TIERS,
+  MAX_GOLD,
+  MAX_VIGOUR,
+  MONEY_EXCHANGE_ERROR_GOLD_MAX,
+  MONEY_EXCHANGE_ERROR_INVALID,
+  MONEY_EXCHANGE_ERROR_NONE,
+  MONEY_EXCHANGE_ERROR_NO_TIMES,
+  MONEY_EXCHANGE_ERROR_NOT_ENOUGH_DIAMOND,
+  MONEY_EXCHANGE_ERROR_VIGOUR_MAX,
+  MONEY_RIKI_COIN,
+  reconcileVigourRecovery,
+  VIGOUR_RECOVERY_TIME_TASK_ID,
+} from "../game-data/vigour-recovery-data.js";
+
+export {
+  ENERGY_EXCHANGE_COUNT_TASK_ID,
+  GOLD_EXCHANGE_COUNT_TASK_ID,
+  MONEY_RIKI_COIN,
+  VIGOUR_RECOVERY_TIME_TASK_ID,
+};
+import {
   RUNE_GENRE,
   RUNE_SLOT_COUNT,
   runeTemplateCatalog,
@@ -1766,13 +1791,29 @@ function makeStarterRoster(
     {
       id: 1,
       title: "Initial Formation",
-      fightCards: inventory.map((card) => ({
-        mainCardGuid: card.guid,
-        secondaryCardGuids: [],
-        usedCardGuid: card.guid,
-        weaponGuid: 0,
-        runeItemGuids: [],
-      })),
+      fightCards: [
+        {
+          mainCardGuid: inventory[0]!.guid,
+          secondaryCardGuids: [],
+          usedCardGuid: inventory[0]!.guid,
+          weaponGuid: 0,
+          runeItemGuids: [],
+        },
+        {
+          mainCardGuid: 0,
+          secondaryCardGuids: [],
+          usedCardGuid: 0,
+          weaponGuid: 0,
+          runeItemGuids: [],
+        },
+        {
+          mainCardGuid: 0,
+          secondaryCardGuids: [],
+          usedCardGuid: 0,
+          weaponGuid: 0,
+          runeItemGuids: [],
+        },
+      ],
     },
   ];
   return { inventory, girls, formations };
@@ -3832,6 +3873,7 @@ export class PlayerRepository {
       if (player) {
         if (this.#welcomeGifts) reconcileStarterCafe(player, now);
         reconcileEnergyActivity(player, now);
+        reconcileVigourRecovery(player, MONEY_VIGOUR, now);
         reconcileYenPackLimits(player, now);
         if (this.#welcomeGifts) {
           // The ¥ mail first, so that a new save shows the welcome mail on top.
@@ -3898,6 +3940,7 @@ export class PlayerRepository {
       };
       if (this.#welcomeGifts) reconcileStarterCafe(player, now);
       reconcileEnergyActivity(player, now);
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       reconcileInventoryLockState(player);
       reconcileRuneState(player);
       reconcileDailyMissions(player);
@@ -3968,6 +4011,7 @@ export class PlayerRepository {
       reconcileDailyMissions(player, now);
       reconcileDailySignUp(player, now);
       reconcileEnergyActivity(player, now);
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       reconcileEightDaySignUp(player, now, true);
       reconcileBounty(player, now);
       reconcileChapterStarTaskValues(player);
@@ -5445,7 +5489,6 @@ export class PlayerRepository {
     packId: number,
     now = Date.now(),
   ): Promise<CostumePackResult> {
-    void now;
     const pack = costumePack(packId);
     if (!pack) throw new IBShopError("unknown_item");
     let player: Player | undefined;
@@ -5472,6 +5515,7 @@ export class PlayerRepository {
       const before = { ...player.taskValues };
       player.taskValues[String(ibTaskId)] = 1;
       grantAwards(player, pack.contents, updatedItemGuids, updatedMoneyIds);
+      incrementDailyMissionProgress(player, 108, 1, now);
       for (const [key, value] of Object.entries(player.taskValues)) {
         if (before[key] !== value) updatedTaskIds.add(Number(key));
       }
@@ -7285,7 +7329,230 @@ export class PlayerRepository {
     };
   }
 
-  async chargeLevelVigour(account: string, energyCost: number): Promise<Player> {
+  async syncVigourRecovery(
+    account: string,
+    now = Date.now(),
+  ): Promise<{
+    player: Player;
+    recoveredVigour: number;
+    taskChanged: boolean;
+    updatedMoney: MoneyState[];
+  }> {
+    const snapshot = this.get(account);
+    if (!snapshot) throw new Error(`Unknown player account: ${account}`);
+    const probe = reconcileVigourRecovery(
+      {
+        level: snapshot.level,
+        money: snapshot.money.map((entry) => ({ ...entry })),
+        taskValues: { ...snapshot.taskValues },
+      },
+      MONEY_VIGOUR,
+      now,
+    );
+    if (probe.recoveredVigour === 0 && !probe.taskChanged) {
+      return {
+        player: snapshot,
+        recoveredVigour: 0,
+        taskChanged: false,
+        updatedMoney: [],
+      };
+    }
+    return this.#store.update((state) => {
+      const player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const update = reconcileVigourRecovery(player, MONEY_VIGOUR, now);
+      const updated = structuredClone(player);
+      const updatedMoney =
+        update.recoveredVigour > 0
+          ? updated.money.filter(({ id }) => id === MONEY_VIGOUR)
+          : [];
+      return {
+        player: updated,
+        recoveredVigour: update.recoveredVigour,
+        taskChanged: update.taskChanged,
+        updatedMoney,
+      };
+    });
+  }
+
+  async useEnergyItem(
+    account: string,
+    guid: number,
+    now = Date.now(),
+  ): Promise<{
+    error: number;
+    addedVigour: number;
+    player: Player;
+    updatedItems: InventoryEntryState[];
+    updatedMoney: MoneyState[];
+    taskChanged: boolean;
+  } | null> {
+    if (!Number.isSafeInteger(guid) || guid <= 0) return null;
+    return this.#store.update((state) => {
+      const player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const item = player.inventory.find(
+        (candidate) =>
+          candidate.guid === guid &&
+          candidate.count > 0 &&
+          candidate.genre === 10 &&
+          candidate.detail === 1 &&
+          candidate.particular === 1,
+      );
+      if (!item) return null;
+      const gain = ENERGY_ITEM_VIGOUR_BY_LEVEL[item.templateLevel];
+      if (!gain) return null;
+
+      const beforeRecovery = reconcileVigourRecovery(player, MONEY_VIGOUR, now);
+      let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
+      if (!vigour) {
+        vigour = { id: MONEY_VIGOUR, count: 0 };
+        player.money.push(vigour);
+      }
+      const addedVigour = Math.min(gain, Math.max(0, MAX_VIGOUR - vigour.count));
+      if (addedVigour <= 0) {
+        const snapshot = structuredClone(player);
+        return {
+          error: MONEY_EXCHANGE_ERROR_VIGOUR_MAX,
+          addedVigour: 0,
+          player: snapshot,
+          updatedItems: [],
+          updatedMoney:
+            beforeRecovery.recoveredVigour > 0
+              ? snapshot.money.filter(({ id }) => id === MONEY_VIGOUR)
+              : [],
+          taskChanged: beforeRecovery.taskChanged,
+        };
+      }
+
+      item.count -= 1;
+      vigour.count += addedVigour;
+      const afterRecovery = reconcileVigourRecovery(player, MONEY_VIGOUR, now);
+      const snapshot = structuredClone(player);
+      return {
+        error: MONEY_EXCHANGE_ERROR_NONE,
+        addedVigour,
+        player: snapshot,
+        updatedItems: snapshot.inventory.filter(
+          (candidate) => candidate.guid === item.guid,
+        ),
+        updatedMoney: snapshot.money.filter(({ id }) => id === MONEY_VIGOUR),
+        taskChanged: beforeRecovery.taskChanged || afterRecovery.taskChanged,
+      };
+    });
+  }
+
+  async exchangeMoney(
+    account: string,
+    type: number,
+    count: number,
+    now = Date.now(),
+  ): Promise<{
+    error: number;
+    player: Player;
+    updatedMoney: MoneyState[];
+    taskChanged: boolean;
+  }> {
+    return this.#store.update((state) => {
+      const player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      const activityTasksChanged = reconcileEnergyActivity(player, now);
+      const beforeRecovery = reconcileVigourRecovery(player, MONEY_VIGOUR, now);
+      const updatedMoneyIds = new Set<number>();
+      if (beforeRecovery.recoveredVigour > 0) updatedMoneyIds.add(MONEY_VIGOUR);
+      let taskChanged = activityTasksChanged || beforeRecovery.taskChanged;
+
+      const finish = (error: number) => {
+        const snapshot = structuredClone(player);
+        return {
+          error,
+          player: snapshot,
+          updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
+          taskChanged,
+        };
+      };
+
+      if (!Number.isSafeInteger(count) || count <= 0) {
+        return finish(MONEY_EXCHANGE_ERROR_INVALID);
+      }
+
+      if (type === MONEY_VIGOUR || type === MONEY_GOLD) {
+        const isVigour = type === MONEY_VIGOUR;
+        const tiers = isVigour ? ENERGY_EXCHANGE_TIERS : GOLD_EXCHANGE_TIERS;
+        const countTaskKey = String(
+          isVigour ? ENERGY_EXCHANGE_COUNT_TASK_ID : GOLD_EXCHANGE_COUNT_TASK_ID,
+        );
+        const used = Math.max(0, player.taskValues[countTaskKey] ?? 0);
+        if (used + count > tiers.length) {
+          return finish(MONEY_EXCHANGE_ERROR_NO_TIMES);
+        }
+        let totalCost = 0;
+        let totalGain = 0;
+        for (let step = used; step < used + count; step += 1) {
+          totalCost += tiers[step]!.cost;
+          totalGain += tiers[step]!.gain;
+        }
+        let targetMoney = player.money.find(({ id }) => id === type);
+        const currentAmount = targetMoney?.count ?? 0;
+        const cap = isVigour ? MAX_VIGOUR : MAX_GOLD;
+        if (currentAmount + totalGain > cap) {
+          return finish(
+            isVigour ? MONEY_EXCHANGE_ERROR_VIGOUR_MAX : MONEY_EXCHANGE_ERROR_GOLD_MAX,
+          );
+        }
+        try {
+          deductShopMoney(player, MONEY_DIAMOND, totalCost, updatedMoneyIds);
+        } catch (error) {
+          if (error instanceof ShopError && error.reason === "insufficient_funds") {
+            return finish(MONEY_EXCHANGE_ERROR_NOT_ENOUGH_DIAMOND);
+          }
+          throw error;
+        }
+        if (!targetMoney) {
+          targetMoney = { id: type, count: 0 };
+          player.money.push(targetMoney);
+        }
+        targetMoney.count += totalGain;
+        updatedMoneyIds.add(type);
+        player.taskValues[countTaskKey] = used + count;
+        taskChanged = true;
+        if (isVigour) {
+          const afterRecovery = reconcileVigourRecovery(player, MONEY_VIGOUR, now);
+          taskChanged ||= afterRecovery.taskChanged;
+        }
+        return finish(MONEY_EXCHANGE_ERROR_NONE);
+      }
+
+      if (type === MONEY_RIKI_COIN) {
+        const coffeeCost = 1_000 * count;
+        const rikiGain = 5 * count;
+        try {
+          deductShopMoney(player, MONEY_COFFEE_COIN, coffeeCost, updatedMoneyIds);
+        } catch (error) {
+          if (error instanceof ShopError && error.reason === "insufficient_funds") {
+            return finish(MONEY_EXCHANGE_ERROR_INVALID);
+          }
+          throw error;
+        }
+        let riki = player.money.find(({ id }) => id === MONEY_RIKI_COIN);
+        if (!riki) {
+          riki = { id: MONEY_RIKI_COIN, count: 0 };
+          player.money.push(riki);
+        }
+        riki.count += rikiGain;
+        updatedMoneyIds.add(MONEY_RIKI_COIN);
+        return finish(MONEY_EXCHANGE_ERROR_NONE);
+      }
+
+      return finish(MONEY_EXCHANGE_ERROR_INVALID);
+    });
+  }
+
+  async chargeLevelVigour(
+    account: string,
+    energyCost: number,
+    now = Date.now(),
+  ): Promise<Player> {
     if (!Number.isSafeInteger(energyCost) || energyCost < 0) {
       throw new Error(`Invalid level energy cost: ${energyCost}`);
     }
@@ -7294,6 +7561,7 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       const vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
       const available = vigour?.count ?? 0;
       if (available < energyCost) {
@@ -7304,6 +7572,7 @@ export class PlayerRepository {
       } else {
         player.money.push({ id: MONEY_VIGOUR, count: -energyCost });
       }
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       incrementDailyMissionProgress(player, 109, energyCost);
       if (energyCost > 0)
         this.#activities.dispatch(player, [
@@ -7333,6 +7602,8 @@ export class PlayerRepository {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
       reconcileBounty(player);
+      const now = Date.now();
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
 
       energyCost = effectiveBountyEnergyCost(level, player.level);
       let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
@@ -7402,6 +7673,7 @@ export class PlayerRepository {
       incrementDailyMissionProgress(player, 109, energyCost);
 
       experienceUpdate = applyPlayerExperience(player, level.masterExp);
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       if (experienceUpdate.vigourRecovery > 0) {
         updatedMoneyIds.add(MONEY_VIGOUR);
       }
@@ -7478,6 +7750,8 @@ export class PlayerRepository {
     await this.#store.update((state) => {
       player = state.players[account];
       if (!player) throw new Error(`Unknown player account: ${account}`);
+      const now = Date.now();
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
 
       let vigour = player.money.find(({ id }) => id === MONEY_VIGOUR);
       const available = vigour?.count ?? 0;
@@ -7522,6 +7796,7 @@ export class PlayerRepository {
         incrementDailyMissionProgress(player, 101);
       }
       experienceUpdate = applyPlayerExperience(player, masterExp);
+      reconcileVigourRecovery(player, MONEY_VIGOUR, now);
       if (experienceUpdate.vigourRecovery > 0) {
         updatedMoneyIds.add(MONEY_VIGOUR);
       }

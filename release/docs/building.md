@@ -25,7 +25,8 @@ platform. Compilation targets Java 8 bytecode and Android API 24. Set `GCG_JAVA`
 and `GCG_ANDROID_SDK` to their installation locations when needed.
 
 The client recipes operate on a hash-pinned input and produce an overlay rather
-than editing the original. Both ARM libraries retain the Unity allocator and
+than editing the original. See [client baseline](client-base.md) before adapting
+scripts or table IDs from another client version. Both ARM libraries retain the Unity allocator and
 Cubism compatibility fixes. Native developer entry points are disabled before
 their UI, socket or command paths execute; developer Lua and UI content are
 removed. The test-automation listener (UAutoSDK, TCP port 13000) and Unity's own
@@ -43,6 +44,18 @@ the builder; a different explicitly reviewed donor requires `--icon-sha256`.
 The data overlay must use indexes reconciled to the actual packaged resource
 sizes and CRCs, including translated and custom bundles. A client-only overlay
 without this reconciliation is not the final distribution overlay.
+
+The client overlay builder also takes `--combat-source-zip` for the owned full
+source resource ZIP and `--combat-donor-obb` for the owned EN 1.0.9 base OBB.
+`patch_combat_labels.py` pins the five input members by hash. The resulting
+`at/mat.u` and `ui_tx/ui_fight.u` replacements are data files recorded in
+`externalFiles`; include them when assembling the full data set or a delta.
+The builder updates their sizes and CRCs in both APK and external resource
+indexes. English narrative punctuation is normalized after selector language
+entries are added, preserving the translation keys and control markup.
+`patch_text_fixes.py` then gives English text to the 37 values that the text
+table holds as spreadsheet errors (`#N/A`, `#VALUE!`): the emote guide and
+screen, the emote items, one cat-ears item and one anniversary tower line.
 
 Generate and host the complete data packs, set their actual HTTPS direct URLs in
 the full manifest, then sign its exact bytes with `release/tools/release_crypto.py`.
