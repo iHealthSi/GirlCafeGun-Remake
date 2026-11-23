@@ -916,6 +916,7 @@ export interface ItemBoxOpenResult {
   awards: BaseAward[];
   updatedItems: InventoryItemState[];
   updatedMoney: MoneyState[];
+  updatedGirls: GirlState[];
 }
 
 export interface DailySignUpResult {
@@ -5839,6 +5840,7 @@ export class PlayerRepository {
 
     const updatedItemGuids = new Set<number>();
     const updatedMoneyIds = new Set<number>();
+    const girlIds = new Set<number>();
     let awards: BaseAward[] = [];
     let opened = 0;
     const player = await this.#store.update((state) => {
@@ -5869,6 +5871,8 @@ export class PlayerRepository {
       stack.count -= times;
       updatedItemGuids.add(stack.guid);
       grantAwards(player, awards, updatedItemGuids, updatedMoneyIds);
+      const reconciled = reconcileGirlAppearanceState(player, updatedItemGuids);
+      for (const id of reconciled.updatedGirlIds) girlIds.add(id);
       return player;
     });
     const snapshot = structuredClone(player);
@@ -5883,6 +5887,7 @@ export class PlayerRepository {
       awards,
       updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
       updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
+      updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
     };
   }
 

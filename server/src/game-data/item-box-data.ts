@@ -5,6 +5,11 @@ import type { BaseAward } from "./chapter-config.js";
 export const LUA_COMMAND_ITEM_BOX_OPEN = 75;
 export const LUA_COMMAND_ITEM_BOX_OPEN_MANUAL = 76;
 export const ITEM_BOX_MAX_OPEN_PER_REQUEST = 10;
+/**
+ * Select boxes opened one at a time even when the request asks for more.
+ * [INFER] The source of these two ids was not recorded; no client table or
+ * C# handler found during review names them.
+ */
 export const ITEM_BOX_SELECT_ONCE_IDS = new Set([213, 215]);
 
 export type ItemBoxObtainType = "Fix" | "Random" | "Prob" | "Select";
@@ -159,6 +164,12 @@ export class ItemBoxCatalog {
 
   has(boxId: number): boolean {
     return this.#entriesByBox.has(boxId);
+  }
+
+  /** True when the item names a box that ItemBoxInfo holds awards for. */
+  opens(gdpl: readonly number[]): boolean {
+    const boxId = this.boxId(gdpl);
+    return boxId !== null && this.has(boxId);
   }
 
   hasSelect(boxId: number): boolean {

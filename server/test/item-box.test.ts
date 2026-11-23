@@ -262,3 +262,34 @@ it("opens bag boxes over LuaCall 75 and 76, consumes one stack and grants stock 
     await cleanup();
   }
 }, 15_000);
+
+it("sends task values and girl updates when a box award writes them", async () => {
+  const account = "item-box-sync";
+  // Box 30001 (8-15-1-4) holds head frames, owned through task 11/id; box 901
+  // (8-9-1-3) holds character cards. Both use the shipped tables.
+  const { call, players, cleanup } = await openGateway(account, [
+    [8, 15, 1, 4, 1],
+    [8, 9, 1, 3, 1],
+  ]);
+  const headFrameTasks = () =>
+    Object.keys(players.get(account)!.taskValues).filter(
+      (key) => Number(key) >>> 16 === 11,
+    ).length;
+  try {
+    const before = headFrameTasks();
+    const frame = await call(75, { gdpln: [8, 15, 1, 4, 1], select: 1 });
+    expect(headFrameTasks()).toBe(before + 1);
+    expect(frame.map(({ command }) => command)).toContain(COMMAND.TASK_VALUE_RSP);
+
+    const card = await call(75, { gdpln: [8, 9, 1, 3, 1], select: 4 });
+    expect(callback(card.at(-1)!)!.parameters).toEqual({
+      sCmd: 75,
+      tbParam: [[1, 12, 4, 3, 1]],
+    });
+    const commands = card.map(({ command }) => command);
+    expect(commands).toContain(COMMAND.GIRL_UPDATE_NTF);
+    expect(commands).toContain(COMMAND.TASK_VALUE_RSP);
+  } finally {
+    await cleanup();
+  }
+}, 15_000);

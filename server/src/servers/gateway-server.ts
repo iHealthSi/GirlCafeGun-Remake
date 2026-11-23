@@ -1652,7 +1652,7 @@ export function createGatewayServer({
             : null;
         const itemBoxRequest =
           parsedItemBoxRequest &&
-          itemBoxCatalog().boxId(parsedItemBoxRequest.gdpl) !== null &&
+          itemBoxCatalog().opens(parsedItemBoxRequest.gdpl) &&
           !rotationSelectorCatalog().isItem(parsedItemBoxRequest.gdpl)
             ? parsedItemBoxRequest
             : null;
@@ -1667,6 +1667,13 @@ export function createGatewayServer({
             );
             for (const money of result.updatedMoney)
               send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            sendGirlUpdates(result.updatedGirls);
+            // Awards can write task values (head frames, list marks: auto-use-item-data.ts).
+            send(
+              COMMAND.TASK_VALUE_RSP,
+              0,
+              makeTaskValueSync(result.player.taskValues),
+            );
             send(
               COMMAND.NTF_S2C_CALL,
               0,
