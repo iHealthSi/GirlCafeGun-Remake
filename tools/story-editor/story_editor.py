@@ -42,7 +42,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 WORK = os.path.join(HERE, "work")
 CFG = {"data": None, "archive": None, "lang": None, "official": [], "source": None, "label": "data"}   # set by configure()
 SEED = 0x166920ED
-CACHE_VERSION = 7
+CACHE_VERSION = 8
 SOURCE_MEMBERS = ("assets/_lang_bundle.bin", "assets/lang.u")   # Chinese table of the Remake APK first
 
 CJK = re.compile(r"[぀-ヿ㐀-䶿一-鿿豈-﫿가-힯]")
@@ -591,12 +591,20 @@ def build(setname, log=print):
         m = re.match(r"(?:ui\.npcid\.(\d+)\.name|_GirlInfo\.(\d+)\.(?:NickName|GirlName))$", k)
         if m:
             names[k] = cur[k]
-    # Chinese line: the source table, else a Chinese value of a table given with --official
-    zh = {}
+    # Chinese line: the source table, else a Chinese value of the shown table or of a table given with --official
+    def file_label(spec):
+        return os.path.basename(source_name(spec).split("::")[0])
+
+    official_specs = [v for k, v in src.items() if k.startswith("official")]
+    tables = [(cur, file_label(src["lang"]))] + [(t, file_label(s)) for t, s in zip(official, official_specs)]
+    source_label = file_label(src["source"]) if "source" in src else None
+    zh, zh_from = {}, {}
     for k in keys:
         v = chinese.get(k)
         if not is_cjk_text(v):
-            v = next((t.get(k) for t in [cur] + official if is_cjk_text(t.get(k))), None) or (v or None)
+            hit = next(((t[k], name) for t, name in tables if is_cjk_text(t.get(k))), None)
+            if hit:
+                v, zh_from[k] = hit
         if v:
             zh[k] = v
     data = {
@@ -609,7 +617,8 @@ def build(setname, log=print):
         "texts": {k: [cur.get(k)] + [t.get(k) for t in official] for k in sorted(keys)},
         "names": names,
         "source": zh,
-        "sourceName": os.path.basename(source_name(src["source"]).split("::")[0]) if "source" in src else None,
+        "sourceFrom": zh_from,          # keys whose Chinese line comes from another table than --source
+        "sourceName": source_label or ("Chinese values of the text tables" if zh else None),
     }
     return data
 
@@ -689,7 +698,8 @@ class Store:
                 shown.append({"label": ("Source text, " if is_cjk_text(v) else "Official text, ") + (names[n] if n < len(names) else "table %d" % (n + 1)),
                               "text": v, "source": is_cjk_text(v)})
         return {"key": key, "text": text, "tag": tag, "edited": "text" in e, "base": cur, "refs": shown,
-                "source": source, "updated": e.get("updated")}
+                "source": source, "sourceFrom": self.data.get("sourceFrom", {}).get(key) or self.data.get("sourceName"),
+                "updated": e.get("updated")}
 
     def save(self, key, text=None):
         with self.lock:

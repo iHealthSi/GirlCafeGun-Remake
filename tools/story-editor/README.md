@@ -64,7 +64,8 @@ The tool sets the tag from the text; the page only shows it. A saved text gets i
 - **Not translated** / **No text**: the line holds Chinese or Japanese, or the script names a key that has no text.
 - **No tag**: no official table was given, so the tool cannot tell original from machine translated text.
 
-When an official table holds Chinese or Japanese for a line, the editor shows it as the source text.
+When the `--source` table has no Chinese for a line (or no `--source` is given), the Chinese value of the shown table
+or of an `--official` table is the Chinese line; the Line panel names the file it comes from.
 
 ## Characters need the Live2D runtime
 

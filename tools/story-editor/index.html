@@ -813,7 +813,7 @@ function renderEditor() {
   const ta = $("#edtext");
   if (ta.dataset.key !== S.key || ta.dataset.base !== String(d.text)) { ta.value = d.text == null ? "" : d.text; ta.dataset.key = S.key; ta.dataset.base = String(d.text); }
   $("#edtag").innerHTML = '<span class="chip"><i class="dot t-' + d.tag + '"></i>' + esc(TAG_LABEL[d.tag] || d.tag) + "</span>";
-  $("#edzh").innerHTML = S.nav && S.nav.source ? '<div class="ref src"><div class="h">Chinese original · ' + esc(S.nav.source) + '</div><div class="b zh" lang="zh-Hans">' +
+  $("#edzh").innerHTML = S.nav && S.nav.source ? '<div class="ref src"><div class="h">Chinese original · ' + esc(d.sourceFrom || S.nav.source) + '</div><div class="b zh" lang="zh-Hans">' +
     (d.source ? rich(d.source) : '<span class="rawkey">not in the Chinese table</span>') + "</div></div>" : "";
   $("#revert").disabled = !d.edited;
   $("#edmsg").textContent = d.edited ? "edited " + (d.updated || "").replace("T", " ") : "";
