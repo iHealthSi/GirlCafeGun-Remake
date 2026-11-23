@@ -6,6 +6,13 @@ import {
   type PromiseTaskData,
 } from "../game-data/girl-promise-data.js";
 import type { AppConfig } from "../config.js";
+import {
+  ITEM_BOX_MAX_OPEN_PER_REQUEST,
+  ITEM_BOX_SELECT_ONCE_IDS,
+  ItemBoxCatalog,
+  ItemBoxError,
+  type ItemBoxOpenRequest,
+} from "../game-data/item-box-data.js";
 import { isRotationSelectionTaskId } from "../game-data/recruitment-policy.js";
 import {
   rotationSelectorCatalog,
@@ -902,6 +909,13 @@ export interface RotationSelectorOpenResult {
   awards: (number | boolean)[][];
   updatedItems: InventoryItemState[];
   updatedGirls: GirlState[];
+}
+
+export interface ItemBoxOpenResult {
+  player: Player;
+  awards: BaseAward[];
+  updatedItems: InventoryItemState[];
+  updatedMoney: MoneyState[];
 }
 
 export interface DailySignUpResult {
@@ -5819,6 +5833,64 @@ export class PlayerRepository {
       awards,
       updatedItems: snapshot.inventory.filter(({ guid }) => updated.has(guid)),
       updatedGirls: snapshot.girls.filter(({ girlId }) => girlIds.has(girlId)),
+    };
+  }
+
+  async openItemBox(
+    account: string,
+    request: ItemBoxOpenRequest,
+    random: () => number = Math.random,
+  ): Promise<ItemBoxOpenResult> {
+    const catalog = ItemBoxCatalog.loadDefault();
+    const boxId = catalog.boxId(request.gdpl);
+    if (boxId === null || !catalog.has(boxId)) throw new ItemBoxError("unknown_box");
+
+    const updatedItemGuids = new Set<number>();
+    const updatedMoneyIds = new Set<number>();
+    let awards: BaseAward[] = [];
+    let opened = 0;
+    const player = await this.#store.update((state) => {
+      const player = state.players[account];
+      if (!player) throw new ItemBoxError("not_owned");
+      const [genre, detail, particular, level] = request.gdpl;
+      const stack = player.inventory.find(
+        (item) =>
+          item.genre === genre &&
+          item.detail === detail &&
+          item.particular === particular &&
+          item.templateLevel === level &&
+          item.lockOn === 0 &&
+          item.count > 0,
+      );
+      if (!stack) throw new ItemBoxError("not_owned");
+
+      let times = Math.min(
+        ITEM_BOX_MAX_OPEN_PER_REQUEST,
+        Math.max(1, request.times),
+        Math.floor(stack.count),
+      );
+      if (request.select > 0 && ITEM_BOX_SELECT_ONCE_IDS.has(boxId)) times = 1;
+      opened = times;
+      awards = catalog.roll(boxId, times, request.select, random);
+      if (!awards.length) throw new ItemBoxError("empty_roll");
+
+      stack.count -= times;
+      updatedItemGuids.add(stack.guid);
+      grantAwards(player, awards, updatedItemGuids, updatedMoneyIds);
+      return player;
+    });
+    const snapshot = structuredClone(player);
+    this.#logger.info("player.item_box.opened", {
+      account,
+      boxId,
+      times: opened,
+      select: request.select,
+    });
+    return {
+      player: snapshot,
+      awards,
+      updatedItems: snapshot.inventory.filter(({ guid }) => updatedItemGuids.has(guid)),
+      updatedMoney: snapshot.money.filter(({ id }) => updatedMoneyIds.has(id)),
     };
   }
 

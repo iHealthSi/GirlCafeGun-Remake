@@ -59,7 +59,10 @@ import { parseWeaponEnhancementRequest } from "../game-data/weapon-enhancement-d
 import { RUNE_SLOT_COUNT } from "../game-data/rune-data.js";
 import { RuneOperationError } from "../game-data/rune-progression-data.js";
 import { cardRarityOf } from "../game-data/custom-card-data.js";
-import { RotationSelectorError } from "../game-data/rotation-selector-data.js";
+import {
+  rotationSelectorCatalog,
+  RotationSelectorError,
+} from "../game-data/rotation-selector-data.js";
 import {
   parseWeaponDecompositionRequest,
   WEAPON_LOGIC_COMMAND_DECOMPOSE,
@@ -70,6 +73,11 @@ import {
   rollChapterAwards,
 } from "../game-data/chapter-config.js";
 import { LUA_COMMAND_CAFE_FURNITURE_COUNT } from "../game-data/cafe-data.js";
+import {
+  ItemBoxError,
+  itemBoxCatalog,
+  parseItemBoxOpenRequest,
+} from "../game-data/item-box-data.js";
 import { cafePetList, CafePetOperationError } from "../game-data/cafe-pets.js";
 import type { CafeNotification } from "../game-data/cafe-runtime.js";
 import {
@@ -1630,17 +1638,63 @@ export function createGatewayServer({
           ...(call ? { method: call.method, json: call.json } : {}),
         });
         send(COMMAND.C2S_CALL_RSP, packet.serial);
+        const outerParameters =
+          call?.parameters && typeof call.parameters === "object"
+            ? (call.parameters as Record<string, unknown>)
+            : {};
+        const luaParameters =
+          outerParameters.tbParam && typeof outerParameters.tbParam === "object"
+            ? (outerParameters.tbParam as Record<string, unknown>)
+            : {};
+        const parsedItemBoxRequest =
+          luaCommand === 75 || luaCommand === 76
+            ? parseItemBoxOpenRequest(luaParameters.gdpln, luaParameters.select)
+            : null;
+        const itemBoxRequest =
+          parsedItemBoxRequest &&
+          itemBoxCatalog().boxId(parsedItemBoxRequest.gdpl) !== null &&
+          !rotationSelectorCatalog().isItem(parsedItemBoxRequest.gdpl)
+            ? parsedItemBoxRequest
+            : null;
+        if (itemBoxRequest) {
+          try {
+            const result = await players.openItemBox(context.account, itemBoxRequest);
+            context.player = result.player;
+            send(
+              COMMAND.ITEM_UPDATE_NTF,
+              0,
+              makeItemUpdateNotification(result.updatedItems),
+            );
+            for (const money of result.updatedMoney)
+              send(COMMAND.MONEY_UPDATE_NTF, 0, makeMoneyUpdateNotification(money));
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: luaCommand,
+                tbParam: result.awards,
+              }),
+            );
+          } catch (error) {
+            if (!(error instanceof ItemBoxError)) throw error;
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", { sCmd: luaCommand, tbParam: [] }),
+            );
+            logger.warn("item_box.rejected", {
+              account: context.account,
+              reason: error.reason,
+            });
+          }
+          return;
+        }
         if (luaCommand === 76) {
-          const outer = call!.parameters as Record<string, unknown>;
-          const parameters =
-            outer.tbParam && typeof outer.tbParam === "object"
-              ? (outer.tbParam as Record<string, unknown>)
-              : {};
           try {
             const result = await players.openRotationSelector(
               context.account,
-              parameters.gdpln,
-              parameters.select,
+              luaParameters.gdpln,
+              luaParameters.select,
             );
             context.player = result.player;
             send(
