@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { AutoUseItemCatalog } from "../src/game-data/auto-use-item-data.js";
 import { makeIBShopTaskId } from "../src/game-data/ib-shop-data.js";
+import { itemBoxCatalog } from "../src/game-data/item-box-data.js";
 import {
   IB_SHOP_ERROR_NOT_ENOUGH_YEN,
   IB_SHOP_ERROR_PACK_OFFLINE,
@@ -117,9 +118,19 @@ describe("yen pack catalog", () => {
       .filter(({ contents }) => contents === null)
       .map(({ id }) => id)
       .sort((a, b) => a - b);
-    expect(blocked).toEqual([1, 89, 131, 172, 173, 181]);
+    expect(blocked).toEqual([131, 181]);
     expect(catalog.pack(131)?.blocked).toMatch(/BuyRecruitAuto/);
-    expect(catalog.pack(1)?.blocked).toMatch(/bag box 8-5-2-3/);
+    const boxes = itemBoxCatalog();
+    for (const id of [1, 89, 172, 173]) {
+      expect(
+        catalog
+          .pack(id)
+          ?.contents?.some(
+            ([g, d, p, l]) => g === 8 && boxes.boxId([g, d, p, l]) !== null,
+          ),
+        `${id}: sells an openable bag box`,
+      ).toBe(true);
+    }
   });
 });
 
@@ -239,10 +250,17 @@ describe("yen pack purchase", () => {
 
   it("puts every item of a sellable pack in a wallet, the bag or an AutoUse rule", () => {
     const rules = AutoUseItemCatalog.loadDefault();
+    const boxes = itemBoxCatalog();
     for (const pack of YenPackCatalog.loadDefault().packs()) {
       for (const [g, d, p, l] of pack.contents ?? []) {
         const effect = rules.effect(g, d, p, l);
-        expect(g === 8 && effect === null, `${pack.id}: bag box ${g}-${d}`).toBe(false);
+        if (g === 8 && effect === null) {
+          expect(
+            boxes.boxId([g, d, p, l]),
+            `${pack.id}: bag box ${g}-${d}-${p}-${l}`,
+          ).not.toBeNull();
+          continue;
+        }
         if (g === 15 && [1, 2, 4, 10, 11, 20].includes(d)) continue;
         expect(effect?.kind, `${pack.id}: ${g}-${d}-${p}-${l}`).not.toBe("none");
       }
