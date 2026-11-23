@@ -7,8 +7,9 @@ export const LUA_COMMAND_ITEM_BOX_OPEN_MANUAL = 76;
 export const ITEM_BOX_MAX_OPEN_PER_REQUEST = 10;
 /**
  * Select boxes opened one at a time even when the request asks for more.
- * [INFER] The source of these two ids was not recorded; no client table or
- * C# handler found during review names them.
+ * Boxes 213 (item 8-5-16-4) and 215 (8-5-18-4) are the one-time rewards of
+ * Activity/AchievementOther rows 1640 and 1665 ("100 pulls on limited weapon
+ * banner 516 / 520"): pick one of that banner's two featured weapons.
  */
 export const ITEM_BOX_SELECT_ONCE_IDS = new Set([213, 215]);
 
