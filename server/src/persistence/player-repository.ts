@@ -566,6 +566,7 @@ export interface Player {
   promise?: PromiseState;
   /** Card skin, list mark and chat bubble (look-data.ts). */
   profileLook?: ProfileLookState;
+  headFrame?: number;
 }
 
 export interface PersistedState {
@@ -3865,6 +3866,7 @@ export class PlayerRepository {
         dailySignUp: makeInitialDailySignUpState(),
         eightDaySignUp: makeInitialEightDaySignUpState(),
         bounty: makeInitialBountyState(),
+        headFrame: 0,
         ...makeStarterRoster(registerTime),
       };
       if (this.#welcomeGifts) reconcileStarterCafe(player, now);
@@ -4037,6 +4039,18 @@ export class PlayerRepository {
     });
     if (!player) throw new Error(`Failed to set main girl: ${account}`);
     this.#logger.info("player.main_girl.updated", { account, girlId });
+    return structuredClone(player);
+  }
+
+  async setHeadFrame(account: string, headFrame: number): Promise<Player> {
+    let player: Player | undefined;
+    await this.#store.update((state) => {
+      player = state.players[account];
+      if (!player) throw new Error(`Unknown player account: ${account}`);
+      player.headFrame = headFrame;
+    });
+    if (!player) throw new Error(`Failed to set head frame: ${account}`);
+    this.#logger.info("player.head_frame.updated", { account, headFrame });
     return structuredClone(player);
   }
 

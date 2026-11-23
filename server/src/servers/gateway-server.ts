@@ -2,6 +2,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { createServer, type Server, type Socket } from "node:net";
 
 import type { AppConfig } from "../config.js";
+import {
+  DEFAULT_HEAD_FRAME_ID,
+  HEAD_FRAME_TASK_GROUP,
+  LUA_COMMAND_SET_HEAD_FRAME,
+} from "../game-data/auto-use-item-data.js";
 import { makeBackgroundLuaResponse } from "../game-data/background-lua-data.js";
 import {
   LUA_COMMAND_CHANGE_BACKGROUND,
@@ -632,6 +637,28 @@ function parseNumericLuaCommand(call: LuaCall | null): number | null {
   }
   const command = Number((call.parameters as Record<string, unknown>).sCmd);
   return Number.isSafeInteger(command) ? command : null;
+}
+
+function parseHeadFrameId(value: unknown): number | null {
+  const wrapped = Array.isArray(value) ? value[0] : value;
+  const candidate =
+    typeof wrapped === "object" && wrapped !== null
+      ? (wrapped as Record<string, unknown>).id
+      : wrapped;
+  if (typeof candidate === "number")
+    return Number.isSafeInteger(candidate) && candidate >= 0 ? candidate : null;
+  if (typeof candidate === "string" && /^\d+$/.test(candidate)) {
+    const parsed = Number(candidate);
+    return Number.isSafeInteger(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function ownsHeadFrame(player: Player, id: number): boolean {
+  if (id === 0 || id === DEFAULT_HEAD_FRAME_ID) return true;
+  if (id > 0xffff) return false;
+  const key = String((HEAD_FRAME_TASK_GROUP << 16) | id);
+  return (player.taskValues[key] ?? 0) > 0;
 }
 
 type BountyCall =
@@ -1761,6 +1788,42 @@ export function createGatewayServer({
             type,
             count,
             error: result.error,
+          });
+          return;
+        }
+        if (luaCommand === LUA_COMMAND_SET_HEAD_FRAME) {
+          const outer = call?.parameters as { tbParam?: unknown } | undefined;
+          const id = parseHeadFrameId(outer?.tbParam);
+          const player = context.player ?? (await players.getOrCreate(context.account));
+          if (id === null || !ownsHeadFrame(player, id)) {
+            logger.warn("head_frame.rejected", {
+              peer,
+              account: context.account,
+              id,
+            });
+            send(
+              COMMAND.NTF_S2C_CALL,
+              0,
+              makeServerLuaCall("LuaCall", {
+                sCmd: LUA_COMMAND_SET_HEAD_FRAME,
+                tbParam: { nError: 1 },
+              }),
+            );
+            return;
+          }
+          context.player = await players.setHeadFrame(context.account, id);
+          send(
+            COMMAND.NTF_S2C_CALL,
+            0,
+            makeServerLuaCall("LuaCall", {
+              sCmd: LUA_COMMAND_SET_HEAD_FRAME,
+              tbParam: [id],
+            }),
+          );
+          logger.info("head_frame.updated", {
+            peer,
+            account: context.account,
+            id,
           });
           return;
         }
