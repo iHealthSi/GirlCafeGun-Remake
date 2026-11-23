@@ -67,15 +67,17 @@ Keep `LoginNotice` empty unless a window at every login is wanted.
 
 ## Not done
 
-- The client's own notice reader does not use this server. `NoticeCommon.lua` builds
-  its address from `Game.Dir.GetBaseUpdateUrl()`, which is a publisher host on the 0.1.3
-  phone build (logcat line `NoticeCommon's Url is
-http://l3-prod-patch-sssj.bilibiligame.net/bili/10136/debug/notice.txt`, 2026-11-14).
-  It does not send the request in this client: the two callers of
-  `DownloadNoticeData` are `TryStopServerNotice`, which `UI_Login.lua` calls only when
-  the language is Japanese, and `TryAllChapterNotice`, which returns at its first line.
-  `UI_Notice` always opens the web view for a normal notice. The recipe leaves
-  `NoticeCommon.lua` as it is.
+- The client's own notice reader maps its address to this server. `NoticeCommon.lua`
+  builds the address from `Game.Dir.GetBaseUpdateUrl()`, which is a publisher host on
+  the 0.1.3 phone build (logcat line `NoticeCommon's Url is
+  http://l3-prod-patch-sssj.bilibiligame.net/bili/10136/debug/notice.txt`, 2026-11-14);
+  the Lua recipe wraps both assignments with `OfflineWeb.NoticeUrl`, which uses the
+  local address of `Game.ServerList.GetNoticeUrl()` and asks for `/notice.txt`.
+  It rarely sends the request in this client: the two callers of `DownloadNoticeData`
+  are `TryStopServerNotice`, which `UI_Login.lua` calls only when the language is
+  Japanese, and `TryAllChapterNotice`, which returns at its first line.
+  `UI_Notice` always opens the web view for a normal notice.
+
 - `UI_OtherTip` and `UI_RikiComic` load an address from a table, and the other `Load`
   calls of `UI_Notice` are for other regions or for a page that the caller names. They
   stay stock.
